@@ -19,3 +19,15 @@ npm run dev
 ```
 
 채널 경기목록: `/c/{channel-slug}`
+
+## CI/CD
+- CI: `.github/workflows/ci.yml`
+  - PR / main push 시 `npm ci`, `npm run lint`, `npm run build`
+- CD(Vercel): `.github/workflows/cd-vercel.yml`
+  - main push 시 production 배포
+
+### GitHub Secrets (for CD)
+레포 Settings → Secrets and variables → Actions 에 아래 값 추가:
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`

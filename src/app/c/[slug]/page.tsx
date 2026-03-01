@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
+import { isEditAuthorized } from '@/lib/editAuth'
 
-type Channel = { id: string; name: string; slug: string }
+type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type Match = {
   id: string
@@ -21,10 +22,10 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string }>
+  searchParams: Promise<{ date?: string; err?: string; edit?: string }>
 }) {
   const { slug } = await params
-  const { date } = await searchParams
+  const { date, err, edit } = await searchParams
 
   const supabase = getSupabaseServerClient()
 
@@ -44,7 +45,7 @@ export default async function ChannelPage({
 
   const { data: channel } = await supabase
     .from('channels')
-    .select('id,name,slug')
+    .select('id,name,slug,edit_session_version')
     .eq('slug', slug)
     .maybeSingle<Channel>()
 
@@ -58,6 +59,8 @@ export default async function ChannelPage({
       </main>
     )
   }
+
+  const canEdit = await isEditAuthorized(channel.slug, channel.edit_session_version)
 
   let groupQuery = supabase
     .from('match_groups')
@@ -96,6 +99,24 @@ export default async function ChannelPage({
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold">{channel.name}</h1>
           <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={`rounded px-2 py-1 border ${canEdit ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+              {canEdit ? '편집모드 ON' : '읽기모드'}
+            </span>
+            {canEdit ? (
+              <form action={`/c/${encodeURIComponent(channel.slug)}/edit-login`} method="post">
+                <input type="hidden" name="action" value="logout" />
+                <button className="underline" type="submit">편집모드 종료</button>
+              </form>
+            ) : (
+              <form action={`/c/${encodeURIComponent(channel.slug)}/edit-login`} method="post" className="flex items-center gap-2">
+                <input className="rounded border px-2 py-1" type="password" name="password" placeholder="편집 비밀번호" required />
+                <button className="rounded border px-2 py-1" type="submit">편집 시작</button>
+              </form>
+            )}
+            {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
+            {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
+          </div>
           <form className="flex items-center gap-2" method="get">
             <label className="text-xs text-gray-600">날짜</label>
             <input className="rounded border px-2 py-1.5 text-sm" type="date" name="date" defaultValue={date ?? ''} />

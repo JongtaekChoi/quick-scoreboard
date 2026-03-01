@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getSupabaseServerClient } from '@/lib/supabase'
+import { isEditAuthorized } from '@/lib/editAuth'
 import ScoreActions from './ScoreActions'
 
 type Match = {
@@ -15,7 +16,7 @@ type Match = {
   channel_id: string
 }
 
-type Channel = { id: string; slug: string }
+type Channel = { id: string; slug: string; edit_session_version: number }
 
 type GoalEvent = {
   id: string
@@ -27,11 +28,14 @@ type GoalEvent = {
   created_at: string
 }
 
-async function addGoal(matchId: string, teamSide: 'A' | 'B') {
+async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string, channelVersion: number) {
   'use server'
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
 
   const { data: match } = await supabase
     .from('matches')
@@ -58,6 +62,35 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B') {
       started_at: match.status === 'scheduled' ? new Date().toISOString() : undefined,
     })
     .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
+async function updateGoalEvent(matchId: string, goalId: string, channelSlug: string, channelVersion: number, formData: FormData) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  const scorerNo = String(formData.get('scorer_no') || '').trim()
+  const scorerName = String(formData.get('scorer_name') || '').trim()
+  const assistNo = String(formData.get('assist_no') || '').trim()
+  const assistName = String(formData.get('assist_name') || '').trim()
+
+  await supabase
+    .from('goal_events')
+    .update({
+      scorer_no: scorerNo || null,
+      scorer_name: scorerName || null,
+      assist_no: assistNo || null,
+      assist_name: assistName || null,
+    })
+    .eq('id', goalId)
+    .eq('match_id', matchId)
 
   revalidatePath(`/m/${matchId}`)
   redirect(`/m/${matchId}`)
@@ -103,7 +136,7 @@ export default async function MatchDetailPage({
 
   const { data: channel } = await supabase
     .from('channels')
-    .select('id,slug')
+    .select('id,slug,edit_session_version')
     .eq('id', match.channel_id)
     .maybeSingle<Channel>()
 
@@ -115,8 +148,10 @@ export default async function MatchDetailPage({
     .order('created_at', { ascending: false })
     .returns<GoalEvent[]>()
 
-  const addGoalA = addGoal.bind(null, matchId, 'A')
-  const addGoalB = addGoal.bind(null, matchId, 'B')
+  const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
+
+  const addGoalA = channel ? addGoal.bind(null, matchId, 'A', channel.slug, channel.edit_session_version) : async () => {}
+  const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -127,6 +162,9 @@ export default async function MatchDetailPage({
           </Link>
           <h1 className="text-2xl font-semibold">{match.seq}경기</h1>
           <p className="text-sm text-gray-600">상태: {match.status}</p>
+          <p className={`text-xs ${canEdit ? 'text-green-700' : 'text-gray-500'}`}>
+            {canEdit ? '편집모드 ON' : '읽기모드 (채널에서 편집 비밀번호 입력 필요)'}
+          </p>
         </header>
 
         <section className="rounded border p-4 space-y-3">
@@ -142,7 +180,11 @@ export default async function MatchDetailPage({
             </div>
           </div>
 
-          <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} />
+          {canEdit ? (
+            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} />
+          ) : (
+            <p className="text-xs text-gray-500">읽기모드에서는 득점 버튼을 사용할 수 없습니다.</p>
+          )}
         </section>
 
         <section className="rounded border p-4 space-y-2">
@@ -152,7 +194,7 @@ export default async function MatchDetailPage({
           ) : (
             <ul className="space-y-2">
               {(goals ?? []).map((g, idx) => (
-                <li key={g.id} className="rounded border px-3 py-2 text-sm">
+                <li key={g.id} className="rounded border px-3 py-2 text-sm space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <div className="font-medium">{(goals?.length ?? 0) - idx}. {g.team_side}팀 득점</div>
@@ -163,11 +205,24 @@ export default async function MatchDetailPage({
                     </div>
                     <div className="text-xs text-gray-400">{new Date(g.created_at).toLocaleTimeString()}</div>
                   </div>
+
+                  {canEdit && channel ? (
+                    <form
+                      action={updateGoalEvent.bind(null, matchId, g.id, channel.slug, channel.edit_session_version)}
+                      className="grid grid-cols-2 md:grid-cols-4 gap-2"
+                    >
+                      <input className="rounded border px-2 py-1" name="scorer_no" placeholder="골 번호" defaultValue={g.scorer_no ?? ''} />
+                      <input className="rounded border px-2 py-1" name="scorer_name" placeholder="골 이름" defaultValue={g.scorer_name ?? ''} />
+                      <input className="rounded border px-2 py-1" name="assist_no" placeholder="어시 번호" defaultValue={g.assist_no ?? ''} />
+                      <input className="rounded border px-2 py-1" name="assist_name" placeholder="어시 이름" defaultValue={g.assist_name ?? ''} />
+                      <button className="rounded border px-2 py-1 text-xs md:col-span-4 justify-self-end" type="submit">선수정보 저장</button>
+                    </form>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
-          <p className="text-xs text-gray-500">선수 번호/이름 사후 입력은 다음 단계에서 추가됩니다.</p>
+          <p className="text-xs text-gray-500">편집모드에서 득점/어시 번호와 이름을 사후 입력할 수 있습니다.</p>
         </section>
       </section>
     </main>

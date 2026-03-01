@@ -36,7 +36,7 @@ export default async function ChannelPage({
           <p className="text-sm text-amber-700">
             Supabase 환경변수가 없어 데이터 연결을 건너뛰었습니다.
           </p>
-          <p className="text-xs text-gray-600">NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY 설정 후 다시 확인해줘.</p>
+          <p className="text-xs text-gray-600">NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 설정 후 다시 확인해줘.</p>
         </section>
       </main>
     )

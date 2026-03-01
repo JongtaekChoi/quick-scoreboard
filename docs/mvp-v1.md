@@ -21,9 +21,14 @@
 
 ## 데이터 개념
 - channels
+- channel_share_links
 - match_groups
 - matches
 - goal_events
+- match_player_aliases
+
+스키마 파일: `db/schema.sql`
+시드 예시: `db/seed.sql`
 
 ## 핵심 UX
 - 점수 입력은 1탭 저장

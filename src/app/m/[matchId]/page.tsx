@@ -28,6 +28,8 @@ type GoalEvent = {
   created_at: string
 }
 
+type Alias = { jersey_no: string | null; player_name: string | null }
+
 async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string, channelVersion: number) {
   'use server'
 
@@ -92,6 +94,25 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
     .eq('id', goalId)
     .eq('match_id', matchId)
 
+  const aliasPairs = [
+    { jersey_no: scorerNo || null, player_name: scorerName || null },
+    { jersey_no: assistNo || null, player_name: assistName || null },
+  ].filter((x) => x.jersey_no || x.player_name)
+
+  for (const a of aliasPairs) {
+    await supabase
+      .from('match_player_aliases')
+      .upsert(
+        {
+          match_id: matchId,
+          jersey_no: a.jersey_no,
+          player_name: a.player_name,
+          last_used_at: new Date().toISOString(),
+        },
+        { onConflict: 'match_id,jersey_no,player_name' },
+      )
+  }
+
   revalidatePath(`/m/${matchId}`)
   redirect(`/m/${matchId}`)
 }
@@ -148,7 +169,33 @@ export default async function MatchDetailPage({
     .order('created_at', { ascending: false })
     .returns<GoalEvent[]>()
 
+  const { data: aliases } = await supabase
+    .from('match_player_aliases')
+    .select('jersey_no,player_name')
+    .eq('match_id', matchId)
+    .order('last_used_at', { ascending: false })
+    .limit(50)
+    .returns<Alias[]>()
+
   const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
+
+  const suggestedNos = Array.from(
+    new Set(
+      [
+        ...(aliases ?? []).map((a) => a.jersey_no).filter(Boolean),
+        ...(goals ?? []).flatMap((g) => [g.scorer_no, g.assist_no]).filter(Boolean),
+      ] as string[],
+    ),
+  ).slice(0, 20)
+
+  const suggestedNames = Array.from(
+    new Set(
+      [
+        ...(aliases ?? []).map((a) => a.player_name).filter(Boolean),
+        ...(goals ?? []).flatMap((g) => [g.scorer_name, g.assist_name]).filter(Boolean),
+      ] as string[],
+    ),
+  ).slice(0, 20)
 
   const addGoalA = channel ? addGoal.bind(null, matchId, 'A', channel.slug, channel.edit_session_version) : async () => {}
   const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
@@ -211,10 +258,10 @@ export default async function MatchDetailPage({
                       action={updateGoalEvent.bind(null, matchId, g.id, channel.slug, channel.edit_session_version)}
                       className="grid grid-cols-2 md:grid-cols-4 gap-2"
                     >
-                      <input className="rounded border px-2 py-1" name="scorer_no" placeholder="골 번호" defaultValue={g.scorer_no ?? ''} />
-                      <input className="rounded border px-2 py-1" name="scorer_name" placeholder="골 이름" defaultValue={g.scorer_name ?? ''} />
-                      <input className="rounded border px-2 py-1" name="assist_no" placeholder="어시 번호" defaultValue={g.assist_no ?? ''} />
-                      <input className="rounded border px-2 py-1" name="assist_name" placeholder="어시 이름" defaultValue={g.assist_name ?? ''} />
+                      <input className="rounded border px-2 py-1" list="no-suggestions" name="scorer_no" placeholder="골 번호" defaultValue={g.scorer_no ?? ''} />
+                      <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer_name" placeholder="골 이름" defaultValue={g.scorer_name ?? ''} />
+                      <input className="rounded border px-2 py-1" list="no-suggestions" name="assist_no" placeholder="어시 번호" defaultValue={g.assist_no ?? ''} />
+                      <input className="rounded border px-2 py-1" list="name-suggestions" name="assist_name" placeholder="어시 이름" defaultValue={g.assist_name ?? ''} />
                       <button className="rounded border px-2 py-1 text-xs md:col-span-4 justify-self-end" type="submit">선수정보 저장</button>
                     </form>
                   ) : null}
@@ -222,6 +269,37 @@ export default async function MatchDetailPage({
               ))}
             </ul>
           )}
+          {suggestedNos.length > 0 || suggestedNames.length > 0 ? (
+            <div className="space-y-1">
+              <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
+              {suggestedNos.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {suggestedNos.map((no) => (
+                    <span key={no} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">#{no}</span>
+                  ))}
+                </div>
+              ) : null}
+              {suggestedNames.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {suggestedNames.map((name) => (
+                    <span key={name} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">{name}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <datalist id="no-suggestions">
+            {suggestedNos.map((no) => (
+              <option key={`no-${no}`} value={no} />
+            ))}
+          </datalist>
+          <datalist id="name-suggestions">
+            {suggestedNames.map((name) => (
+              <option key={`name-${name}`} value={name} />
+            ))}
+          </datalist>
+
           <p className="text-xs text-gray-500">편집모드에서 득점/어시 번호와 이름을 사후 입력할 수 있습니다.</p>
         </section>
       </section>

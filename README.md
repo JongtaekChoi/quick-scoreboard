@@ -13,5 +13,9 @@
 ## Run
 ```bash
 npm install
+cp .env.example .env.local
+# fill Supabase envs
 npm run dev
 ```
+
+채널 경기목록: `/c/{channel-slug}`

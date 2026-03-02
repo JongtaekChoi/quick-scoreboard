@@ -177,10 +177,13 @@ export const dynamic = 'force-dynamic'
 
 export default async function MatchDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ matchId: string }>
+  searchParams: Promise<{ goal?: string }>
 }) {
   const { matchId } = await params
+  const { goal: goalParam } = await searchParams
   const supabase = getSupabaseServerClient()
 
   if (!supabase) {
@@ -235,6 +238,9 @@ export default async function MatchDetailPage({
 
   const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
 
+  const activeGoalId = goalParam || (goals?.[0]?.id ?? '')
+  const activeGoal = (goals ?? []).find((g) => g.id === activeGoalId) ?? (goals?.[0] ?? null)
+
   const suggestedNames = Array.from(
     new Set(
       [
@@ -286,7 +292,7 @@ export default async function MatchDetailPage({
         />
 
         {canEdit ? (
-          <section className="rounded border p-4 space-y-2">
+          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
             {!match.started_at ? (
               <form action={startMatchAction}>
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
@@ -297,68 +303,47 @@ export default async function MatchDetailPage({
         ) : null}
 
         {canEdit ? (
-          <details className="rounded border p-4" open={false}>
-            <summary className="text-sm font-semibold text-gray-700 cursor-pointer">득점 이벤트 펼치기</summary>
-            <div className="space-y-2 mt-3">
-              {(goals ?? []).length === 0 ? (
-                <p className="text-sm text-gray-500">아직 득점 이벤트가 없습니다.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {(goals ?? []).map((g, idx) => (
-                    <li key={g.id} className="rounded border px-3 py-2 text-sm space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="font-medium">{(goals?.length ?? 0) - idx}. {g.team_side}팀 득점 {g.minute !== null ? `· ${g.minute}분` : ''}</div>
-                          <div className="text-xs text-gray-500">
-                            득점 {g.scorer_name ?? g.scorer_no ?? ''}
-                            {g.assist_name || g.assist_no ? ` · 어시 ${g.assist_name ?? g.assist_no ?? ''}` : ''}
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-400">{new Date(g.created_at).toLocaleTimeString()}</div>
-                      </div>
-
-                      {channel ? (
-                        <form
-                          action={updateGoalEvent.bind(null, matchId, g.id, channel.slug, channel.edit_session_version)}
-                          className="grid grid-cols-2 md:grid-cols-3 gap-2"
-                        >
-                          <input className="rounded border px-2 py-1" name="minute" type="number" min={0} placeholder="분" defaultValue={g.minute ?? ''} />
-                          <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={g.scorer_name ?? g.scorer_no ?? ''} />
-                          <input className="rounded border px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={g.assist_name ?? g.assist_no ?? ''} />
-                          <button className="rounded border px-2 py-1 text-xs md:col-span-3 justify-self-end" type="submit">이벤트 저장</button>
-                        </form>
-                      ) : null}
-
-                      {channel ? (
-                        <form action={deleteGoalEvent.bind(null, matchId, g.id, g.team_side, channel.slug, channel.edit_session_version)}>
-                          <button className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" type="submit">
-                            이벤트 삭제
-                          </button>
-                        </form>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {suggestedNames.length > 0 ? (
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
-                  <div className="flex flex-wrap gap-1">
-                    {suggestedNames.map((name) => (
-                      <span key={name} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">{name}</span>
-                    ))}
-                  </div>
+          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-700">현재 편집 이벤트</h2>
+            {!activeGoal || !channel ? (
+              <p className="text-sm text-gray-500">편집할 이벤트가 없습니다.</p>
+            ) : (
+              <>
+                <div className="text-sm text-gray-700">
+                  {activeGoal.team_side}팀 · {activeGoal.minute !== null ? `${activeGoal.minute}분` : '시간 미설정'}
                 </div>
-              ) : null}
+                <form
+                  action={updateGoalEvent.bind(null, matchId, activeGoal.id, channel.slug, channel.edit_session_version)}
+                  className="grid grid-cols-2 md:grid-cols-3 gap-2"
+                >
+                  <input className="rounded-lg border border-gray-200 px-2 py-1" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
+                  <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs md:col-span-3 justify-self-end" type="submit">이벤트 저장</button>
+                </form>
+                <form action={deleteGoalEvent.bind(null, matchId, activeGoal.id, activeGoal.team_side, channel.slug, channel.edit_session_version)}>
+                  <button className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" type="submit">이벤트 삭제</button>
+                </form>
+              </>
+            )}
 
-              <datalist id="name-suggestions">
-                {suggestedNames.map((name) => (
-                  <option key={`name-${name}`} value={name} />
-                ))}
-              </datalist>
-            </div>
-          </details>
+            {suggestedNames.length > 0 ? (
+              <div className="space-y-1">
+                <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
+                <div className="flex flex-wrap gap-1">
+                  {suggestedNames.map((name) => (
+                    <span key={name} className="text-[11px] rounded-lg border border-gray-200 px-1.5 py-0.5 text-gray-600">{name}</span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <datalist id="name-suggestions">
+              {suggestedNames.map((name) => (
+                <option key={`name-${name}`} value={name} />
+              ))}
+            </datalist>
+          </section>
         ) : null}
       </section>
     </main>

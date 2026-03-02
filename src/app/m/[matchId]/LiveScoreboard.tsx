@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 
 type Goal = {
@@ -35,6 +36,9 @@ function LiveScoreboardInner({
   initialGoals: Goal[]
   readonly: boolean
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [autoUpdate, setAutoUpdate] = useState(false)
 
   const { data, refetch, isFetching } = useQuery({
@@ -52,7 +56,7 @@ function LiveScoreboardInner({
   const goals = data.goals
 
   return (
-    <section className="sticky top-0 z-10 rounded border p-4 space-y-3 bg-white/95 backdrop-blur">
+    <section className="sticky top-0 z-10 rounded-xl border border-gray-200 p-4 space-y-3 bg-white/95 backdrop-blur shadow-sm">
       {readonly ? (
         <div className="flex items-center justify-between gap-2 text-sm">
           <label className="flex items-center gap-2">
@@ -75,18 +79,30 @@ function LiveScoreboardInner({
         </div>
       </div>
 
-      <div className="rounded border p-2 space-y-1">
+      <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
         {goals.length === 0 ? (
           <p className="text-xs text-gray-500">득점 이벤트 없음</p>
         ) : (
           goals.map((g, idx) => {
             const who = g.scorer_name ?? g.scorer_no ?? (g.team_side === 'A' ? match.team_a_name : match.team_b_name)
+            const currentGoal = searchParams.get('goal')
+            const active = currentGoal ? currentGoal === g.id : idx === 0
             return (
-              <div key={g.id} className={`grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded px-1 py-0.5 ${idx === 0 ? 'bg-gray-50' : ''}`}>
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => {
+                  if (readonly) return
+                  const qs = new URLSearchParams(searchParams.toString())
+                  qs.set('goal', g.id)
+                  router.replace(`${pathname}?${qs.toString()}`, { scroll: false })
+                }}
+                className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? 'bg-white ring-1 ring-gray-300' : 'hover:bg-white/70'}`}
+              >
                 <div className="text-right truncate">{g.team_side === 'A' ? who : ''}</div>
                 <div className="text-gray-500 tabular-nums">{g.minute !== null ? `${g.minute}’` : ''}</div>
                 <div className="truncate">{g.team_side === 'B' ? who : ''}</div>
-              </div>
+              </button>
             )
           })
         )}

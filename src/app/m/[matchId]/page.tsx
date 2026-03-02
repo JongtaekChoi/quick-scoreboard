@@ -78,26 +78,24 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
   const canEdit = await isEditAuthorized(channelSlug, channelVersion)
   if (!canEdit) return
 
-  const scorerNo = String(formData.get('scorer_no') || '').trim()
-  const scorerName = String(formData.get('scorer_name') || '').trim()
-  const assistNo = String(formData.get('assist_no') || '').trim()
-  const assistName = String(formData.get('assist_name') || '').trim()
+  const scorer = String(formData.get('scorer') || '').trim()
+  const assist = String(formData.get('assist') || '').trim()
 
   await supabase
     .from('goal_events')
     .update({
-      scorer_no: scorerNo || null,
-      scorer_name: scorerName || null,
-      assist_no: assistNo || null,
-      assist_name: assistName || null,
+      scorer_no: null,
+      scorer_name: scorer || null,
+      assist_no: null,
+      assist_name: assist || null,
     })
     .eq('id', goalId)
     .eq('match_id', matchId)
 
   const aliasPairs = [
-    { jersey_no: scorerNo || null, player_name: scorerName || null },
-    { jersey_no: assistNo || null, player_name: assistName || null },
-  ].filter((x) => x.jersey_no || x.player_name)
+    { jersey_no: null, player_name: scorer || null },
+    { jersey_no: null, player_name: assist || null },
+  ].filter((x) => x.player_name)
 
   for (const a of aliasPairs) {
     await supabase
@@ -179,15 +177,6 @@ export default async function MatchDetailPage({
 
   const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
 
-  const suggestedNos = Array.from(
-    new Set(
-      [
-        ...(aliases ?? []).map((a) => a.jersey_no).filter(Boolean),
-        ...(goals ?? []).flatMap((g) => [g.scorer_no, g.assist_no]).filter(Boolean),
-      ] as string[],
-    ),
-  ).slice(0, 20)
-
   const suggestedNames = Array.from(
     new Set(
       [
@@ -258,42 +247,26 @@ export default async function MatchDetailPage({
                       action={updateGoalEvent.bind(null, matchId, g.id, channel.slug, channel.edit_session_version)}
                       className="grid grid-cols-2 md:grid-cols-4 gap-2"
                     >
-                      <input className="rounded border px-2 py-1" list="no-suggestions" name="scorer_no" placeholder="골 번호" defaultValue={g.scorer_no ?? ''} />
-                      <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer_name" placeholder="골 이름" defaultValue={g.scorer_name ?? ''} />
-                      <input className="rounded border px-2 py-1" list="no-suggestions" name="assist_no" placeholder="어시 번호" defaultValue={g.assist_no ?? ''} />
-                      <input className="rounded border px-2 py-1" list="name-suggestions" name="assist_name" placeholder="어시 이름" defaultValue={g.assist_name ?? ''} />
-                      <button className="rounded border px-2 py-1 text-xs md:col-span-4 justify-self-end" type="submit">선수정보 저장</button>
+                      <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(번호/이름 통합)" defaultValue={g.scorer_name ?? g.scorer_no ?? ''} />
+                      <input className="rounded border px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(번호/이름 통합)" defaultValue={g.assist_name ?? g.assist_no ?? ''} />
+                      <button className="rounded border px-2 py-1 text-xs md:col-span-2 justify-self-end" type="submit">선수정보 저장</button>
                     </form>
                   ) : null}
                 </li>
               ))}
             </ul>
           )}
-          {suggestedNos.length > 0 || suggestedNames.length > 0 ? (
+          {suggestedNames.length > 0 ? (
             <div className="space-y-1">
               <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
-              {suggestedNos.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {suggestedNos.map((no) => (
-                    <span key={no} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">#{no}</span>
-                  ))}
-                </div>
-              ) : null}
-              {suggestedNames.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {suggestedNames.map((name) => (
-                    <span key={name} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">{name}</span>
-                  ))}
-                </div>
-              ) : null}
+              <div className="flex flex-wrap gap-1">
+                {suggestedNames.map((name) => (
+                  <span key={name} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">{name}</span>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          <datalist id="no-suggestions">
-            {suggestedNos.map((no) => (
-              <option key={`no-${no}`} value={no} />
-            ))}
-          </datalist>
           <datalist id="name-suggestions">
             {suggestedNames.map((name) => (
               <option key={`name-${name}`} value={name} />

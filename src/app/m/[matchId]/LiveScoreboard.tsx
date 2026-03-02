@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 
 type Goal = {
   id: string
@@ -19,7 +20,11 @@ type MatchMini = {
   score_b: number
 }
 
-export default function LiveScoreboard({
+type ScoreboardPayload = { match: MatchMini; goals: Goal[] }
+
+const REFRESH_SEC = 10
+
+function LiveScoreboardInner({
   matchId,
   initialMatch,
   initialGoals,
@@ -30,47 +35,21 @@ export default function LiveScoreboard({
   initialGoals: Goal[]
   readonly: boolean
 }) {
-  const [match, setMatch] = useState(initialMatch)
-  const [goals, setGoals] = useState(initialGoals)
   const [autoUpdate, setAutoUpdate] = useState(false)
-  const [countdown, setCountdown] = useState(10)
-  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    setMatch(initialMatch)
-  }, [initialMatch])
-
-  useEffect(() => {
-    setGoals(initialGoals)
-  }, [initialGoals])
-
-  const refreshScoreboard = useCallback(async () => {
-    setRefreshing(true)
-    try {
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ['scoreboard', matchId],
+    queryFn: async () => {
       const res = await fetch(`/api/matches/${matchId}/scoreboard`, { cache: 'no-store' })
-      if (!res.ok) return
-      const json = (await res.json()) as { match: MatchMini; goals: Goal[] }
-      setMatch(json.match)
-      setGoals(json.goals)
-      setCountdown(10)
-    } finally {
-      setRefreshing(false)
-    }
-  }, [matchId])
+      if (!res.ok) throw new Error('failed_to_fetch_scoreboard')
+      return (await res.json()) as ScoreboardPayload
+    },
+    initialData: { match: initialMatch, goals: initialGoals },
+    refetchInterval: readonly && autoUpdate ? REFRESH_SEC * 1000 : false,
+  })
 
-  useEffect(() => {
-    if (!readonly || !autoUpdate) return
-    const t = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          void refreshScoreboard()
-          return 10
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(t)
-  }, [readonly, autoUpdate, refreshScoreboard])
+  const match = data.match
+  const goals = data.goals
 
   return (
     <section className="sticky top-0 z-10 rounded border p-4 space-y-3 bg-white/95 backdrop-blur">
@@ -80,8 +59,8 @@ export default function LiveScoreboard({
             <span className="text-gray-600">자동 업데이트</span>
             <input type="checkbox" checked={autoUpdate} onChange={(e) => setAutoUpdate(e.target.checked)} />
           </label>
-          <button className="rounded border px-2 py-1 text-xs" type="button" onClick={() => void refreshScoreboard()}>
-            {autoUpdate ? `${countdown}초 후` : ''} {refreshing ? '갱신 중...' : '↻ 새로고침'}
+          <button className="rounded border px-2 py-1 text-xs" type="button" onClick={() => void refetch()}>
+            {autoUpdate ? `${REFRESH_SEC}초 간격` : ''} {isFetching ? '갱신 중...' : '↻ 새로고침'}
           </button>
         </div>
       ) : null}
@@ -113,5 +92,19 @@ export default function LiveScoreboard({
         )}
       </div>
     </section>
+  )
+}
+
+export default function LiveScoreboard(props: {
+  matchId: string
+  initialMatch: MatchMini
+  initialGoals: Goal[]
+  readonly: boolean
+}) {
+  const [queryClient] = useState(() => new QueryClient())
+  return (
+    <QueryClientProvider client={queryClient}>
+      <LiveScoreboardInner {...props} />
+    </QueryClientProvider>
   )
 }

@@ -378,15 +378,17 @@ export default async function MatchDetailPage({
                   {activeGoal.team_side}팀 · {activeGoal.minute !== null ? `${activeGoal.minute}분` : '시간 미설정'}
                 </div>
                 <form
+                  key={activeGoal.id}
                   action={updateGoalEvent.bind(null, matchId, activeGoal.id, channel.slug, channel.edit_session_version)}
                   className="grid grid-cols-2 md:grid-cols-3 gap-2"
                 >
-                  <input className="rounded-lg border border-gray-200 px-2 py-1" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
                   <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit" name="set_none" value="scorer">득점자 미상</button>
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit" name="set_none" value="assist">어시 없음</button>
+                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="reset">편집 취소</button>
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit">이벤트 저장</button>
                   </div>
                 </form>

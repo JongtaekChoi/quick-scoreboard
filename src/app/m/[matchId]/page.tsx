@@ -44,36 +44,66 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string
 
   const { data: match } = await supabase
     .from('matches')
-    .select('id,score_a,score_b,status,started_at')
+    .select('id,status,started_at')
     .eq('id', matchId)
-    .maybeSingle<{ id: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; started_at: string | null }>()
+    .maybeSingle<{ id: string; status: 'scheduled' | 'live' | 'ended'; started_at: string | null }>()
 
   if (!match) return
-
-  const nextScoreA = teamSide === 'A' ? match.score_a + 1 : match.score_a
-  const nextScoreB = teamSide === 'B' ? match.score_b + 1 : match.score_b
 
   const now = new Date()
   const minute = match.started_at
     ? Math.max(0, Math.floor((now.getTime() - new Date(match.started_at).getTime()) / 60000))
     : 0
 
-  await supabase.from('goal_events').insert({
-    match_id: matchId,
-    team_side: teamSide,
-    minute,
-    scored_at: now.toISOString(),
-  })
+  const { data: insertedGoal, error: insertError } = await supabase
+    .from('goal_events')
+    .insert({
+      match_id: matchId,
+      team_side: teamSide,
+      minute,
+      scored_at: now.toISOString(),
+    })
+    .select('id')
+    .maybeSingle<{ id: string }>()
 
-  await supabase
+  if (insertError || !insertedGoal?.id) {
+    console.error('[addGoal] goal_events insert failed', { matchId, teamSide, error: insertError?.message })
+    redirect(`/m/${matchId}?err=goal_insert_failed`)
+  }
+
+  const { data: countedGoals, error: countError } = await supabase
+    .from('goal_events')
+    .select('team_side')
+    .eq('match_id', matchId)
+    .is('deleted_at', null)
+
+  if (countError) {
+    console.error('[addGoal] recount failed', { matchId, error: countError.message })
+    redirect(`/m/${matchId}?err=goal_recount_failed`)
+  }
+
+  let scoreA = 0
+  let scoreB = 0
+  for (const g of countedGoals ?? []) {
+    if (g.team_side === 'A') scoreA += 1
+    else if (g.team_side === 'B') scoreB += 1
+  }
+
+  const { error: updateError } = await supabase
     .from('matches')
     .update({
-      score_a: nextScoreA,
-      score_b: nextScoreB,
+      score_a: scoreA,
+      score_b: scoreB,
       status: match.status === 'scheduled' ? 'live' : match.status,
-      started_at: match.status === 'scheduled' ? new Date().toISOString() : undefined,
+      started_at: match.status === 'scheduled' ? now.toISOString() : undefined,
     })
     .eq('id', matchId)
+
+  if (updateError) {
+    await supabase.from('goal_events').update({ deleted_at: now.toISOString() }).eq('id', insertedGoal.id).eq('match_id', matchId)
+    console.error('[addGoal] matches update failed', { matchId, error: updateError.message })
+    redirect(`/m/${matchId}?err=score_update_failed`)
+  }
 
   revalidatePath(`/m/${matchId}`)
   redirect(`/m/${matchId}`)
@@ -180,10 +210,10 @@ export default async function MatchDetailPage({
   searchParams,
 }: {
   params: Promise<{ matchId: string }>
-  searchParams: Promise<{ goal?: string }>
+  searchParams: Promise<{ goal?: string; err?: string }>
 }) {
   const { matchId } = await params
-  const { goal: goalParam } = await searchParams
+  const { goal: goalParam, err } = await searchParams
   const supabase = getSupabaseServerClient()
 
   if (!supabase) {
@@ -269,6 +299,7 @@ export default async function MatchDetailPage({
           <p className={`text-xs ${canEdit ? 'text-green-700' : 'text-gray-500'}`}>
             {canEdit ? '편집모드 ON' : '읽기모드 (채널에서 편집 비밀번호 입력 필요)'}
           </p>
+          {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
         </header>
 
         <LiveScoreboard

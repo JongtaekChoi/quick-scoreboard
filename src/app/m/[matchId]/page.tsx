@@ -13,6 +13,7 @@ type Match = {
   score_a: number
   score_b: number
   status: 'scheduled' | 'live' | 'ended'
+  started_at: string | null
   channel_id: string
 }
 
@@ -21,6 +22,7 @@ type Channel = { id: string; slug: string; edit_session_version: number }
 type GoalEvent = {
   id: string
   team_side: 'A' | 'B'
+  minute: number | null
   scorer_no: string | null
   scorer_name: string | null
   assist_no: string | null
@@ -41,18 +43,25 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string
 
   const { data: match } = await supabase
     .from('matches')
-    .select('id,score_a,score_b,status')
+    .select('id,score_a,score_b,status,started_at')
     .eq('id', matchId)
-    .maybeSingle<{ id: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended' }>()
+    .maybeSingle<{ id: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; started_at: string | null }>()
 
   if (!match) return
 
   const nextScoreA = teamSide === 'A' ? match.score_a + 1 : match.score_a
   const nextScoreB = teamSide === 'B' ? match.score_b + 1 : match.score_b
 
+  const now = new Date()
+  const minute = match.started_at
+    ? Math.max(0, Math.floor((now.getTime() - new Date(match.started_at).getTime()) / 60000))
+    : 0
+
   await supabase.from('goal_events').insert({
     match_id: matchId,
     team_side: teamSide,
+    minute,
+    scored_at: now.toISOString(),
   })
 
   await supabase
@@ -63,6 +72,24 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string
       status: match.status === 'scheduled' ? 'live' : match.status,
       started_at: match.status === 'scheduled' ? new Date().toISOString() : undefined,
     })
+    .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
+async function startMatch(matchId: string, channelSlug: string, channelVersion: number) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  await supabase
+    .from('matches')
+    .update({ status: 'live', started_at: new Date().toISOString() })
     .eq('id', matchId)
 
   revalidatePath(`/m/${matchId}`)
@@ -80,10 +107,13 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
 
   const scorer = String(formData.get('scorer') || '').trim()
   const assist = String(formData.get('assist') || '').trim()
+  const minuteRaw = String(formData.get('minute') || '').trim()
+  const minute = minuteRaw === '' ? null : Math.max(0, Number(minuteRaw) || 0)
 
   await supabase
     .from('goal_events')
     .update({
+      minute,
       scorer_no: null,
       scorer_name: scorer || null,
       assist_no: null,
@@ -165,7 +195,7 @@ export default async function MatchDetailPage({
 
   const { data: match } = await supabase
     .from('matches')
-    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,channel_id')
+    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,started_at,channel_id')
     .eq('id', matchId)
     .maybeSingle<Match>()
 
@@ -188,7 +218,7 @@ export default async function MatchDetailPage({
 
   const { data: goals } = await supabase
     .from('goal_events')
-    .select('id,team_side,scorer_no,scorer_name,assist_no,assist_name,created_at')
+    .select('id,team_side,minute,scorer_no,scorer_name,assist_no,assist_name,created_at')
     .eq('match_id', matchId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -215,6 +245,7 @@ export default async function MatchDetailPage({
 
   const addGoalA = channel ? addGoal.bind(null, matchId, 'A', channel.slug, channel.edit_session_version) : async () => {}
   const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
+  const startMatchAction = channel ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -225,6 +256,9 @@ export default async function MatchDetailPage({
           </Link>
           <h1 className="text-2xl font-semibold">{match.seq}경기</h1>
           <p className="text-sm text-gray-600">상태: {match.status}</p>
+          <p className="text-xs text-gray-500">
+            시작시간: {match.started_at ? new Date(match.started_at).toLocaleTimeString() : '미설정'}
+          </p>
           <p className={`text-xs ${canEdit ? 'text-green-700' : 'text-gray-500'}`}>
             {canEdit ? '편집모드 ON' : '읽기모드 (채널에서 편집 비밀번호 입력 필요)'}
           </p>
@@ -238,7 +272,14 @@ export default async function MatchDetailPage({
           </div>
 
           {canEdit ? (
-            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
+            <div className="space-y-2">
+              {!match.started_at ? (
+                <form action={startMatchAction}>
+                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
+                </form>
+              ) : null}
+              <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
+            </div>
           ) : (
             <p className="text-xs text-gray-500">읽기모드에서는 득점 버튼을 사용할 수 없습니다.</p>
           )}
@@ -254,7 +295,7 @@ export default async function MatchDetailPage({
                 <li key={g.id} className="rounded border px-3 py-2 text-sm space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <div className="font-medium">{(goals?.length ?? 0) - idx}. {g.team_side}팀 득점</div>
+                      <div className="font-medium">{(goals?.length ?? 0) - idx}. {g.team_side}팀 득점 {g.minute !== null ? `· ${g.minute}분` : ''}</div>
                       <div className="text-xs text-gray-500">
                         골 {g.scorer_no ? `#${g.scorer_no}` : ''} {g.scorer_name ?? ''}
                         {g.assist_no || g.assist_name ? ` · 어시 ${g.assist_no ? `#${g.assist_no}` : ''} ${g.assist_name ?? ''}` : ''}
@@ -266,11 +307,12 @@ export default async function MatchDetailPage({
                   {canEdit && channel ? (
                     <form
                       action={updateGoalEvent.bind(null, matchId, g.id, channel.slug, channel.edit_session_version)}
-                      className="grid grid-cols-2 md:grid-cols-4 gap-2"
+                      className="grid grid-cols-2 md:grid-cols-3 gap-2"
                     >
+                      <input className="rounded border px-2 py-1" name="minute" type="number" min={0} placeholder="분" defaultValue={g.minute ?? ''} />
                       <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(번호/이름 통합)" defaultValue={g.scorer_name ?? g.scorer_no ?? ''} />
                       <input className="rounded border px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(번호/이름 통합)" defaultValue={g.assist_name ?? g.assist_no ?? ''} />
-                      <button className="rounded border px-2 py-1 text-xs md:col-span-2 justify-self-end" type="submit">선수정보 저장</button>
+                      <button className="rounded border px-2 py-1 text-xs md:col-span-3 justify-self-end" type="submit">이벤트 저장</button>
                     </form>
                   ) : null}
 

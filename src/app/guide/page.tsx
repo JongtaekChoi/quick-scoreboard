@@ -19,8 +19,8 @@ export default function GuidePage() {
             <p className="text-gray-600">채널 상단에서 편집 비밀번호를 입력하면 편집모드가 켜집니다.</p>
           </li>
           <li>
-            <div className="font-medium">경기 상세에서 +1 입력</div>
-            <p className="text-gray-600">A팀/B팀 +1 버튼을 누르면 골 이벤트와 스코어가 즉시 저장됩니다.</p>
+            <div className="font-medium">경기 시작 후 +1 입력</div>
+            <p className="text-gray-600">편집모드에서 경기 시작 버튼을 누른 뒤 +1 버튼을 사용하세요. 골 시간(분)은 시작시각 기준으로 자동 기록됩니다.</p>
           </li>
           <li>
             <div className="font-medium">선수정보는 나중에 보정</div>

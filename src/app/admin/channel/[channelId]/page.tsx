@@ -16,18 +16,28 @@ async function createGroup(formData: FormData) {
   const playDate = String(formData.get('play_date') || '')
   const venue = String(formData.get('venue') || '').trim()
   const title = String(formData.get('title') || '').trim()
-  const seq = Number(formData.get('seq') || 1)
   if (!channelId || !playDate) return
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
+
+  const { data: lastGroup } = await supabase
+    .from('match_groups')
+    .select('seq')
+    .eq('channel_id', channelId)
+    .eq('play_date', playDate)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ seq: number }>()
+
+  const nextSeq = (lastGroup?.seq ?? 0) + 1
 
   await supabase.from('match_groups').insert({
     channel_id: channelId,
     play_date: playDate,
     venue: venue || null,
     title: title || null,
-    seq: Number.isFinite(seq) ? seq : 1,
+    seq: nextSeq,
   })
 
   redirect(`/admin/channel/${channelId}`)
@@ -40,7 +50,6 @@ async function createMatch(formData: FormData) {
 
   const channelId = String(formData.get('channelId') || '')
   const groupId = String(formData.get('groupId') || '')
-  const seq = Number(formData.get('seq') || 1)
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
   if (!channelId || !groupId || !teamA || !teamB) return
@@ -48,10 +57,20 @@ async function createMatch(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
+  const { data: lastMatch } = await supabase
+    .from('matches')
+    .select('seq')
+    .eq('match_group_id', groupId)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ seq: number }>()
+
+  const nextSeq = (lastMatch?.seq ?? 0) + 1
+
   await supabase.from('matches').insert({
     channel_id: channelId,
     match_group_id: groupId,
-    seq: Number.isFinite(seq) ? seq : 1,
+    seq: nextSeq,
     team_a_name: teamA,
     team_b_name: teamB,
     score_a: 0,
@@ -115,12 +134,12 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
 
         <section className="rounded border p-4 space-y-2">
           <h2 className="text-sm font-semibold">경기그룹 생성</h2>
-          <form action={createGroup} className="grid md:grid-cols-5 gap-2">
+          <p className="text-xs text-gray-500">순번(seq)은 같은 날짜 기준으로 자동 부여됩니다.</p>
+          <form action={createGroup} className="grid md:grid-cols-4 gap-2">
             <input type="hidden" name="channelId" value={channel.id} />
             <input className="rounded border px-2 py-1.5 text-sm" name="play_date" type="date" required />
             <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" />
             <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" />
-            <input className="rounded border px-2 py-1.5 text-sm" name="seq" type="number" min={1} defaultValue={1} />
             <button className="rounded border px-3 py-2 text-sm" type="submit">생성</button>
           </form>
         </section>
@@ -135,12 +154,12 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
                   <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
                 </div>
 
-                <form action={createMatch} className="grid md:grid-cols-5 gap-2">
+                <p className="text-[11px] text-gray-500">경기 순번은 그룹 내에서 자동 부여됩니다.</p>
+                <form action={createMatch} className="grid md:grid-cols-4 gap-2">
                   <input type="hidden" name="channelId" value={channel.id} />
                   <input type="hidden" name="groupId" value={g.id} />
                   <input className="rounded border px-2 py-1.5 text-sm" name="team_a_name" placeholder="A팀명" required />
                   <input className="rounded border px-2 py-1.5 text-sm" name="team_b_name" placeholder="B팀명" required />
-                  <input className="rounded border px-2 py-1.5 text-sm" name="seq" type="number" min={1} defaultValue={(list.length || 0) + 1} />
                   <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
                 </form>
 

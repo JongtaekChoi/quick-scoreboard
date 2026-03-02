@@ -10,9 +10,14 @@ export default function Home() {
         <section className="rounded border p-4 space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">빠른 시작</h2>
           <p className="text-sm text-gray-600">채널 슬러그로 경기목록 진입</p>
-          <Link className="underline text-sm" href="/c/sample-channel">
-            /c/sample-channel 열기
-          </Link>
+          <div className="flex flex-col gap-1 text-sm">
+            <Link className="underline" href="/c/sample-channel">
+              /c/sample-channel 열기
+            </Link>
+            <Link className="underline" href="/guide">
+              사용방법 보기
+            </Link>
+          </div>
         </section>
       </section>
     </main>

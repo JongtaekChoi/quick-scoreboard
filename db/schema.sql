@@ -24,6 +24,19 @@ create table if not exists channels (
 
 create index if not exists channels_name_idx on channels (name);
 
+-- 1.5) 팀 마스터(채널 내 빠른 입력/추천용)
+create table if not exists teams (
+  id uuid primary key default gen_random_uuid(),
+  channel_id uuid not null references channels(id) on delete cascade,
+  name text not null,
+  last_used_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists teams_unique_channel_name on teams (channel_id, name);
+create index if not exists teams_channel_last_used_idx on teams (channel_id, last_used_at desc);
+
 -- 2) 비공개 링크 토큰(뷰/에딧)
 -- raw token은 저장하지 않고 hash만 저장
 create table if not exists channel_share_links (
@@ -150,6 +163,11 @@ for each row execute procedure set_updated_at();
 drop trigger if exists trg_goal_events_set_updated_at on goal_events;
 create trigger trg_goal_events_set_updated_at
 before update on goal_events
+for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_teams_set_updated_at on teams;
+create trigger trg_teams_set_updated_at
+before update on teams
 for each row execute procedure set_updated_at();
 
 commit;

@@ -6,6 +6,7 @@ import { isAdminAuthorized } from '@/lib/adminAuth'
 type Channel = { id: string; name: string; slug: string }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type Match = { id: string; match_group_id: string | null; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: string }
+type Team = { id: string; name: string }
 
 async function createGroup(formData: FormData) {
   'use server'
@@ -78,6 +79,14 @@ async function createMatch(formData: FormData) {
     status: 'scheduled',
   })
 
+  await supabase.from('teams').upsert(
+    [
+      { channel_id: channelId, name: teamA, last_used_at: new Date().toISOString() },
+      { channel_id: channelId, name: teamB, last_used_at: new Date().toISOString() },
+    ],
+    { onConflict: 'channel_id,name' },
+  )
+
   redirect(`/admin/channel/${channelId}`)
 }
 
@@ -104,6 +113,14 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
     .order('play_date', { ascending: false })
     .order('seq', { ascending: true })
     .returns<MatchGroup[]>()
+
+  const { data: teams } = await supabase
+    .from('teams')
+    .select('id,name')
+    .eq('channel_id', channelId)
+    .order('last_used_at', { ascending: false })
+    .limit(30)
+    .returns<Team[]>()
 
   const groupIds = (groups ?? []).map((g) => g.id)
   const { data: matches } = groupIds.length
@@ -144,6 +161,12 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
           </form>
         </section>
 
+        <datalist id="team-suggestions">
+          {(teams ?? []).map((t) => (
+            <option key={t.id} value={t.name} />
+          ))}
+        </datalist>
+
         <section className="space-y-3">
           {(groups ?? []).map((g) => {
             const list = matchesByGroup.get(g.id) ?? []
@@ -154,12 +177,12 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
                   <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
                 </div>
 
-                <p className="text-[11px] text-gray-500">경기 순번은 그룹 내에서 자동 부여됩니다.</p>
+                <p className="text-[11px] text-gray-500">경기 순번은 그룹 내에서 자동 부여됩니다. 팀명은 최근 입력 목록이 자동완성됩니다.</p>
                 <form action={createMatch} className="grid md:grid-cols-4 gap-2">
                   <input type="hidden" name="channelId" value={channel.id} />
                   <input type="hidden" name="groupId" value={g.id} />
-                  <input className="rounded border px-2 py-1.5 text-sm" name="team_a_name" placeholder="A팀명" required />
-                  <input className="rounded border px-2 py-1.5 text-sm" name="team_b_name" placeholder="B팀명" required />
+                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
+                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
                   <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
                 </form>
 

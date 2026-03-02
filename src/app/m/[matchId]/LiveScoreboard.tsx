@@ -36,6 +36,14 @@ export default function LiveScoreboard({
   const [countdown, setCountdown] = useState(10)
   const [refreshing, setRefreshing] = useState(false)
 
+  useEffect(() => {
+    setMatch(initialMatch)
+  }, [initialMatch])
+
+  useEffect(() => {
+    setGoals(initialGoals)
+  }, [initialGoals])
+
   const refreshScoreboard = useCallback(async () => {
     setRefreshing(true)
     try {

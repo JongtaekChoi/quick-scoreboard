@@ -115,6 +115,33 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
   redirect(`/m/${matchId}`)
 }
 
+async function deleteGoalEvent(matchId: string, goalId: string, teamSide: 'A' | 'B', channelSlug: string, channelVersion: number) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  await supabase.from('goal_events').update({ deleted_at: new Date().toISOString() }).eq('id', goalId).eq('match_id', matchId)
+
+  const { data: match } = await supabase
+    .from('matches')
+    .select('score_a,score_b')
+    .eq('id', matchId)
+    .maybeSingle<{ score_a: number; score_b: number }>()
+
+  if (match) {
+    const nextA = teamSide === 'A' ? Math.max(0, (match.score_a ?? 0) - 1) : match.score_a
+    const nextB = teamSide === 'B' ? Math.max(0, (match.score_b ?? 0) - 1) : match.score_b
+    await supabase.from('matches').update({ score_a: nextA, score_b: nextB }).eq('id', matchId)
+  }
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
 export const dynamic = 'force-dynamic'
 
 export default async function MatchDetailPage({
@@ -244,6 +271,14 @@ export default async function MatchDetailPage({
                       <input className="rounded border px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(번호/이름 통합)" defaultValue={g.scorer_name ?? g.scorer_no ?? ''} />
                       <input className="rounded border px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(번호/이름 통합)" defaultValue={g.assist_name ?? g.assist_no ?? ''} />
                       <button className="rounded border px-2 py-1 text-xs md:col-span-2 justify-self-end" type="submit">선수정보 저장</button>
+                    </form>
+                  ) : null}
+
+                  {canEdit && channel ? (
+                    <form action={deleteGoalEvent.bind(null, matchId, g.id, g.team_side, channel.slug, channel.edit_session_version)}>
+                      <button className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" type="submit">
+                        이벤트 삭제
+                      </button>
                     </form>
                   ) : null}
                 </li>

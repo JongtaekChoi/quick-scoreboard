@@ -138,10 +138,7 @@ export default async function ChannelPage({
               return (
                 <section key={g.id} className="rounded border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date} 그룹 ${g.seq}`}</h2>
-                      <p className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</p>
-                    </div>
+                    <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
                     <span className="text-xs text-gray-400">{list.length}경기</span>
                   </div>
 

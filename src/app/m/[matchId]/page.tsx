@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
 import ScoreActions from './ScoreActions'
-import ReadonlyAutoRefresh from './ReadonlyAutoRefresh'
+import LiveScoreboard from './LiveScoreboard'
 
 type Match = {
   id: string
@@ -248,13 +248,8 @@ export default async function MatchDetailPage({
   const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
   const startMatchAction = channel ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
-  const orderedGoals = [...(goals ?? [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-  const teamAGoals = orderedGoals.filter((g) => g.team_side === 'A')
-  const teamBGoals = orderedGoals.filter((g) => g.team_side === 'B')
-
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
-      <ReadonlyAutoRefresh enabled={!canEdit} intervalMs={5000} />
       <section className="max-w-3xl mx-auto space-y-4">
         <header className="space-y-2">
           <Link href={channel ? `/c/${channel.slug}` : '/'} className="underline text-sm">
@@ -270,42 +265,36 @@ export default async function MatchDetailPage({
           </p>
         </header>
 
-        <section className="sticky top-0 z-10 rounded border p-4 space-y-3 bg-white/95 backdrop-blur">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-            <div className="text-right space-y-1">
-              <div className="text-lg font-semibold">{match.team_a_name}</div>
-              <div className="flex flex-wrap justify-end gap-1">
-                {teamAGoals.map((g, i) => (
-                  <span key={`a-${g.id}`} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">
-                    {i + 1}) {g.scorer_name ?? '-'}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="text-3xl font-bold tabular-nums">{match.score_a} : {match.score_b}</div>
-            <div className="space-y-1">
-              <div className="text-lg font-semibold">{match.team_b_name}</div>
-              <div className="flex flex-wrap gap-1">
-                {teamBGoals.map((g, i) => (
-                  <span key={`b-${g.id}`} className="text-[11px] rounded border px-1.5 py-0.5 text-gray-600">
-                    {i + 1}) {g.scorer_name ?? '-'}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+        <LiveScoreboard
+          matchId={matchId}
+          polling={!canEdit}
+          initialMatch={{
+            id: match.id,
+            team_a_name: match.team_a_name,
+            team_b_name: match.team_b_name,
+            score_a: match.score_a,
+            score_b: match.score_b,
+          }}
+          initialGoals={(goals ?? []).map((g) => ({
+            id: g.id,
+            team_side: g.team_side,
+            minute: g.minute,
+            scorer_name: g.scorer_name,
+            scorer_no: g.scorer_no,
+            created_at: g.created_at,
+          }))}
+        />
 
-          {canEdit ? (
-            <div className="space-y-2">
-              {!match.started_at ? (
-                <form action={startMatchAction}>
-                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
-                </form>
-              ) : null}
-              <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
-            </div>
-          ) : null}
-        </section>
+        {canEdit ? (
+          <section className="rounded border p-4 space-y-2">
+            {!match.started_at ? (
+              <form action={startMatchAction}>
+                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
+              </form>
+            ) : null}
+            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
+          </section>
+        ) : null}
 
         {canEdit ? (
           <details className="rounded border p-4" open={false}>

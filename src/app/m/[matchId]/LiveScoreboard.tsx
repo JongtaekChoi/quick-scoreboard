@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 type Goal = {
   id: string
@@ -23,30 +23,61 @@ export default function LiveScoreboard({
   matchId,
   initialMatch,
   initialGoals,
-  polling,
+  readonly,
 }: {
   matchId: string
   initialMatch: MatchMini
   initialGoals: Goal[]
-  polling: boolean
+  readonly: boolean
 }) {
   const [match, setMatch] = useState(initialMatch)
   const [goals, setGoals] = useState(initialGoals)
+  const [autoUpdate, setAutoUpdate] = useState(false)
+  const [countdown, setCountdown] = useState(10)
+  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    if (!polling) return
-    const t = setInterval(async () => {
+  const refreshScoreboard = useCallback(async () => {
+    setRefreshing(true)
+    try {
       const res = await fetch(`/api/matches/${matchId}/scoreboard`, { cache: 'no-store' })
       if (!res.ok) return
       const json = (await res.json()) as { match: MatchMini; goals: Goal[] }
       setMatch(json.match)
       setGoals(json.goals)
-    }, 5000)
+      setCountdown(10)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [matchId])
+
+  useEffect(() => {
+    if (!readonly || !autoUpdate) return
+    const t = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          void refreshScoreboard()
+          return 10
+        }
+        return prev - 1
+      })
+    }, 1000)
     return () => clearInterval(t)
-  }, [polling, matchId])
+  }, [readonly, autoUpdate, refreshScoreboard])
 
   return (
     <section className="sticky top-0 z-10 rounded border p-4 space-y-3 bg-white/95 backdrop-blur">
+      {readonly ? (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <label className="flex items-center gap-2">
+            <span className="text-gray-600">자동 업데이트</span>
+            <input type="checkbox" checked={autoUpdate} onChange={(e) => setAutoUpdate(e.target.checked)} />
+          </label>
+          <button className="rounded border px-2 py-1 text-xs" type="button" onClick={() => void refreshScoreboard()}>
+            {autoUpdate ? `${countdown}초 후` : ''} {refreshing ? '갱신 중...' : '↻ 새로고침'}
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
         <div className="text-right space-y-1">
           <div className="text-lg font-semibold">{match.team_a_name}</div>

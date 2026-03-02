@@ -267,7 +267,7 @@ export default async function MatchDetailPage({
 
         <LiveScoreboard
           matchId={matchId}
-          polling={!canEdit}
+          readonly={!canEdit}
           initialMatch={{
             id: match.id,
             team_a_name: match.team_a_name,

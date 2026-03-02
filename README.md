@@ -14,11 +14,12 @@
 ```bash
 npm install
 cp .env.example .env.local
-# fill Supabase envs
+# fill Supabase envs + ADMIN_PASSWORD
 npm run dev
 ```
 
 채널 경기목록: `/c/{channel-slug}`
+관리자 페이지: `/admin` (비밀번호는 `ADMIN_PASSWORD`)
 
 ## CI
 - `.github/workflows/ci.yml`

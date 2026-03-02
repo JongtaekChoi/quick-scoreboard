@@ -92,13 +92,13 @@ export default function LiveScoreboard({
         {goals.length === 0 ? (
           <p className="text-xs text-gray-500">득점 이벤트 없음</p>
         ) : (
-          goals.map((g) => {
-            const who = g.scorer_name ?? g.scorer_no ?? '-'
+          goals.map((g, idx) => {
+            const who = g.scorer_name ?? g.scorer_no ?? (g.team_side === 'A' ? match.team_a_name : match.team_b_name)
             return (
-              <div key={g.id} className="grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2">
-                <div className="text-right">{g.team_side === 'A' ? who : ''}</div>
-                <div className="text-gray-500">{g.minute !== null ? `${g.minute}’` : '-'}</div>
-                <div>{g.team_side === 'B' ? who : ''}</div>
+              <div key={g.id} className={`grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded px-1 py-0.5 ${idx === 0 ? 'bg-gray-50' : ''}`}>
+                <div className="text-right truncate">{g.team_side === 'A' ? who : ''}</div>
+                <div className="text-gray-500 tabular-nums">{g.minute !== null ? `${g.minute}’` : ''}</div>
+                <div className="truncate">{g.team_side === 'B' ? who : ''}</div>
               </div>
             )
           })

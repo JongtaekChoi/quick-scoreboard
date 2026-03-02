@@ -148,6 +148,24 @@ async function endMatch(matchId: string, channelSlug: string, channelVersion: nu
   redirect(`/m/${matchId}`)
 }
 
+async function resumeMatch(matchId: string, channelSlug: string, channelVersion: number) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  await supabase
+    .from('matches')
+    .update({ status: 'live', ended_at: null })
+    .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
 async function updateGoalEvent(matchId: string, goalId: string, channelSlug: string, channelVersion: number, formData: FormData) {
   'use server'
 
@@ -305,6 +323,7 @@ export default async function MatchDetailPage({
   const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
   const startMatchAction = channel ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
   const endMatchAction = channel ? endMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
+  const resumeMatchAction = channel ? resumeMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -327,6 +346,7 @@ export default async function MatchDetailPage({
         <LiveScoreboard
           matchId={matchId}
           readonly={!canEdit}
+          matchStatus={match.status}
           initialMatch={{
             id: match.id,
             team_a_name: match.team_a_name,
@@ -358,13 +378,22 @@ export default async function MatchDetailPage({
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 종료</button>
               </form>
             ) : (
-              <p className="text-xs text-gray-500">종료된 경기입니다.</p>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">종료된 경기입니다.</p>
+                <form action={resumeMatchAction}>
+                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 재개</button>
+                </form>
+              </div>
             )}
-            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
+            {match.status !== 'ended' ? (
+              <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
+            ) : (
+              <p className="text-xs text-gray-500">골을 편집하려면 경기 재개를 눌러주세요.</p>
+            )}
           </section>
         ) : null}
 
-        {canEdit ? (
+        {canEdit && match.status !== 'ended' ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-700">현재 편집 이벤트</h2>
             {!activeGoal || !channel ? (
@@ -409,6 +438,10 @@ export default async function MatchDetailPage({
                 <option key={`name-${name}`} value={name} />
               ))}
             </datalist>
+          </section>
+        ) : canEdit ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 shadow-sm">
+            골을 편집하려면 경기 재개를 눌러주세요.
           </section>
         ) : null}
       </section>

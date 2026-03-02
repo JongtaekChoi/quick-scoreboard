@@ -32,11 +32,13 @@ function LiveScoreboardInner({
   initialMatch,
   initialGoals,
   readonly,
+  matchStatus,
 }: {
   matchId: string
   initialMatch: MatchMini
   initialGoals: Goal[]
   readonly: boolean
+  matchStatus: 'scheduled' | 'live' | 'ended'
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -54,7 +56,7 @@ function LiveScoreboardInner({
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
-    refetchInterval: readonly && autoUpdate ? REFRESH_SEC * 1000 : false,
+    refetchInterval: readonly && autoUpdate && matchStatus !== 'ended' ? REFRESH_SEC * 1000 : false,
   })
 
   const match = data.match
@@ -157,6 +159,7 @@ export default function LiveScoreboard(props: {
   initialMatch: MatchMini
   initialGoals: Goal[]
   readonly: boolean
+  matchStatus: 'scheduled' | 'live' | 'ended'
 }) {
   const [queryClient] = useState(() => new QueryClient())
   return (

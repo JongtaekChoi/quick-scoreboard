@@ -380,8 +380,8 @@ export default async function MatchDetailPage({
                   className="grid grid-cols-2 md:grid-cols-3 gap-2"
                 >
                   <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="scorer" placeholder="득점자" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
                   <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="reset">편집 취소</button>
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit">이벤트 저장</button>

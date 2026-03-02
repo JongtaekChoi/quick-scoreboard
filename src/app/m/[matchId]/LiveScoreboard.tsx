@@ -58,6 +58,33 @@ function LiveScoreboardInner({
   const match = data.match
   const goals = data.goals
 
+  const countA = goals.filter((g) => g.team_side === 'A').length
+  const countB = goals.filter((g) => g.team_side === 'B').length
+  const missingA = Math.max(0, match.score_a - countA)
+  const missingB = Math.max(0, match.score_b - countB)
+
+  const displayGoals: Goal[] = [...goals]
+  for (let i = 0; i < missingA; i++) {
+    displayGoals.push({
+      id: `missing-a-${i}`,
+      team_side: 'A',
+      minute: null,
+      scorer_name: '(기록없음)',
+      scorer_no: null,
+      created_at: new Date(0).toISOString(),
+    })
+  }
+  for (let i = 0; i < missingB; i++) {
+    displayGoals.push({
+      id: `missing-b-${i}`,
+      team_side: 'B',
+      minute: null,
+      scorer_name: '(기록없음)',
+      scorer_no: null,
+      created_at: new Date(0).toISOString(),
+    })
+  }
+
   return (
     <section className="sticky top-0 z-10 rounded-xl border border-gray-200 p-4 space-y-3 bg-white/95 backdrop-blur shadow-sm">
       {readonly ? (
@@ -82,11 +109,15 @@ function LiveScoreboardInner({
         </div>
       </div>
 
+      {missingA > 0 || missingB > 0 ? (
+        <p className="text-[11px] text-amber-700">이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행 표시)</p>
+      ) : null}
+
       <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
-        {goals.length === 0 ? (
+        {displayGoals.length === 0 ? (
           <p className="text-xs text-gray-500">득점 이벤트 없음</p>
         ) : (
-          goals.map((g, idx) => {
+          displayGoals.map((g, idx) => {
             const who = g.scorer_name ?? g.scorer_no ?? (g.team_side === 'A' ? match.team_a_name : match.team_b_name)
             const currentGoal = searchParams.get('goal')
             const active = currentGoal ? currentGoal === g.id : idx === 0

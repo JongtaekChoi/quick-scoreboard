@@ -5,8 +5,6 @@ import { isAdminAuthorized } from '@/lib/adminAuth'
 
 type Channel = { id: string; name: string; slug: string }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
-type Match = { id: string; match_group_id: string | null; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: string }
-type Team = { id: string; name: string }
 
 async function createGroup(formData: FormData) {
   'use server'
@@ -44,52 +42,6 @@ async function createGroup(formData: FormData) {
   redirect(`/admin/channel/${channelId}`)
 }
 
-async function createMatch(formData: FormData) {
-  'use server'
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const teamA = String(formData.get('team_a_name') || '').trim()
-  const teamB = String(formData.get('team_b_name') || '').trim()
-  if (!channelId || !groupId || !teamA || !teamB) return
-
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
-
-  const { data: lastMatch } = await supabase
-    .from('matches')
-    .select('seq')
-    .eq('match_group_id', groupId)
-    .order('seq', { ascending: false })
-    .limit(1)
-    .maybeSingle<{ seq: number }>()
-
-  const nextSeq = (lastMatch?.seq ?? 0) + 1
-
-  await supabase.from('matches').insert({
-    channel_id: channelId,
-    match_group_id: groupId,
-    seq: nextSeq,
-    team_a_name: teamA,
-    team_b_name: teamB,
-    score_a: 0,
-    score_b: 0,
-    status: 'scheduled',
-  })
-
-  await supabase.from('teams').upsert(
-    [
-      { channel_id: channelId, name: teamA, last_used_at: new Date().toISOString() },
-      { channel_id: channelId, name: teamB, last_used_at: new Date().toISOString() },
-    ],
-    { onConflict: 'channel_id,name' },
-  )
-
-  redirect(`/admin/channel/${channelId}`)
-}
-
 export default async function AdminChannelPage({ params }: { params: Promise<{ channelId: string }> }) {
   const authorized = await isAdminAuthorized()
   if (!authorized) redirect('/admin/login')
@@ -114,38 +66,12 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
     .order('seq', { ascending: true })
     .returns<MatchGroup[]>()
 
-  const { data: teams } = await supabase
-    .from('teams')
-    .select('id,name')
-    .eq('channel_id', channelId)
-    .order('last_used_at', { ascending: false })
-    .limit(30)
-    .returns<Team[]>()
-
-  const groupIds = (groups ?? []).map((g) => g.id)
-  const { data: matches } = groupIds.length
-    ? await supabase
-        .from('matches')
-        .select('id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status')
-        .in('match_group_id', groupIds)
-        .order('seq', { ascending: true })
-        .returns<Match[]>()
-    : { data: [] as Match[] }
-
-  const matchesByGroup = new Map<string, Match[]>()
-  for (const m of matches ?? []) {
-    if (!m.match_group_id) continue
-    const arr = matchesByGroup.get(m.match_group_id) ?? []
-    arr.push(m)
-    matchesByGroup.set(m.match_group_id, arr)
-  }
-
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
           <Link className="underline text-sm" href="/admin">← Admin</Link>
-          <h1 className="text-2xl font-semibold">{channel.name} 운영</h1>
+          <h1 className="text-2xl font-semibold">{channel.name} · 경기그룹 관리</h1>
           <p className="text-sm text-gray-600">/{channel.slug}</p>
         </header>
 
@@ -161,46 +87,22 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
           </form>
         </section>
 
-        <datalist id="team-suggestions">
-          {(teams ?? []).map((t) => (
-            <option key={t.id} value={t.name} />
-          ))}
-        </datalist>
-
         <section className="space-y-3">
-          {(groups ?? []).map((g) => {
-            const list = matchesByGroup.get(g.id) ?? []
-            return (
-              <div key={g.id} className="rounded border p-3 space-y-2">
+          {(groups ?? []).length === 0 ? (
+            <p className="text-sm text-gray-500">경기그룹이 없습니다.</p>
+          ) : (
+            (groups ?? []).map((g) => (
+              <div key={g.id} className="rounded border p-3 flex items-center justify-between gap-2">
                 <div>
                   <div className="font-medium text-sm">{g.title ?? `${g.play_date} 그룹 ${g.seq}`}</div>
                   <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
                 </div>
-
-                <p className="text-[11px] text-gray-500">경기 순번은 그룹 내에서 자동 부여됩니다. 팀명은 최근 입력 목록이 자동완성됩니다.</p>
-                <form action={createMatch} className="grid md:grid-cols-4 gap-2">
-                  <input type="hidden" name="channelId" value={channel.id} />
-                  <input type="hidden" name="groupId" value={g.id} />
-                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
-                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
-                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
-                </form>
-
-                {list.length === 0 ? (
-                  <p className="text-xs text-gray-500">등록된 경기가 없습니다.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {list.map((m) => (
-                      <li key={m.id} className="text-sm flex items-center justify-between border rounded px-2 py-1.5">
-                        <span>{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</span>
-                        <span className="tabular-nums">{m.score_a}:{m.score_b}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}`}>
+                  경기 관리
+                </Link>
               </div>
-            )
-          })}
+            ))
+          )}
         </section>
       </section>
     </main>

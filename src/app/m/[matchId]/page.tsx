@@ -205,19 +205,13 @@ export default async function MatchDetailPage({
 
         <section className="rounded border p-4 space-y-3">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <div className="text-right">
-              <div className="text-sm text-gray-600">A팀</div>
-              <div className="text-lg font-semibold">{match.team_a_name}</div>
-            </div>
+            <div className="text-right text-lg font-semibold">{match.team_a_name}</div>
             <div className="text-3xl font-bold tabular-nums">{match.score_a} : {match.score_b}</div>
-            <div>
-              <div className="text-sm text-gray-600">B팀</div>
-              <div className="text-lg font-semibold">{match.team_b_name}</div>
-            </div>
+            <div className="text-lg font-semibold">{match.team_b_name}</div>
           </div>
 
           {canEdit ? (
-            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} />
+            <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
           ) : (
             <p className="text-xs text-gray-500">읽기모드에서는 득점 버튼을 사용할 수 없습니다.</p>
           )}

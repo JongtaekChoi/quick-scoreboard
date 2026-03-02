@@ -5,9 +5,13 @@ import { useTransition } from 'react'
 export default function ScoreActions({
   addGoalA,
   addGoalB,
+  teamAName,
+  teamBName,
 }: {
   addGoalA: () => Promise<void>
   addGoalB: () => Promise<void>
+  teamAName: string
+  teamBName: string
 }) {
   const [pending, startTransition] = useTransition()
 
@@ -19,7 +23,7 @@ export default function ScoreActions({
         disabled={pending}
         onClick={() => startTransition(() => addGoalA())}
       >
-        A팀 +1
+        {teamAName} +1
       </button>
       <button
         type="button"
@@ -27,7 +31,7 @@ export default function ScoreActions({
         disabled={pending}
         onClick={() => startTransition(() => addGoalB())}
       >
-        B팀 +1
+        {teamBName} +1
       </button>
     </div>
   )

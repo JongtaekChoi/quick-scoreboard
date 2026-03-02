@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
+import GroupList from './GroupList'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -81,7 +82,7 @@ export default async function ChannelPage({
         .from('matches')
         .select('id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status')
         .in('match_group_id', groupIds)
-        .order('seq', { ascending: true })
+        .order('seq', { ascending: false })
         .returns<Match[]>()
     : { data: [] as Match[] }
 
@@ -92,6 +93,7 @@ export default async function ChannelPage({
     arr.push(m)
     matchesByGroup.set(m.match_group_id, arr)
   }
+  const matchesByGroupObj = Object.fromEntries(matchesByGroup.entries())
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -132,39 +134,7 @@ export default async function ChannelPage({
         {(groups ?? []).length === 0 ? (
           <section className="rounded border p-4 text-sm text-gray-500">표시할 경기그룹이 없어.</section>
         ) : (
-          <div className="space-y-3">
-            {(groups ?? []).map((g) => {
-              const list = matchesByGroup.get(g.id) ?? []
-              return (
-                <section key={g.id} className="rounded border p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
-                    <span className="text-xs text-gray-400">{list.length}경기</span>
-                  </div>
-
-                  {list.length === 0 ? (
-                    <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {list.map((m) => (
-                        <li key={m.id} className="rounded border px-3 py-2 bg-white">
-                          <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
-                            <div className="text-sm">
-                              <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                              <div className="text-xs text-gray-500">상태: {m.status}</div>
-                            </div>
-                            <div className="text-lg font-semibold tabular-nums">
-                              {m.score_a} : {m.score_b}
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              )
-            })}
-          </div>
+          <GroupList groups={groups ?? []} matchesByGroup={matchesByGroupObj} />
         )}
       </section>
     </main>

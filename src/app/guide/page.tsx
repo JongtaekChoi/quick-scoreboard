@@ -24,7 +24,7 @@ export default function GuidePage() {
           </li>
           <li>
             <div className="font-medium">선수정보는 나중에 보정</div>
-            <p className="text-gray-600">득점 이벤트에서 득점자/어시를 통합 입력하세요(번호/이름/혼합 가능). 같은 경기에서 입력한 값은 자동추천됩니다.</p>
+            <p className="text-gray-600">득점 이벤트에서 득점자/어시를 통합 입력하세요(번호/이름/혼합 가능). 같은 경기에서 입력한 값은 자동추천됩니다. 필요하면 `득점자 미상`, `어시 없음` 버튼으로 빠르게 처리할 수 있습니다.</p>
           </li>
           <li>
             <div className="font-medium">지난 경기 찾기</div>

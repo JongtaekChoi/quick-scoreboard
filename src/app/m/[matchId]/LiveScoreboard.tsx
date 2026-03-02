@@ -10,6 +10,8 @@ type Goal = {
   minute: number | null
   scorer_name: string | null
   scorer_no: string | null
+  assist_name: string | null
+  assist_no: string | null
   created_at: string
 }
 
@@ -71,6 +73,8 @@ function LiveScoreboardInner({
       minute: null,
       scorer_name: '(기록없음)',
       scorer_no: null,
+      assist_name: null,
+      assist_no: null,
       created_at: new Date(0).toISOString(),
     })
   }
@@ -81,6 +85,8 @@ function LiveScoreboardInner({
       minute: null,
       scorer_name: '(기록없음)',
       scorer_no: null,
+      assist_name: null,
+      assist_no: null,
       created_at: new Date(0).toISOString(),
     })
   }
@@ -119,6 +125,7 @@ function LiveScoreboardInner({
         ) : (
           displayGoals.map((g, idx) => {
             const who = g.scorer_name ?? g.scorer_no ?? (g.team_side === 'A' ? match.team_a_name : match.team_b_name)
+            const assist = g.assist_name ?? g.assist_no ?? ''
             const currentGoal = searchParams.get('goal')
             const active = currentGoal ? currentGoal === g.id : idx === 0
             return (
@@ -133,9 +140,9 @@ function LiveScoreboardInner({
                 }}
                 className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? 'bg-white ring-1 ring-gray-300' : 'hover:bg-white/70'}`}
               >
-                <div className="text-right truncate">{g.team_side === 'A' ? who : ''}</div>
+                <div className="text-right truncate">{g.team_side === 'A' ? (<><span>{who}</span>{assist ? <span className="text-gray-400"> ({assist})</span> : null}</>) : ''}</div>
                 <div className="text-gray-500 tabular-nums">{g.minute !== null ? `${g.minute}’` : ''}</div>
-                <div className="truncate">{g.team_side === 'B' ? who : ''}</div>
+                <div className="truncate">{g.team_side === 'B' ? (<><span>{who}</span>{assist ? <span className="text-gray-400"> ({assist})</span> : null}</>) : ''}</div>
               </button>
             )
           })

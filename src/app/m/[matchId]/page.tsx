@@ -49,6 +49,9 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string
     .maybeSingle<{ id: string; status: 'scheduled' | 'live' | 'ended'; started_at: string | null }>()
 
   if (!match) return
+  if (match.status === 'ended') {
+    redirect(`/m/${matchId}?err=match_ended`)
+  }
 
   const now = new Date()
   const minute = match.started_at
@@ -127,6 +130,24 @@ async function startMatch(matchId: string, channelSlug: string, channelVersion: 
   redirect(`/m/${matchId}`)
 }
 
+async function endMatch(matchId: string, channelSlug: string, channelVersion: number) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  await supabase
+    .from('matches')
+    .update({ status: 'ended', ended_at: new Date().toISOString() })
+    .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
 async function updateGoalEvent(matchId: string, goalId: string, channelSlug: string, channelVersion: number, formData: FormData) {
   'use server'
 
@@ -136,8 +157,11 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
   const canEdit = await isEditAuthorized(channelSlug, channelVersion)
   if (!canEdit) return
 
-  const scorer = String(formData.get('scorer') || '').trim()
-  const assist = String(formData.get('assist') || '').trim()
+  let scorer = String(formData.get('scorer') || '').trim()
+  let assist = String(formData.get('assist') || '').trim()
+  const setNone = String(formData.get('set_none') || '')
+  if (setNone === 'scorer') scorer = ''
+  if (setNone === 'assist') assist = ''
   const minuteRaw = String(formData.get('minute') || '').trim()
   const minute = minuteRaw === '' ? null : Math.max(0, Number(minuteRaw) || 0)
 
@@ -283,6 +307,7 @@ export default async function MatchDetailPage({
   const addGoalA = channel ? addGoal.bind(null, matchId, 'A', channel.slug, channel.edit_session_version) : async () => {}
   const addGoalB = channel ? addGoal.bind(null, matchId, 'B', channel.slug, channel.edit_session_version) : async () => {}
   const startMatchAction = channel ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
+  const endMatchAction = channel ? endMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -318,6 +343,8 @@ export default async function MatchDetailPage({
             minute: g.minute,
             scorer_name: g.scorer_name,
             scorer_no: g.scorer_no,
+            assist_name: g.assist_name,
+            assist_no: g.assist_no,
             created_at: g.created_at,
           }))}
         />
@@ -329,6 +356,13 @@ export default async function MatchDetailPage({
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
               </form>
             ) : null}
+            {match.status !== 'ended' ? (
+              <form action={endMatchAction}>
+                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 종료</button>
+              </form>
+            ) : (
+              <p className="text-xs text-gray-500">종료된 경기입니다.</p>
+            )}
             <ScoreActions addGoalA={addGoalA} addGoalB={addGoalB} teamAName={match.team_a_name} teamBName={match.team_b_name} />
           </section>
         ) : null}
@@ -350,7 +384,11 @@ export default async function MatchDetailPage({
                   <input className="rounded-lg border border-gray-200 px-2 py-1" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
                   <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="scorer" placeholder="득점자(통합)" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
                   <input className="rounded-lg border border-gray-200 px-2 py-1" list="name-suggestions" name="assist" placeholder="어시(통합)" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
-                  <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs md:col-span-3 justify-self-end" type="submit">이벤트 저장</button>
+                  <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
+                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit" name="set_none" value="scorer">득점자 미상</button>
+                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit" name="set_none" value="assist">어시 없음</button>
+                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit">이벤트 저장</button>
+                  </div>
                 </form>
                 <form action={deleteGoalEvent.bind(null, matchId, activeGoal.id, activeGoal.team_side, channel.slug, channel.edit_session_version)}>
                   <button className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" type="submit">이벤트 삭제</button>

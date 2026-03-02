@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
+import { autoStartDueMatches } from '@/lib/matchSchedule'
 import ScoreActions from './ScoreActions'
 import LiveScoreboard from './LiveScoreboard'
 
@@ -14,6 +15,7 @@ type Match = {
   score_a: number
   score_b: number
   status: 'scheduled' | 'live' | 'ended'
+  scheduled_start_at: string | null
   started_at: string | null
   channel_id: string
 }
@@ -32,6 +34,17 @@ type GoalEvent = {
 }
 
 type Alias = { jersey_no: string | null; player_name: string | null }
+
+function formatKstDateTime(iso: string) {
+  return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })
+}
+
+function toDateTimeLocalValue(iso: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  return kst.toISOString().slice(0, 16)
+}
 
 async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string, channelVersion: number) {
   'use server'
@@ -123,7 +136,7 @@ async function startMatch(matchId: string, channelSlug: string, channelVersion: 
 
   await supabase
     .from('matches')
-    .update({ status: 'live', started_at: new Date().toISOString() })
+    .update({ status: 'live', started_at: new Date().toISOString(), scheduled_start_at: null })
     .eq('id', matchId)
 
   revalidatePath(`/m/${matchId}`)
@@ -159,7 +172,56 @@ async function resumeMatch(matchId: string, channelSlug: string, channelVersion:
 
   await supabase
     .from('matches')
-    .update({ status: 'live', ended_at: null })
+    .update({ status: 'live', ended_at: null, scheduled_start_at: null })
+    .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
+async function reserveMatchStart(matchId: string, channelSlug: string, channelVersion: number, formData: FormData) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  const localValue = String(formData.get('scheduled_start_at') || '').trim()
+  if (!localValue) {
+    revalidatePath(`/m/${matchId}`)
+    redirect(`/m/${matchId}`)
+  }
+
+  const scheduledStartAt = new Date(`${localValue}:00+09:00`).toISOString()
+
+  await supabase
+    .from('matches')
+    .update({
+      status: 'scheduled',
+      started_at: null,
+      ended_at: null,
+      scheduled_start_at: scheduledStartAt,
+    })
+    .eq('id', matchId)
+
+  revalidatePath(`/m/${matchId}`)
+  redirect(`/m/${matchId}`)
+}
+
+async function delayMatch(matchId: string, channelSlug: string, channelVersion: number) {
+  'use server'
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
+  if (!canEdit) return
+
+  await supabase
+    .from('matches')
+    .update({ status: 'scheduled', scheduled_start_at: null, started_at: null })
     .eq('id', matchId)
 
   revalidatePath(`/m/${matchId}`)
@@ -266,9 +328,11 @@ export default async function MatchDetailPage({
     )
   }
 
+  await autoStartDueMatches(supabase, matchId)
+
   const { data: match } = await supabase
     .from('matches')
-    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,started_at,channel_id')
+    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id')
     .eq('id', matchId)
     .maybeSingle<Match>()
 
@@ -324,6 +388,8 @@ export default async function MatchDetailPage({
   const startMatchAction = channel ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
   const endMatchAction = channel ? endMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
   const resumeMatchAction = channel ? resumeMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
+  const reserveMatchStartAction = channel ? reserveMatchStart.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
+  const delayMatchAction = channel ? delayMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -335,8 +401,11 @@ export default async function MatchDetailPage({
           <h1 className="text-2xl font-semibold">{match.seq}경기</h1>
           <p className="text-sm text-gray-600">상태: {match.status}</p>
           <p className="text-xs text-gray-500">
-            시작시간: {match.started_at ? new Date(match.started_at).toLocaleTimeString() : '미설정'}
+            시작시간: {match.started_at ? formatKstDateTime(match.started_at) : '미설정'}
           </p>
+          {match.status === 'scheduled' && match.scheduled_start_at ? (
+            <p className="text-xs text-blue-700">{formatKstDateTime(match.scheduled_start_at)} 시작 예정</p>
+          ) : null}
           <p className={`text-xs ${canEdit ? 'text-green-700' : 'text-gray-500'}`}>
             {canEdit ? '편집모드 ON' : '읽기모드 (채널에서 편집 비밀번호 입력 필요)'}
           </p>
@@ -368,11 +437,22 @@ export default async function MatchDetailPage({
 
         {canEdit ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
-            {!match.started_at ? (
-              <form action={startMatchAction}>
-                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
+            <div className="flex flex-wrap gap-2">
+              {match.status !== 'live' ? (
+                <form action={startMatchAction}>
+                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
+                </form>
+              ) : null}
+              <form action={reserveMatchStartAction} className="flex items-center gap-2">
+                <input className="rounded border px-2 py-1.5 text-sm" type="datetime-local" name="scheduled_start_at" defaultValue={toDateTimeLocalValue(match.scheduled_start_at)} />
+                <button className="rounded border px-3 py-2 text-sm" type="submit">시작 예약</button>
               </form>
-            ) : null}
+              {match.scheduled_start_at ? (
+                <form action={delayMatchAction}>
+                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 지연</button>
+                </form>
+              ) : null}
+            </div>
             {match.status !== 'ended' ? (
               <form action={endMatchAction}>
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 종료</button>

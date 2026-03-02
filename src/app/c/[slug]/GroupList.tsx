@@ -13,6 +13,7 @@ type Match = {
   score_a: number
   score_b: number
   status: 'scheduled' | 'live' | 'ended'
+  scheduled_start_at: string | null
 }
 
 export default function GroupList({
@@ -61,6 +62,11 @@ export default function GroupList({
                         <div className="text-sm">
                           <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
                           <div className="text-xs text-gray-500">상태: {m.status}</div>
+                          {m.status === 'scheduled' && m.scheduled_start_at ? (
+                            <div className="text-xs text-blue-700">
+                              {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작 예정
+                            </div>
+                          ) : null}
                         </div>
                         <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
                       </Link>

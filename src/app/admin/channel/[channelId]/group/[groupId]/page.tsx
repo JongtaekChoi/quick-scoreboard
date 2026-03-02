@@ -5,8 +5,15 @@ import { isAdminAuthorized } from '@/lib/adminAuth'
 
 type Channel = { id: string; name: string; slug: string }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
-type Match = { id: string; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended' }
+type Match = { id: string; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
 type Team = { id: string; name: string }
+
+function toDateTimeLocalValue(iso: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  return kst.toISOString().slice(0, 16)
+}
 
 async function createMatch(formData: FormData) {
   'use server'
@@ -65,12 +72,22 @@ async function updateMatch(formData: FormData) {
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
   const status = String(formData.get('status') || 'scheduled') as 'scheduled' | 'live' | 'ended'
+  const scheduledStartRaw = String(formData.get('scheduled_start_at') || '').trim()
+  const scheduledStartAt = scheduledStartRaw ? new Date(`${scheduledStartRaw}:00+09:00`).toISOString() : null
   if (!channelId || !groupId || !matchId || !teamA || !teamB) return
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await supabase.from('matches').update({ team_a_name: teamA, team_b_name: teamB, status }).eq('id', matchId)
+  await supabase
+    .from('matches')
+    .update({
+      team_a_name: teamA,
+      team_b_name: teamB,
+      status,
+      scheduled_start_at: status === 'ended' ? null : scheduledStartAt,
+    })
+    .eq('id', matchId)
 
   await supabase.from('teams').upsert(
     [
@@ -113,7 +130,7 @@ export default async function AdminGroupPage({ params }: { params: Promise<{ cha
   const [{ data: channel }, { data: group }, { data: matches }, { data: teams }] = await Promise.all([
     supabase.from('channels').select('id,name,slug').eq('id', channelId).maybeSingle<Channel>(),
     supabase.from('match_groups').select('id,play_date,venue,title,seq').eq('id', groupId).maybeSingle<MatchGroup>(),
-    supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
+    supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
     supabase.from('teams').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(30).returns<Team[]>(),
   ])
 
@@ -152,7 +169,7 @@ export default async function AdminGroupPage({ params }: { params: Promise<{ cha
             (matches ?? []).map((m) => (
               <div key={m.id} className="rounded border p-3 space-y-2">
                 <div className="text-sm font-medium">{m.seq}경기 · {m.score_a}:{m.score_b}</div>
-                <form action={updateMatch} className="grid md:grid-cols-5 gap-2 items-center">
+                <form action={updateMatch} className="grid md:grid-cols-6 gap-2 items-center">
                   <input type="hidden" name="channelId" value={channel.id} />
                   <input type="hidden" name="groupId" value={group.id} />
                   <input type="hidden" name="matchId" value={m.id} />
@@ -163,6 +180,7 @@ export default async function AdminGroupPage({ params }: { params: Promise<{ cha
                     <option value="live">live</option>
                     <option value="ended">ended</option>
                   </select>
+                  <input className="rounded border px-2 py-1.5 text-sm" type="datetime-local" name="scheduled_start_at" defaultValue={toDateTimeLocalValue(m.scheduled_start_at)} />
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
                 </form>
 

@@ -83,6 +83,7 @@ create table if not exists matches (
   score_b int not null default 0,
 
   status text not null default 'live' check (status in ('scheduled', 'live', 'ended')),
+  scheduled_start_at timestamptz null,
   started_at timestamptz null,
   ended_at timestamptz null,
   note text null,
@@ -95,6 +96,7 @@ create table if not exists matches (
 
 create index if not exists matches_channel_created_idx on matches (channel_id, created_at desc);
 create index if not exists matches_group_seq_idx on matches (match_group_id, seq);
+create index if not exists matches_scheduled_start_idx on matches (status, scheduled_start_at);
 
 -- 5) 골 이벤트 (append-first, 나중 보정)
 create table if not exists goal_events (

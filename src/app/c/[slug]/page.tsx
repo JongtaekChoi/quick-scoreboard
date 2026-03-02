@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
+import { autoStartDueMatches } from '@/lib/matchSchedule'
 import GroupList from './GroupList'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
@@ -14,6 +15,7 @@ type Match = {
   score_a: number
   score_b: number
   status: 'scheduled' | 'live' | 'ended'
+  scheduled_start_at: string | null
 }
 
 export const dynamic = 'force-dynamic'
@@ -63,6 +65,8 @@ export default async function ChannelPage({
 
   const canEdit = await isEditAuthorized(channel.slug, channel.edit_session_version)
 
+  await autoStartDueMatches(supabase)
+
   let groupQuery = supabase
     .from('match_groups')
     .select('id,channel_id,play_date,venue,title,seq')
@@ -80,7 +84,7 @@ export default async function ChannelPage({
   const { data: matches } = groupIds.length
     ? await supabase
         .from('matches')
-        .select('id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status')
+        .select('id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at')
         .in('match_group_id', groupIds)
         .order('seq', { ascending: false })
         .returns<Match[]>()

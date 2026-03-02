@@ -22,8 +22,9 @@ npm run dev
 관리자 페이지: `/admin` (비밀번호는 `ADMIN_PASSWORD`)
 
 ## DB Patch
-- 팀 추천 입력을 위해 기존 DB에는 아래 패치를 1회 적용하세요.
+- 기존 DB에는 아래 패치를 1회 적용하세요.
   - `db/patch_teams_master.sql`
+  - `db/patch_match_scheduled_start.sql`
 
 ## CI
 - `.github/workflows/ci.yml`

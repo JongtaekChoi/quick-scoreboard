@@ -49,6 +49,9 @@ function LiveScoreboardInner({
       return (await res.json()) as ScoreboardPayload
     },
     initialData: { match: initialMatch, goals: initialGoals },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     refetchInterval: readonly && autoUpdate ? REFRESH_SEC * 1000 : false,
   })
 

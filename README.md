@@ -21,11 +21,18 @@ npm run dev
 채널 경기목록: `/c/{channel-slug}`
 관리자 페이지: `/admin` (비밀번호는 `ADMIN_PASSWORD`)
 
-## DB Patch
-- 기존 DB에는 아래 패치를 1회 적용하세요.
+## DB Migration
+- 기준 마이그레이션: `supabase/migrations/20260303090100_init.sql`
+- 자동 적용: `.github/workflows/ci.yml`의 `db-migrate` job (main push 시)
+  - GitHub Secret `SUPABASE_DB_URL` 설정 필요
+  - 예: `postgresql://postgres:<password>@<project-ref>.supabase.co:5432/postgres?sslmode=require`
+
+## 수동 패치(기존 운영 DB)
+- 이미 운영 중인 DB는 기존 1회 패치 적용 유지:
   - `db/patch_teams_master.sql`
   - `db/patch_match_scheduled_start.sql`
 
 ## CI
 - `.github/workflows/ci.yml`
   - PR / main push 시 `npm ci`, `npm run lint`, `npm run build`
+  - main push + secret 설정 시 `supabase db push`로 migration 적용

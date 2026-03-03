@@ -77,7 +77,6 @@ async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string
       match_id: matchId,
       team_side: teamSide,
       minute,
-      scored_at: now.toISOString(),
     })
     .select('id')
     .maybeSingle<{ id: string }>()

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate:develop": "bash ./scripts/db-migrate.sh develop",
+    "db:migrate:main": "bash ./scripts/db-migrate.sh main"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",

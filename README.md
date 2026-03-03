@@ -23,10 +23,12 @@ npm run dev
 
 ## DB Migration
 - 기준 마이그레이션: `supabase/migrations/*`
-- 자동 적용: `.github/workflows/ci.yml`
-  - `develop` push: `db-migrate-develop` → `SUPABASE_DB_URL_DEVELOP`
-  - `main` push: `db-migrate-main` → `SUPABASE_DB_URL_MAIN`
-  - 예: `postgresql://postgres:<password>@<project-ref>.supabase.co:5432/postgres?sslmode=require`
+- 무료 플랜 권장: 로컬 수동 적용
+  - `export SUPABASE_DB_URL_DEVELOP='postgresql://...'`
+  - `npm run db:migrate:develop`
+  - `export SUPABASE_DB_URL_MAIN='postgresql://...'`
+  - `npm run db:migrate:main`
+- CI 자동 마이그레이션은 네트워크/플랜 제약으로 실패할 수 있음(IPv4/접속 이슈).
 
 ## 수동 패치(기존 운영 DB)
 - 이미 운영 중인 DB는 기존 1회 패치 적용 유지:

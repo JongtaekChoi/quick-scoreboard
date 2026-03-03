@@ -31,6 +31,7 @@ npm run dev
 - 이미 운영 중인 DB는 기존 1회 패치 적용 유지:
   - `db/patch_teams_master.sql`
   - `db/patch_match_scheduled_start.sql`
+  - `db/patch_team_players.sql`
 
 ## CI
 - `.github/workflows/ci.yml`

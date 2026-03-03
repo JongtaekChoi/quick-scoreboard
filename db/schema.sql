@@ -37,6 +37,23 @@ create table if not exists teams (
 create unique index if not exists teams_unique_channel_name on teams (channel_id, name);
 create index if not exists teams_channel_last_used_idx on teams (channel_id, last_used_at desc);
 
+-- 1.6) 팀별 선수 마스터 (등번호/이름)
+create table if not exists team_players (
+  id uuid primary key default gen_random_uuid(),
+  channel_id uuid not null references channels(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  jersey_no text not null,
+  player_name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists team_players_unique_number
+  on team_players (team_id, jersey_no);
+create index if not exists team_players_team_active_idx
+  on team_players (team_id, is_active, jersey_no);
+
 -- 2) 비공개 링크 토큰(뷰/에딧)
 -- raw token은 저장하지 않고 hash만 저장
 create table if not exists channel_share_links (
@@ -170,6 +187,11 @@ for each row execute procedure set_updated_at();
 drop trigger if exists trg_teams_set_updated_at on teams;
 create trigger trg_teams_set_updated_at
 before update on teams
+for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_team_players_set_updated_at on team_players;
+create trigger trg_team_players_set_updated_at
+before update on team_players
 for each row execute procedure set_updated_at();
 
 commit;

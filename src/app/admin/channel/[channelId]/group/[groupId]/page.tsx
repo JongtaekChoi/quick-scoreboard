@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { isEditAuthorized } from '@/lib/editAuth'
+import { getManagerSession } from '@/lib/managerAuth'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = {
@@ -34,7 +35,20 @@ async function canManageChannel(channelId: string) {
   if (isAdmin) return { allowed: true, channel }
 
   const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
-  return { allowed: isEditor, channel }
+  if (isEditor) return { allowed: true, channel, managerTeamId: null as string | null }
+
+  const mgr = await getManagerSession(channel.slug)
+  if (!mgr) return { allowed: false, channel, managerTeamId: null as string | null }
+
+  const { data: account } = await supabase
+    .from('team_manager_accounts')
+    .select('team_id,session_version,is_active')
+    .eq('channel_id', channel.id)
+    .eq('login_id', mgr.loginId)
+    .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
+
+  const ok = !!account && account.is_active && account.team_id === mgr.teamId && account.session_version === mgr.version
+  return { allowed: ok, channel, managerTeamId: ok ? account.team_id : null }
 }
 
 function toDateTimeLocalValue(iso: string | null) {
@@ -168,6 +182,9 @@ async function addGroupEntry(formData: FormData) {
   }
 
   if (!channelId || !groupId || !teamId || !playerId) return
+  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
+  }
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
@@ -187,6 +204,7 @@ async function removeGroupEntry(formData: FormData) {
   const channelId = String(formData.get('channelId') || '')
   const groupId = String(formData.get('groupId') || '')
   const entryId = String(formData.get('entryId') || '')
+  const teamId = String(formData.get('teamId') || '')
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -195,6 +213,9 @@ async function removeGroupEntry(formData: FormData) {
   }
 
   if (!channelId || !groupId || !entryId) return
+  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
+  }
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
@@ -216,6 +237,9 @@ async function toggleEntryConfirm(formData: FormData) {
   }
 
   if (!channelId || !groupId) return
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+  }
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
@@ -344,6 +368,7 @@ export default async function AdminGroupPage({
                               <form action={removeGroupEntry}>
                                 <input type="hidden" name="channelId" value={channel.id} />
                                 <input type="hidden" name="groupId" value={group.id} />
+                                <input type="hidden" name="teamId" value={t.id} />
                                 <input type="hidden" name="entryId" value={e.id} />
                                 <button className="underline" type="submit">제거</button>
                               </form>

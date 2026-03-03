@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
+import { getManagerSession } from '@/lib/managerAuth'
 import GroupList from './GroupList'
 import ShareButton from '@/components/ShareButton'
 
@@ -47,10 +48,10 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string; err?: string; edit?: string; order?: string }>
+  searchParams: Promise<{ date?: string; err?: string; edit?: string; order?: string; mgr?: string }>
 }) {
   const { slug } = await params
-  const { date, err, edit, order } = await searchParams
+  const { date, err, edit, order, mgr } = await searchParams
   const matchOrder: 'asc' | 'desc' = order === 'desc' ? 'desc' : 'asc'
 
   const supabase = getSupabaseServerClient()
@@ -87,6 +88,8 @@ export default async function ChannelPage({
   }
 
   const canEdit = await isEditAuthorized(channel.slug, channel.edit_session_version)
+  const managerSession = await getManagerSession(channel.slug)
+  const managerTeamId = managerSession?.teamId ?? null
   const channelUrl = `https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}`
 
   await autoStartDueMatches(supabase)
@@ -147,8 +150,22 @@ export default async function ChannelPage({
                 <button className="rounded border px-2 py-1" type="submit">편집 시작</button>
               </form>
             )}
+            {managerTeamId ? (
+              <form action={`/c/${encodeURIComponent(channel.slug)}/manager-login`} method="post">
+                <input type="hidden" name="action" value="logout" />
+                <button className="underline" type="submit">팀장 로그아웃</button>
+              </form>
+            ) : (
+              <form action={`/c/${encodeURIComponent(channel.slug)}/manager-login`} method="post" className="flex items-center gap-2">
+                <input className="rounded border px-2 py-1" name="login_id" placeholder="팀장ID" required />
+                <input className="rounded border px-2 py-1" type="password" name="password" placeholder="팀장 비밀번호" required />
+                <button className="rounded border px-2 py-1" type="submit">팀장 로그인</button>
+              </form>
+            )}
             {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
             {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
+            {mgr === '1' ? <span className="text-green-700">팀장 로그인 완료.</span> : null}
+            {mgr === 'password' ? <span className="text-red-600">팀장 계정 정보가 올바르지 않아.</span> : null}
             {canEdit ? (
               <Link className="underline" href={`/admin/channel/${channel.id}?from=channel`}>
                 운영 관리 열기

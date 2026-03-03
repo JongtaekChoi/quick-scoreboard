@@ -145,8 +145,16 @@ async function deleteMatch(formData: FormData) {
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
 
-export default async function AdminGroupPage({ params }: { params: Promise<{ channelId: string; groupId: string }> }) {
+export default async function AdminGroupPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ channelId: string; groupId: string }>
+  searchParams: Promise<{ from?: string }>
+}) {
   const { channelId, groupId } = await params
+  const { from } = await searchParams
+  const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -169,7 +177,17 @@ export default async function AdminGroupPage({ params }: { params: Promise<{ cha
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
-          <Link className="underline text-sm" href={`/admin/channel/${channel.id}`}>← 경기그룹 목록</Link>
+          <div className="text-xs text-gray-500 flex items-center gap-1">
+            <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
+              {fromChannel ? '채널 경기목록' : '관리자 홈'}
+            </Link>
+            <span>›</span>
+            <Link className="underline" href={`/admin/channel/${channel.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
+              경기그룹 관리
+            </Link>
+            <span>›</span>
+            <span>경기 관리</span>
+          </div>
           <h1 className="text-2xl font-semibold">경기 관리</h1>
           <p className="text-sm text-gray-600">{group.title ?? `${group.play_date} 그룹 ${group.seq}`} · {group.play_date} {group.venue ? `· ${group.venue}` : ''}</p>
         </header>

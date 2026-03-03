@@ -145,8 +145,8 @@ export default async function ChannelPage({
             {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
             {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
             {canEdit ? (
-              <Link className="underline" href={`/admin/channel/${channel.id}`}>
-                경기/그룹 관리
+              <Link className="underline" href={`/admin/channel/${channel.id}?from=channel`}>
+                운영 관리 열기
               </Link>
             ) : null}
           </div>

@@ -64,8 +64,16 @@ async function createGroup(formData: FormData) {
   redirect(`/admin/channel/${channelId}`)
 }
 
-export default async function AdminChannelPage({ params }: { params: Promise<{ channelId: string }> }) {
+export default async function AdminChannelPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ channelId: string }>
+  searchParams: Promise<{ from?: string }>
+}) {
   const { channelId } = await params
+  const { from } = await searchParams
+  const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -90,9 +98,15 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
-          <Link className="underline text-sm" href={`/c/${channel.slug}`}>← 채널 경기목록</Link>
-          <h1 className="text-2xl font-semibold">{channel.name} · 경기그룹 관리</h1>
-          <p className="text-sm text-gray-600">/{channel.slug}</p>
+          <div className="text-xs text-gray-500 flex items-center gap-1">
+            <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
+              {fromChannel ? '채널 경기목록' : '관리자 홈'}
+            </Link>
+            <span>›</span>
+            <span>경기그룹 관리</span>
+          </div>
+          <h1 className="text-2xl font-semibold">{channel.name} 경기그룹 관리</h1>
+          <p className="text-sm text-gray-600">채널: /{channel.slug}</p>
         </header>
 
         <section className="rounded border p-4 space-y-2">
@@ -117,8 +131,8 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
                   <div className="font-medium text-sm">{g.title ?? `${g.play_date} 그룹 ${g.seq}`}</div>
                   <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
                 </div>
-                <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}`}>
-                  경기 관리
+                <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
+                  이 그룹 경기 관리
                 </Link>
               </div>
             ))

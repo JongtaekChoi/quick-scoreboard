@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -f .env.local ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.local
+  set +a
+fi
+
 if ! command -v supabase >/dev/null 2>&1; then
   echo "[error] supabase CLI not found. Install first: brew install supabase/tap/supabase"
   exit 1

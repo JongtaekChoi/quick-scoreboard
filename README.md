@@ -24,10 +24,13 @@ npm run dev
 ## DB Migration
 - 기준 마이그레이션: `supabase/migrations/*`
 - 무료 플랜 권장: 로컬 수동 적용
-  - `export SUPABASE_DB_URL_DEVELOP='postgresql://...'`
-  - `npm run db:migrate:develop`
-  - `export SUPABASE_DB_URL_MAIN='postgresql://...'`
-  - `npm run db:migrate:main`
+  - `.env.local`에 아래 값 저장(로컬 전용, git 커밋 금지)
+    - `SUPABASE_DB_URL_DEVELOP='postgresql://...'`
+    - `SUPABASE_DB_URL_MAIN='postgresql://...'`
+  - 실행
+    - `npm run db:migrate:develop`
+    - `npm run db:migrate:main` (YES 확인 필요)
+- `scripts/db-migrate.sh`는 실행 시 `.env.local`을 자동 로드합니다.
 - CI 자동 마이그레이션은 네트워크/플랜 제약으로 실패할 수 있음(IPv4/접속 이슈).
 
 ## 수동 패치(기존 운영 DB)

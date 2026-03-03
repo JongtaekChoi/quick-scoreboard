@@ -31,6 +31,15 @@ if [[ -z "$DB_URL" ]]; then
   exit 1
 fi
 
+if [[ "$TARGET" == "main" || "$TARGET" == "prod" || "$TARGET" == "production" ]]; then
+  echo "[warn] You are about to apply migrations to MAIN (production) database."
+  read -r -p "Type YES to continue: " CONFIRM
+  if [[ "$CONFIRM" != "YES" ]]; then
+    echo "[abort] canceled"
+    exit 1
+  fi
+fi
+
 echo "[info] applying migrations to $TARGET"
 supabase db push --db-url "$DB_URL" --include-all
 

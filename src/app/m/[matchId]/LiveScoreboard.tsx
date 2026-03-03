@@ -1,12 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type Goal = {
   id: string;
@@ -47,7 +43,15 @@ function LiveScoreboardInner({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [autoUpdate, setAutoUpdate] = useState(false);
+
+  useEffect(() => {
+    queryClient.setQueryData(["scoreboard", matchId], {
+      match: initialMatch,
+      goals: initialGoals,
+    });
+  }, [queryClient, matchId, initialMatch, initialGoals]);
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["scoreboard", matchId],
@@ -216,10 +220,5 @@ export default function LiveScoreboard(props: {
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
 }) {
-  const [queryClient] = useState(() => new QueryClient());
-  return (
-    <QueryClientProvider client={queryClient}>
-      <LiveScoreboardInner {...props} />
-    </QueryClientProvider>
-  );
+  return <LiveScoreboardInner {...props} />;
 }

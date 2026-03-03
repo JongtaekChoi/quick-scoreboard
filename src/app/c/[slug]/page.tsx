@@ -25,10 +25,11 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string; err?: string; edit?: string }>
+  searchParams: Promise<{ date?: string; err?: string; edit?: string; order?: string }>
 }) {
   const { slug } = await params
-  const { date, err, edit } = await searchParams
+  const { date, err, edit, order } = await searchParams
+  const matchOrder: 'asc' | 'desc' = order === 'desc' ? 'desc' : 'asc'
 
   const supabase = getSupabaseServerClient()
 
@@ -86,7 +87,7 @@ export default async function ChannelPage({
         .from('matches')
         .select('id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at')
         .in('match_group_id', groupIds)
-        .order('seq', { ascending: false })
+        .order('seq', { ascending: matchOrder === 'asc' })
         .returns<Match[]>()
     : { data: [] as Match[] }
 
@@ -100,7 +101,7 @@ export default async function ChannelPage({
   const matchesByGroupObj = Object.fromEntries(matchesByGroup.entries())
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white">
+    <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold">{channel.name}</h1>
@@ -123,11 +124,16 @@ export default async function ChannelPage({
             {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
             {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
           </div>
-          <form className="flex items-center gap-2" method="get">
+          <form className="flex flex-wrap items-center gap-2" method="get">
             <label className="text-xs text-gray-600">날짜</label>
             <input className="rounded border px-2 py-1.5 text-sm" type="date" name="date" defaultValue={date ?? ''} />
-            <button className="rounded border px-3 py-1.5 text-sm" type="submit">필터</button>
-            {date ? (
+            <label className="text-xs text-gray-600">정렬</label>
+            <select className="rounded border px-2 py-1.5 text-sm" name="order" defaultValue={matchOrder}>
+              <option value="asc">경기순 1→N</option>
+              <option value="desc">경기순 N→1</option>
+            </select>
+            <button className="rounded border px-3 py-1.5 text-sm" type="submit">적용</button>
+            {(date || matchOrder !== 'asc') ? (
               <Link className="text-xs underline text-gray-600" href={`/c/${encodeURIComponent(channel.slug)}`}>
                 초기화
               </Link>

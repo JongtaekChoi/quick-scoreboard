@@ -23,7 +23,7 @@ export default function ScoreActions({
         disabled={pending}
         onClick={() => startTransition(() => addGoalA())}
       >
-        {teamAName} +1
+        {pending ? <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />저장중...</span> : `${teamAName} +1`}
       </button>
       <button
         type="button"
@@ -31,7 +31,7 @@ export default function ScoreActions({
         disabled={pending}
         onClick={() => startTransition(() => addGoalB())}
       >
-        {teamBName} +1
+        {pending ? <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />저장중...</span> : `${teamBName} +1`}
       </button>
     </div>
   )

@@ -6,6 +6,7 @@ import { isEditAuthorized } from '@/lib/editAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
 import ScoreActions from './ScoreActions'
 import LiveScoreboard from './LiveScoreboard'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Match = {
   id: string
@@ -18,9 +19,11 @@ type Match = {
   scheduled_start_at: string | null
   started_at: string | null
   channel_id: string
+  match_group_id: string | null
 }
 
 type Channel = { id: string; slug: string; edit_session_version: number }
+type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 
 type GoalEvent = {
   id: string
@@ -318,7 +321,7 @@ export default async function MatchDetailPage({
 
   if (!supabase) {
     return (
-      <main className="min-h-screen p-4 md:p-6 bg-white">
+      <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기 상세</h1>
           <p className="text-sm text-amber-700">Supabase 환경변수가 없어 데이터 연결을 건너뛰었습니다.</p>
@@ -331,13 +334,13 @@ export default async function MatchDetailPage({
 
   const { data: match } = await supabase
     .from('matches')
-    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id')
+    .select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id')
     .eq('id', matchId)
     .maybeSingle<Match>()
 
   if (!match) {
     return (
-      <main className="min-h-screen p-4 md:p-6 bg-white">
+      <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기를 찾을 수 없음</h1>
           <p className="text-sm text-gray-600">유효한 경기 링크인지 확인해줘.</p>
@@ -351,6 +354,14 @@ export default async function MatchDetailPage({
     .select('id,slug,edit_session_version')
     .eq('id', match.channel_id)
     .maybeSingle<Channel>()
+
+  const { data: group } = match.match_group_id
+    ? await supabase
+        .from('match_groups')
+        .select('id,play_date,venue,title,seq')
+        .eq('id', match.match_group_id)
+        .maybeSingle<MatchGroup>()
+    : { data: null as MatchGroup | null }
 
   const { data: goals } = await supabase
     .from('goal_events')
@@ -391,12 +402,20 @@ export default async function MatchDetailPage({
   const delayMatchAction = channel ? delayMatch.bind(null, matchId, channel.slug, channel.edit_session_version) : async () => {}
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white">
+    <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         <header className="space-y-2">
-          <Link href={channel ? `/c/${channel.slug}` : '/'} className="underline text-sm">
-            ← 경기목록
-          </Link>
+          <div className="text-xs text-gray-500 flex flex-wrap items-center gap-1">
+            <Link href={channel ? `/c/${channel.slug}` : '/'} className="underline">경기목록</Link>
+            {group ? (
+              <>
+                <span>›</span>
+                <span>{group.title ?? `${group.play_date} 그룹 ${group.seq}`}</span>
+              </>
+            ) : null}
+            <span>›</span>
+            <span>{match.seq}경기</span>
+          </div>
           <h1 className="text-2xl font-semibold">{match.seq}경기</h1>
           <p className="text-sm text-gray-600">상태: {match.status}</p>
           <p className="text-xs text-gray-500">
@@ -439,28 +458,28 @@ export default async function MatchDetailPage({
             <div className="flex flex-wrap gap-2">
               {match.status !== 'live' ? (
                 <form action={startMatchAction}>
-                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 시작</button>
+                  <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="시작중...">경기 시작</PendingSubmitButton>
                 </form>
               ) : null}
               <form action={reserveMatchStartAction} className="flex items-center gap-2">
                 <input className="rounded border px-2 py-1.5 text-sm" type="datetime-local" name="scheduled_start_at" defaultValue={toDateTimeLocalValue(match.scheduled_start_at)} />
-                <button className="rounded border px-3 py-2 text-sm" type="submit">시작 예약</button>
+                <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="예약중...">시작 예약</PendingSubmitButton>
               </form>
               {match.scheduled_start_at ? (
                 <form action={delayMatchAction}>
-                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 지연</button>
+                  <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">경기 지연</PendingSubmitButton>
                 </form>
               ) : null}
             </div>
             {match.status !== 'ended' ? (
               <form action={endMatchAction}>
-                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 종료</button>
+                <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="종료중...">경기 종료</PendingSubmitButton>
               </form>
             ) : (
               <div className="space-y-1">
                 <p className="text-xs text-gray-500">종료된 경기입니다.</p>
                 <form action={resumeMatchAction}>
-                  <button className="rounded border px-3 py-2 text-sm" type="submit">경기 재개</button>
+                  <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="재개중...">경기 재개</PendingSubmitButton>
                 </form>
               </div>
             )}
@@ -492,11 +511,11 @@ export default async function MatchDetailPage({
                   <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
                   <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
                     <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="reset">편집 취소</button>
-                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="submit">이벤트 저장</button>
+                    <PendingSubmitButton className="rounded-lg border border-gray-200 px-2 py-1 text-xs" pendingText="저장중...">이벤트 저장</PendingSubmitButton>
                   </div>
                 </form>
                 <form action={deleteGoalEvent.bind(null, matchId, activeGoal.id, activeGoal.team_side, channel.slug, channel.edit_session_version)}>
-                  <button className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" type="submit">이벤트 삭제</button>
+                  <PendingSubmitButton className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" pendingText="삭제중...">이벤트 삭제</PendingSubmitButton>
                 </form>
               </>
             )}

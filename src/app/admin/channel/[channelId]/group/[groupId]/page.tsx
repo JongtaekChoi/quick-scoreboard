@@ -5,9 +5,18 @@ import { isAdminAuthorized } from '@/lib/adminAuth'
 import { isEditAuthorized } from '@/lib/editAuth'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
-type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
+type MatchGroup = {
+  id: string
+  play_date: string
+  venue: string | null
+  title: string | null
+  seq: number
+  entry_confirmed_at: string | null
+}
 type Match = { id: string; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
 type Team = { id: string; name: string }
+type TeamPlayer = { id: string; team_id: string; jersey_no: string; player_name: string; is_active: boolean }
+type GroupEntry = { id: string; team_id: string; player_id: string }
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -145,6 +154,80 @@ async function deleteMatch(formData: FormData) {
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
 
+async function addGroupEntry(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const teamId = String(formData.get('teamId') || '')
+  const playerId = String(formData.get('playerId') || '')
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+
+  if (!channelId || !groupId || !teamId || !playerId) return
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  await supabase
+    .from('match_group_entries')
+    .upsert(
+      { channel_id: channelId, match_group_id: groupId, team_id: teamId, player_id: playerId },
+      { onConflict: 'match_group_id,team_id,player_id' },
+    )
+
+  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+}
+
+async function removeGroupEntry(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const entryId = String(formData.get('entryId') || '')
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+
+  if (!channelId || !groupId || !entryId) return
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  await supabase.from('match_group_entries').delete().eq('id', entryId)
+  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+}
+
+async function toggleEntryConfirm(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const next = String(formData.get('next') || '')
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+
+  if (!channelId || !groupId) return
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  await supabase
+    .from('match_groups')
+    .update({ entry_confirmed_at: next === '1' ? new Date().toISOString() : null })
+    .eq('id', groupId)
+
+  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+}
+
 export default async function AdminGroupPage({
   params,
   searchParams,
@@ -165,13 +248,31 @@ export default async function AdminGroupPage({
   }
 
   const channel = manage.channel
-  const [{ data: group }, { data: matches }, { data: teams }] = await Promise.all([
-    supabase.from('match_groups').select('id,play_date,venue,title,seq').eq('id', groupId).maybeSingle<MatchGroup>(),
+  const [{ data: group }, { data: matches }, { data: teams }, { data: players }, { data: entries }] = await Promise.all([
+    supabase.from('match_groups').select('id,play_date,venue,title,seq,entry_confirmed_at').eq('id', groupId).maybeSingle<MatchGroup>(),
     supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
-    supabase.from('teams').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(30).returns<Team[]>(),
+    supabase.from('teams').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
+    supabase.from('team_players').select('id,team_id,jersey_no,player_name,is_active').eq('channel_id', channelId).eq('is_active', true).order('jersey_no', { ascending: true }).returns<TeamPlayer[]>(),
+    supabase.from('match_group_entries').select('id,team_id,player_id').eq('match_group_id', groupId).returns<GroupEntry[]>(),
   ])
 
   if (!channel || !group) return <main className="p-6">채널/그룹을 찾을 수 없습니다.</main>
+
+  const playersByTeam = new Map<string, TeamPlayer[]>()
+  for (const p of players ?? []) {
+    const arr = playersByTeam.get(p.team_id) ?? []
+    arr.push(p)
+    playersByTeam.set(p.team_id, arr)
+  }
+
+  const entriesByTeam = new Map<string, GroupEntry[]>()
+  for (const e of entries ?? []) {
+    const arr = entriesByTeam.get(e.team_id) ?? []
+    arr.push(e)
+    entriesByTeam.set(e.team_id, arr)
+  }
+
+  const playerMap = new Map((players ?? []).map((p) => [p.id, p]))
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -191,6 +292,72 @@ export default async function AdminGroupPage({
           <h1 className="text-2xl font-semibold">경기 관리</h1>
           <p className="text-sm text-gray-600">{group.title ?? `${group.play_date} 그룹 ${group.seq}`} · {group.play_date} {group.venue ? `· ${group.venue}` : ''}</p>
         </header>
+
+        <section className="rounded border p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">쿼터 엔트리(=경기그룹 엔트리)</h2>
+            <form action={toggleEntryConfirm}>
+              <input type="hidden" name="channelId" value={channel.id} />
+              <input type="hidden" name="groupId" value={group.id} />
+              <input type="hidden" name="next" value={group.entry_confirmed_at ? '0' : '1'} />
+              <button className="rounded border px-3 py-1.5 text-xs" type="submit">
+                {group.entry_confirmed_at ? '엔트리 확정 해제' : '엔트리 확정'}
+              </button>
+            </form>
+          </div>
+          <p className="text-xs text-gray-500">
+            상태: {group.entry_confirmed_at ? `확정됨 (${new Date(group.entry_confirmed_at).toLocaleString('ko-KR')})` : '미확정'}
+          </p>
+
+          {(teams ?? []).length === 0 ? (
+            <p className="text-xs text-gray-500">팀이 없습니다. 먼저 경기를 추가해 팀을 생성해줘.</p>
+          ) : (
+            <div className="space-y-3">
+              {(teams ?? []).map((t) => {
+                const teamPlayers = playersByTeam.get(t.id) ?? []
+                const teamEntries = entriesByTeam.get(t.id) ?? []
+                return (
+                  <div key={t.id} className="rounded border p-2 space-y-2">
+                    <div className="font-medium text-sm">{t.name}</div>
+                    <form action={addGroupEntry} className="flex flex-wrap gap-2 items-center">
+                      <input type="hidden" name="channelId" value={channel.id} />
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="teamId" value={t.id} />
+                      <select className="rounded border px-2 py-1.5 text-sm" name="playerId" required>
+                        <option value="">선수 선택</option>
+                        {teamPlayers.map((p) => (
+                          <option key={p.id} value={p.id}>#{p.jersey_no} {p.player_name}</option>
+                        ))}
+                      </select>
+                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">엔트리 추가</button>
+                    </form>
+
+                    {teamEntries.length === 0 ? (
+                      <p className="text-xs text-gray-500">등록 엔트리 없음</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {teamEntries.map((e) => {
+                          const p = playerMap.get(e.player_id)
+                          return (
+                            <li key={e.id} className="rounded border px-2 py-1 text-xs flex items-center justify-between">
+                              <span>{p ? `#${p.jersey_no} ${p.player_name}` : '삭제된 선수'}</span>
+                              <form action={removeGroupEntry}>
+                                <input type="hidden" name="channelId" value={channel.id} />
+                                <input type="hidden" name="groupId" value={group.id} />
+                                <input type="hidden" name="entryId" value={e.id} />
+                                <button className="underline" type="submit">제거</button>
+                              </form>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
 
         <datalist id="team-suggestions">
           {(teams ?? []).map((t) => (

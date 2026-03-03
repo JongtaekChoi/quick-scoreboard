@@ -78,6 +78,7 @@ create table if not exists match_groups (
   title text null,
   note text null,
   seq int not null default 1,
+  entry_confirmed_at timestamptz null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -154,6 +155,21 @@ create index if not exists match_player_aliases_match_last_used_idx
 
 create unique index if not exists match_player_aliases_unique_pair
   on match_player_aliases (match_id, coalesce(jersey_no, ''), coalesce(player_name, ''));
+
+-- 7) 쿼터(=match_group) 엔트리 등록
+create table if not exists match_group_entries (
+  id uuid primary key default gen_random_uuid(),
+  match_group_id uuid not null references match_groups(id) on delete cascade,
+  channel_id uuid not null references channels(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  player_id uuid not null references team_players(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists match_group_entries_unique_player
+  on match_group_entries (match_group_id, team_id, player_id);
+create index if not exists match_group_entries_group_team_idx
+  on match_group_entries (match_group_id, team_id);
 
 -- updated_at auto trigger
 create or replace function set_updated_at()

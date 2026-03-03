@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
@@ -19,6 +20,26 @@ type Match = {
 }
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const supabase = getSupabaseServerClient()
+
+  if (!supabase) {
+    return { title: `채널 ${slug}` }
+  }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('name')
+    .eq('slug', slug)
+    .maybeSingle<{ name: string }>()
+
+  return {
+    title: channel ? channel.name : `채널 ${slug}`,
+    description: channel ? `${channel.name} 경기목록` : '채널 경기목록',
+  }
+}
 
 export default async function ChannelPage({
   params,

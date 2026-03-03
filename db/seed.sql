@@ -4,7 +4,7 @@ begin;
 
 with c as (
   insert into channels (name, slug, is_public_view, edit_password_hash)
-  values ('샘플 채널', 'sample-channel', true, '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4') -- password: 1234
+  values ('샘플 채널', 'sample', true, '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4') -- password: 1234
   on conflict (slug) do update set name = excluded.name
   returning id
 ), g as (

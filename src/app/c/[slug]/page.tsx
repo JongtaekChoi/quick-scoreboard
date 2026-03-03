@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
 import GroupList from './GroupList'
+import ShareChannelButton from './ShareChannelButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -86,6 +87,7 @@ export default async function ChannelPage({
   }
 
   const canEdit = await isEditAuthorized(channel.slug, channel.edit_session_version)
+  const channelUrl = `https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}`
 
   await autoStartDueMatches(supabase)
 
@@ -144,6 +146,7 @@ export default async function ChannelPage({
             )}
             {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
             {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
+            <ShareChannelButton url={channelUrl} title={`${channel.name} 경기목록`} />
             {canEdit ? (
               <Link className="underline" href={`/admin/channel/${channel.id}?from=channel`}>
                 운영 관리 열기

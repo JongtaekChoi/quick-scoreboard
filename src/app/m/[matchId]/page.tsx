@@ -8,6 +8,7 @@ import { autoStartDueMatches } from '@/lib/matchSchedule'
 import ScoreActions from './ScoreActions'
 import LiveScoreboard from './LiveScoreboard'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
+import ShareButton from '@/components/ShareButton'
 
 type Match = {
   id: string
@@ -405,6 +406,7 @@ export default async function MatchDetailPage({
     .returns<Alias[]>()
 
   const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
+  const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`
 
   const activeGoalId = goalParam || (goals?.[0]?.id ?? '')
   const activeGoal = (goals ?? []).find((g) => g.id === activeGoalId) ?? (goals?.[0] ?? null)
@@ -430,7 +432,8 @@ export default async function MatchDetailPage({
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         <header className="space-y-2">
-          <div className="text-xs text-gray-500 flex flex-wrap items-center gap-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs text-gray-500 flex flex-wrap items-center gap-1">
             <Link href={channel ? `/c/${channel.slug}` : '/'} className="underline">경기목록</Link>
             {group ? (
               <>
@@ -440,6 +443,8 @@ export default async function MatchDetailPage({
             ) : null}
             <span>›</span>
             <span>{match.seq}경기</span>
+            </div>
+            <ShareButton url={matchUrl} title={`${match.seq}경기 ${match.team_a_name} vs ${match.team_b_name}`} className="rounded border px-2 py-1 text-xs" />
           </div>
           <h1 className="text-2xl font-semibold">{match.seq}경기</h1>
           <p className="text-sm text-gray-600">상태: {match.status}</p>

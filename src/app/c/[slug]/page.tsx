@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
 import GroupList from './GroupList'
-import ShareChannelButton from './ShareChannelButton'
+import ShareButton from '@/components/ShareButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -127,7 +127,10 @@ export default async function ChannelPage({
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
         <header className="space-y-2">
-          <h1 className="text-2xl font-semibold">{channel.name}</h1>
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="text-2xl font-semibold">{channel.name}</h1>
+            <ShareButton url={channelUrl} title={`${channel.name} 경기목록`} className="rounded border px-2 py-1 text-xs" />
+          </div>
           <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className={`rounded px-2 py-1 border ${canEdit ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
@@ -146,7 +149,6 @@ export default async function ChannelPage({
             )}
             {err === 'password' ? <span className="text-red-600">비밀번호가 틀렸어.</span> : null}
             {edit === '1' ? <span className="text-green-700">편집모드 인증 완료.</span> : null}
-            <ShareChannelButton url={channelUrl} title={`${channel.name} 경기목록`} />
             {canEdit ? (
               <Link className="underline" href={`/admin/channel/${channel.id}?from=channel`}>
                 운영 관리 열기

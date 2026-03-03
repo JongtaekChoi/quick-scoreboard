@@ -2,16 +2,38 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
+import { isEditAuthorized } from '@/lib/editAuth'
 
-type Channel = { id: string; name: string; slug: string }
+type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
+
+async function canManageChannel(channelId: string) {
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return { allowed: false, channel: null as Channel | null }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('id,name,slug,edit_session_version')
+    .eq('id', channelId)
+    .maybeSingle<Channel>()
+
+  if (!channel) return { allowed: false, channel: null as Channel | null }
+
+  const isAdmin = await isAdminAuthorized()
+  if (isAdmin) return { allowed: true, channel }
+
+  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
+  return { allowed: isEditor, channel }
+}
 
 async function createGroup(formData: FormData) {
   'use server'
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const channelId = String(formData.get('channelId') || '')
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
   const playDate = String(formData.get('play_date') || '')
   const venue = String(formData.get('venue') || '').trim()
   const title = String(formData.get('title') || '').trim()
@@ -43,19 +65,17 @@ async function createGroup(formData: FormData) {
 }
 
 export default async function AdminChannelPage({ params }: { params: Promise<{ channelId: string }> }) {
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const { channelId } = await params
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
-  const { data: channel } = await supabase
-    .from('channels')
-    .select('id,name,slug')
-    .eq('id', channelId)
-    .maybeSingle<Channel>()
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
 
+  const channel = manage.channel
   if (!channel) return <main className="p-6">채널을 찾을 수 없습니다.</main>
 
   const { data: groups } = await supabase
@@ -70,7 +90,7 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ c
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
-          <Link className="underline text-sm" href="/admin">← Admin</Link>
+          <Link className="underline text-sm" href={`/c/${channel.slug}`}>← 채널 경기목록</Link>
           <h1 className="text-2xl font-semibold">{channel.name} · 경기그룹 관리</h1>
           <p className="text-sm text-gray-600">/{channel.slug}</p>
         </header>

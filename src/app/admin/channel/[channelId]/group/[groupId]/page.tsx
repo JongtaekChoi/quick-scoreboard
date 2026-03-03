@@ -2,11 +2,31 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
+import { isEditAuthorized } from '@/lib/editAuth'
 
-type Channel = { id: string; name: string; slug: string }
+type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type Match = { id: string; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
 type Team = { id: string; name: string }
+
+async function canManageChannel(channelId: string) {
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return { allowed: false, channel: null as Channel | null }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('id,name,slug,edit_session_version')
+    .eq('id', channelId)
+    .maybeSingle<Channel>()
+
+  if (!channel) return { allowed: false, channel: null as Channel | null }
+
+  const isAdmin = await isAdminAuthorized()
+  if (isAdmin) return { allowed: true, channel }
+
+  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
+  return { allowed: isEditor, channel }
+}
 
 function toDateTimeLocalValue(iso: string | null) {
   if (!iso) return ''
@@ -17,10 +37,12 @@ function toDateTimeLocalValue(iso: string | null) {
 
 async function createMatch(formData: FormData) {
   'use server'
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const channelId = String(formData.get('channelId') || '')
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
   const groupId = String(formData.get('groupId') || '')
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
@@ -63,10 +85,12 @@ async function createMatch(formData: FormData) {
 
 async function updateMatch(formData: FormData) {
   'use server'
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const channelId = String(formData.get('channelId') || '')
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
   const groupId = String(formData.get('groupId') || '')
   const matchId = String(formData.get('matchId') || '')
   const teamA = String(formData.get('team_a_name') || '').trim()
@@ -102,10 +126,12 @@ async function updateMatch(formData: FormData) {
 
 async function deleteMatch(formData: FormData) {
   'use server'
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const channelId = String(formData.get('channelId') || '')
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
   const groupId = String(formData.get('groupId') || '')
   const matchId = String(formData.get('matchId') || '')
   if (!channelId || !groupId || !matchId) return
@@ -120,15 +146,18 @@ async function deleteMatch(formData: FormData) {
 }
 
 export default async function AdminGroupPage({ params }: { params: Promise<{ channelId: string; groupId: string }> }) {
-  const authorized = await isAdminAuthorized()
-  if (!authorized) redirect('/admin/login')
-
   const { channelId, groupId } = await params
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
-  const [{ data: channel }, { data: group }, { data: matches }, { data: teams }] = await Promise.all([
-    supabase.from('channels').select('id,name,slug').eq('id', channelId).maybeSingle<Channel>(),
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+
+  const channel = manage.channel
+  const [{ data: group }, { data: matches }, { data: teams }] = await Promise.all([
     supabase.from('match_groups').select('id,play_date,venue,title,seq').eq('id', groupId).maybeSingle<MatchGroup>(),
     supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
     supabase.from('teams').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(30).returns<Team[]>(),

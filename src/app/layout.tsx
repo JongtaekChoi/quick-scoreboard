@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   description: '회원가입 없이 빠르게 기록하는 풋살 경기 스코어보드',
   applicationName: 'quick-scoreboard',
   icons: {
-    icon: [{ url: '/favicon.ico' }, { url: '/icon.svg', type: 'image/svg+xml' }],
-    shortcut: ['/favicon.ico'],
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico' }],
+    shortcut: ['/icon.svg'],
   },
   openGraph: {
     title: 'quick-scoreboard',

@@ -22,9 +22,10 @@ npm run dev
 관리자 페이지: `/admin` (비밀번호는 `ADMIN_PASSWORD`)
 
 ## DB Migration
-- 기준 마이그레이션: `supabase/migrations/20260303090100_init.sql`
-- 자동 적용: `.github/workflows/ci.yml`의 `db-migrate` job (main push 시)
-  - GitHub Secret `SUPABASE_DB_URL` 설정 필요
+- 기준 마이그레이션: `supabase/migrations/*`
+- 자동 적용: `.github/workflows/ci.yml`
+  - `develop` push: `db-migrate-develop` → `SUPABASE_DB_URL_DEVELOP`
+  - `main` push: `db-migrate-main` → `SUPABASE_DB_URL_MAIN`
   - 예: `postgresql://postgres:<password>@<project-ref>.supabase.co:5432/postgres?sslmode=require`
 
 ## 수동 패치(기존 운영 DB)

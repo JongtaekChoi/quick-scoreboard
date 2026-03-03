@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   web:
@@ -18,21 +18,40 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-  db-migrate:
-    if: github.ref == 'refs/heads/main'
+  db-migrate-develop:
+    if: github.ref == 'refs/heads/develop'
     needs: web
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL_DEVELOP }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Apply migrations
+      - name: Apply migrations (develop)
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "SUPABASE_DB_URL secret is not set. Skipping DB migration."
+            echo "SUPABASE_DB_URL_DEVELOP secret is not set. Skipping DB migration."
+            exit 0
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+
+  db-migrate-main:
+    if: github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL_MAIN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Apply migrations (main)
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL_MAIN secret is not set. Skipping DB migration."
             exit 0
           fi
           supabase db push --db-url "$SUPABASE_DB_URL" --include-all

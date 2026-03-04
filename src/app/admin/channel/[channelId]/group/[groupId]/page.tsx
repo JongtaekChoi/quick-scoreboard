@@ -168,12 +168,12 @@ async function deleteMatch(formData: FormData) {
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
 
-async function addGroupEntry(formData: FormData) {
+async function saveGroupEntries(formData: FormData) {
   'use server'
   const channelId = String(formData.get('channelId') || '')
   const groupId = String(formData.get('groupId') || '')
   const teamId = String(formData.get('teamId') || '')
-  const playerId = String(formData.get('playerId') || '')
+  const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -181,7 +181,7 @@ async function addGroupEntry(formData: FormData) {
     redirect('/admin/login')
   }
 
-  if (!channelId || !groupId || !teamId || !playerId) return
+  if (!channelId || !groupId || !teamId) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
   }
@@ -191,36 +191,21 @@ async function addGroupEntry(formData: FormData) {
 
   await supabase
     .from('match_group_entries')
-    .upsert(
-      { channel_id: channelId, match_group_id: groupId, team_id: teamId, player_id: playerId },
-      { onConflict: 'match_group_id,team_id,player_id' },
+    .delete()
+    .eq('match_group_id', groupId)
+    .eq('team_id', teamId)
+
+  if (playerIds.length > 0) {
+    await supabase.from('match_group_entries').insert(
+      playerIds.map((playerId) => ({
+        channel_id: channelId,
+        match_group_id: groupId,
+        team_id: teamId,
+        player_id: playerId,
+      })),
     )
-
-  redirect(`/admin/channel/${channelId}/group/${groupId}`)
-}
-
-async function removeGroupEntry(formData: FormData) {
-  'use server'
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const entryId = String(formData.get('entryId') || '')
-  const teamId = String(formData.get('teamId') || '')
-
-  const manage = await canManageChannel(channelId)
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
-    redirect('/admin/login')
   }
 
-  if (!channelId || !groupId || !entryId) return
-  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
-  }
-
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
-
-  await supabase.from('match_group_entries').delete().eq('id', entryId)
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
 
@@ -296,8 +281,6 @@ export default async function AdminGroupPage({
     entriesByTeam.set(e.team_id, arr)
   }
 
-  const playerMap = new Map((players ?? []).map((p) => [p.id, p]))
-
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
@@ -319,7 +302,7 @@ export default async function AdminGroupPage({
 
         <section className="rounded border p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">쿼터 엔트리(=경기그룹 엔트리)</h2>
+            <h2 className="text-sm font-semibold">엔트리 선택(=경기그룹 엔트리)</h2>
             <form action={toggleEntryConfirm}>
               <input type="hidden" name="channelId" value={channel.id} />
               <input type="hidden" name="groupId" value={group.id} />
@@ -343,40 +326,24 @@ export default async function AdminGroupPage({
                 return (
                   <div key={t.id} className="rounded border p-2 space-y-2">
                     <div className="font-medium text-sm">{t.name}</div>
-                    <form action={addGroupEntry} className="flex flex-wrap gap-2 items-center">
+                    <form action={saveGroupEntries} className="space-y-2">
                       <input type="hidden" name="channelId" value={channel.id} />
                       <input type="hidden" name="groupId" value={group.id} />
                       <input type="hidden" name="teamId" value={t.id} />
-                      <select className="rounded border px-2 py-1.5 text-sm" name="playerId" required>
-                        <option value="">선수 선택</option>
-                        {teamPlayers.map((p) => (
-                          <option key={p.id} value={p.id}>#{p.jersey_no} {p.player_name}</option>
-                        ))}
-                      </select>
-                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">엔트리 추가</button>
-                    </form>
-
-                    {teamEntries.length === 0 ? (
-                      <p className="text-xs text-gray-500">등록 엔트리 없음</p>
-                    ) : (
-                      <ul className="space-y-1">
-                        {teamEntries.map((e) => {
-                          const p = playerMap.get(e.player_id)
+                      <div className="text-xs text-gray-500">엔트리 선택 (여러 명 선택 가능)</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {teamPlayers.map((p) => {
+                          const checked = teamEntries.some((e) => e.player_id === p.id)
                           return (
-                            <li key={e.id} className="rounded border px-2 py-1 text-xs flex items-center justify-between">
-                              <span>{p ? `#${p.jersey_no} ${p.player_name}` : '삭제된 선수'}</span>
-                              <form action={removeGroupEntry}>
-                                <input type="hidden" name="channelId" value={channel.id} />
-                                <input type="hidden" name="groupId" value={group.id} />
-                                <input type="hidden" name="teamId" value={t.id} />
-                                <input type="hidden" name="entryId" value={e.id} />
-                                <button className="underline" type="submit">제거</button>
-                              </form>
-                            </li>
+                            <label key={p.id} className="rounded border px-2 py-1 text-xs flex items-center gap-1">
+                              <input type="checkbox" name="playerIds" value={p.id} defaultChecked={checked} />
+                              <span>#{p.jersey_no} {p.player_name}</span>
+                            </label>
                           )
                         })}
-                      </ul>
-                    )}
+                      </div>
+                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">엔트리 선택 저장</button>
+                    </form>
                   </div>
                 )
               })}

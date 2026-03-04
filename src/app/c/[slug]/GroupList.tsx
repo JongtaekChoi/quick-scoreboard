@@ -46,14 +46,21 @@ export default function GroupList({
         const open = openSet.has(g.id)
         return (
           <section key={g.id} className="rounded border p-3 space-y-2">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between gap-2 text-left"
-              onClick={() => toggle(g.id)}
-            >
-              <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
-              <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
-            </button>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className="flex-1 flex items-center justify-between gap-2 text-left"
+                onClick={() => toggle(g.id)}
+              >
+                <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
+                <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
+              </button>
+              {showManagerEntryButton ? (
+                <Link className="text-xs underline shrink-0" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
+                  내 팀 엔트리 관리
+                </Link>
+              ) : null}
+            </div>
 
             {open ? (
               list.length === 0 ? (
@@ -61,7 +68,7 @@ export default function GroupList({
               ) : (
                 <ul className="space-y-2">
                   {list.map((m) => (
-                    <li key={m.id} className="rounded border px-3 py-2 bg-white space-y-2">
+                    <li key={m.id} className="rounded border px-3 py-2 bg-white">
                       <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
                         <div className="text-sm">
                           <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
@@ -74,13 +81,6 @@ export default function GroupList({
                         </div>
                         <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
                       </Link>
-                      {showManagerEntryButton ? (
-                        <div className="flex justify-end">
-                          <Link className="text-xs underline" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
-                            내 팀 엔트리 관리
-                          </Link>
-                        </div>
-                      ) : null}
                     </li>
                   ))}
                 </ul>

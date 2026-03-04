@@ -84,11 +84,11 @@ export default async function ChannelPage({
         <section className="max-w-4xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">채널 경기목록</h1>
           <p className="text-sm text-amber-700">
-            Supabase 환경변수가 없어 데이터 연결을 건너뛰었습니다.
+            Supabase 환경변수가 없어서 데이터 연결을 건너뛰었습니다.
           </p>
           <p className="text-xs text-gray-600">
             NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 설정
-            후 다시 확인해줘.
+            후 다시 확인해 주세요.
           </p>
         </section>
       </main>
@@ -106,7 +106,7 @@ export default async function ChannelPage({
       <main className="min-h-screen p-4 md:p-6">
         <section className="max-w-4xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">채널을 찾을 수 없음</h1>
-          <p className="text-sm text-gray-600">유효한 링크인지 확인해줘.</p>
+          <p className="text-sm text-gray-600">유효한 링크인지 확인해 주세요.</p>
         </section>
       </main>
     );
@@ -238,7 +238,7 @@ export default async function ChannelPage({
               </form>
             )}
             {err === "password" ? (
-              <span className="text-red-600">비밀번호가 틀렸어.</span>
+              <span className="text-red-600">비밀번호가 올바르지 않습니다.</span>
             ) : null}
             {edit === "1" ? (
               <span className="text-green-700">편집모드 인증 완료.</span>
@@ -248,7 +248,7 @@ export default async function ChannelPage({
             ) : null}
             {mgr === "password" ? (
               <span className="text-red-600">
-                팀장 계정 정보가 올바르지 않아.
+                팀장 계정 정보가 올바르지 않습니다.
               </span>
             ) : null}
             {canEdit || managerTeamId ? (

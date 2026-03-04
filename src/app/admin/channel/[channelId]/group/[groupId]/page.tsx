@@ -329,7 +329,7 @@ export default async function AdminGroupPage({
           </p>
 
           {(teams ?? []).length === 0 ? (
-            <p className="text-xs text-gray-500">팀이 없습니다. 먼저 경기를 추가해 팀을 생성해줘.</p>
+            <p className="text-xs text-gray-500">팀이 없습니다. 먼저 경기를 추가해 팀을 생성해 주세요.</p>
           ) : (
             <div className="space-y-3">
               {(teams ?? []).map((t) => {

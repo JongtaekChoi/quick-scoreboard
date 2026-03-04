@@ -350,7 +350,7 @@ export default async function MatchDetailPage({
       <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기 상세</h1>
-          <p className="text-sm text-amber-700">Supabase 환경변수가 없어 데이터 연결을 건너뛰었습니다.</p>
+          <p className="text-sm text-amber-700">Supabase 환경변수가 없어서 데이터 연결을 건너뛰었습니다.</p>
         </section>
       </main>
     )
@@ -369,7 +369,7 @@ export default async function MatchDetailPage({
       <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기를 찾을 수 없음</h1>
-          <p className="text-sm text-gray-600">유효한 경기 링크인지 확인해줘.</p>
+          <p className="text-sm text-gray-600">유효한 경기 링크인지 확인해 주세요.</p>
         </section>
       </main>
     )

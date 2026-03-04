@@ -200,7 +200,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
         </header>
 
         {(teams ?? []).length === 0 ? (
-          <section className="rounded border p-4 text-sm text-gray-500">먼저 경기 입력으로 팀을 생성해줘.</section>
+          <section className="rounded border p-4 text-sm text-gray-500">먼저 경기 입력을 통해 팀을 생성해 주세요.</section>
         ) : (
           <section className="space-y-3">
             {(teams ?? []).map((t) => {

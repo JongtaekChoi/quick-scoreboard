@@ -224,8 +224,7 @@ async function saveGroupGuest(formData: FormData) {
   const channelId = String(formData.get('channelId') || '')
   const groupId = String(formData.get('groupId') || '')
   const teamId = String(formData.get('teamId') || '')
-  const sourceTeamId = String(formData.get('sourceTeamId') || '')
-  const guestName = String(formData.get('guestName') || '').trim()
+  const source = String(formData.get('sourcePlayer') || '')
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -233,10 +232,12 @@ async function saveGroupGuest(formData: FormData) {
     redirect('/admin/login')
   }
 
-  if (!channelId || !groupId || !teamId || !sourceTeamId || !guestName) return
+  if (!channelId || !groupId || !teamId || !source) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
   }
+  const [sourceTeamId, sourcePlayerId, guestName] = source.split('|')
+  if (!sourceTeamId || !sourcePlayerId || !guestName) return
   if (teamId === sourceTeamId) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?err=guest_source`)
   }
@@ -252,6 +253,7 @@ async function saveGroupGuest(formData: FormData) {
         match_group_id: groupId,
         team_id: teamId,
         source_team_id: sourceTeamId,
+        source_player_id: sourcePlayerId,
         guest_name: guestName,
       },
       { onConflict: 'match_group_id,team_id' },
@@ -443,13 +445,22 @@ export default async function AdminGroupPage({
                         <input type="hidden" name="channelId" value={channel.id} />
                         <input type="hidden" name="groupId" value={group.id} />
                         <input type="hidden" name="teamId" value={t.id} />
-                        <select className="rounded border px-2 py-1.5 text-xs" name="sourceTeamId" required defaultValue="">
-                          <option value="" disabled>휴식 팀 선택</option>
-                          {(teams ?? []).filter((x) => x.id !== t.id).map((x) => (
-                            <option key={x.id} value={x.id}>{x.name}</option>
-                          ))}
+                        <select className="rounded border px-2 py-1.5 text-xs min-w-64" name="sourcePlayer" required defaultValue="">
+                          <option value="" disabled>타팀 선수 선택</option>
+                          {(teams ?? []).filter((x) => x.id !== t.id).map((teamOption) => {
+                            const sourcePlayers = playersByTeam.get(teamOption.id) ?? []
+                            if (sourcePlayers.length === 0) return null
+                            return (
+                              <optgroup key={teamOption.id} label={teamOption.name}>
+                                {sourcePlayers.map((p) => (
+                                  <option key={`${teamOption.id}-${p.id}`} value={`${teamOption.id}|${p.id}|${p.player_name}`}>
+                                    #{p.jersey_no} {p.player_name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )
+                          })}
                         </select>
-                        <input className="rounded border px-2 py-1.5 text-xs" name="guestName" placeholder="용병 이름" required />
                         <button className="rounded border px-2 py-1.5 text-xs" type="submit">용병 저장</button>
                       </form>
 

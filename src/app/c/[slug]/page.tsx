@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { isEditAuthorized } from "@/lib/editAuth";
+import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import { getManagerSession } from "@/lib/managerAuth";
 import GroupList from "./GroupList";
@@ -112,6 +113,7 @@ export default async function ChannelPage({
     );
   }
 
+  const isAdmin = await isAdminAuthorized();
   const canEdit = await isEditAuthorized(
     channel.slug,
     channel.edit_session_version,
@@ -240,6 +242,15 @@ export default async function ChannelPage({
             {err === "password" ? (
               <span className="text-red-600">비밀번호가 올바르지 않습니다.</span>
             ) : null}
+            <span className={`rounded px-2 py-1 border ${isAdmin ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+              어드민: {isAdmin ? "로그인" : "미로그인"}
+            </span>
+            <span className={`rounded px-2 py-1 border ${canEdit ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+              채널관리자/골입력자: {canEdit ? "로그인" : "미로그인"}
+            </span>
+            <span className={`rounded px-2 py-1 border ${managerTeamId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+              팀관리자: {managerTeamId ? "로그인" : "미로그인"}
+            </span>
             {edit === "1" ? (
               <span className="text-green-700">편집모드 인증 완료.</span>
             ) : null}

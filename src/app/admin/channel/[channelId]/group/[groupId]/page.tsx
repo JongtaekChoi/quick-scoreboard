@@ -67,6 +67,9 @@ async function createMatch(formData: FormData) {
     redirect('/admin/login')
   }
   const groupId = String(formData.get('groupId') || '')
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+  }
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
   if (!channelId || !groupId || !teamA || !teamB) return
@@ -115,6 +118,9 @@ async function updateMatch(formData: FormData) {
     redirect('/admin/login')
   }
   const groupId = String(formData.get('groupId') || '')
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+  }
   const matchId = String(formData.get('matchId') || '')
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
@@ -156,6 +162,9 @@ async function deleteMatch(formData: FormData) {
     redirect('/admin/login')
   }
   const groupId = String(formData.get('groupId') || '')
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+  }
   const matchId = String(formData.get('matchId') || '')
   if (!channelId || !groupId || !matchId) return
 
@@ -242,10 +251,10 @@ export default async function AdminGroupPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string; groupId: string }>
-  searchParams: Promise<{ from?: string }>
+  searchParams: Promise<{ from?: string; err?: string }>
 }) {
   const { channelId, groupId } = await params
-  const { from } = await searchParams
+  const { from, err } = await searchParams
   const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
@@ -257,6 +266,7 @@ export default async function AdminGroupPage({
   }
 
   const channel = manage.channel
+  const managerTeamId = manage.managerTeamId
   const [{ data: group }, { data: matches }, { data: teams }, { data: players }, { data: entries }] = await Promise.all([
     supabase.from('match_groups').select('id,play_date,venue,title,seq,entry_confirmed_at').eq('id', groupId).maybeSingle<MatchGroup>(),
     supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
@@ -298,6 +308,8 @@ export default async function AdminGroupPage({
           </div>
           <h1 className="text-2xl font-semibold">경기 관리</h1>
           <p className="text-sm text-gray-600">{group.title ?? `${group.play_date} 그룹 ${group.seq}`} · {group.play_date} {group.venue ? `· ${group.venue}` : ''}</p>
+          {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
+          {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
         </header>
 
         <section className="rounded border p-4 space-y-2">
@@ -357,25 +369,27 @@ export default async function AdminGroupPage({
           ))}
         </datalist>
 
-        <section className="rounded border p-4 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">경기 추가</h2>
-            <Link className="text-xs underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리는 별도 화면에서</Link>
-          </div>
-          <form action={createMatch} className="grid md:grid-cols-4 gap-2">
-            <input type="hidden" name="channelId" value={channel.id} />
-            <input type="hidden" name="groupId" value={group.id} />
-            <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
-            <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
-            <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
-          </form>
-        </section>
+        {!managerTeamId ? (
+          <>
+            <section className="rounded border p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">경기 추가</h2>
+                <Link className="text-xs underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리는 별도 화면에서</Link>
+              </div>
+              <form action={createMatch} className="grid md:grid-cols-4 gap-2">
+                <input type="hidden" name="channelId" value={channel.id} />
+                <input type="hidden" name="groupId" value={group.id} />
+                <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
+                <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
+                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
+              </form>
+            </section>
 
-        <section className="space-y-2">
-          {(matches ?? []).length === 0 ? (
-            <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
-          ) : (
-            (matches ?? []).map((m) => (
+            <section className="space-y-2">
+              {(matches ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
+              ) : (
+                (matches ?? []).map((m) => (
               <div key={m.id} className="rounded border p-3 space-y-2">
                 <div className="text-sm font-medium">{m.seq}경기 · {m.score_a}:{m.score_b}</div>
                 <form action={updateMatch} className="grid md:grid-cols-6 gap-2 items-center">
@@ -403,9 +417,11 @@ export default async function AdminGroupPage({
                   </form>
                 </div>
               </div>
-            ))
-          )}
-        </section>
+                ))
+              )}
+            </section>
+          </>
+        ) : null}
       </section>
     </main>
   )

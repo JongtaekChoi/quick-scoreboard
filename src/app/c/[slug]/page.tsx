@@ -254,9 +254,9 @@ export default async function ChannelPage({
             {canEdit || managerTeamId ? (
               <Link
                 className="underline"
-                href={`/admin/channel/${channel.id}?from=channel`}
+                href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
               >
-                운영 관리 열기
+                {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
               </Link>
             ) : null}
           </div>

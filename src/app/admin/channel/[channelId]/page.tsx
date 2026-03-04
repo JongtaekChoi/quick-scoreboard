@@ -104,6 +104,9 @@ export default async function AdminChannelPage({
   const channel = manage.channel
   const managerTeamId = manage.managerTeamId
   if (!channel) return <main className="p-6">채널을 찾을 수 없습니다.</main>
+  if (managerTeamId) {
+    redirect(`/admin/channel/${channelId}/manager-entries`)
+  }
 
   const { data: groups } = await supabase
     .from('match_groups')

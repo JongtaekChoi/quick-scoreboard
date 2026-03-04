@@ -19,9 +19,13 @@ type Match = {
 export default function GroupList({
   groups,
   matchesByGroup,
+  channelId,
+  showManagerEntryButton,
 }: {
   groups: MatchGroup[]
   matchesByGroup: Record<string, Match[]>
+  channelId: string
+  showManagerEntryButton: boolean
 }) {
   const initialOpen = useMemo(() => new Set(groups.length ? [groups[0].id] : []), [groups])
   const [openSet, setOpenSet] = useState<Set<string>>(initialOpen)
@@ -57,7 +61,7 @@ export default function GroupList({
               ) : (
                 <ul className="space-y-2">
                   {list.map((m) => (
-                    <li key={m.id} className="rounded border px-3 py-2 bg-white">
+                    <li key={m.id} className="rounded border px-3 py-2 bg-white space-y-2">
                       <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
                         <div className="text-sm">
                           <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
@@ -70,6 +74,13 @@ export default function GroupList({
                         </div>
                         <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
                       </Link>
+                      {showManagerEntryButton ? (
+                        <div className="flex justify-end">
+                          <Link className="text-xs underline" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
+                            내 팀 엔트리 관리
+                          </Link>
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

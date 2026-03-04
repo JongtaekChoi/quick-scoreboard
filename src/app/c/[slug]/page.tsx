@@ -299,7 +299,12 @@ export default async function ChannelPage({
             표시할 경기그룹이 없습니다.
           </section>
         ) : (
-          <GroupList groups={groups ?? []} matchesByGroup={matchesByGroupObj} />
+          <GroupList
+            groups={groups ?? []}
+            matchesByGroup={matchesByGroupObj}
+            channelId={channel.id}
+            showManagerEntryButton={!!managerTeamId}
+          />
         )}
       </section>
     </main>

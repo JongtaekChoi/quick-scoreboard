@@ -180,6 +180,9 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
     managersByTeam.set(m.team_id, arr)
   }
 
+  const totalPlayers = (players ?? []).length
+  const totalActivePlayers = (players ?? []).filter((p) => p.is_active).length
+
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
@@ -193,6 +196,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
           </div>
           <h1 className="text-2xl font-semibold">팀 멤버 관리</h1>
           <p className="text-sm text-gray-600">{channel.name} · 팀별 등번호/이름 등록</p>
+          <p className="text-xs text-gray-500">전체 팀인원: {totalActivePlayers}/{totalPlayers}명 (활성/전체)</p>
         </header>
 
         {(teams ?? []).length === 0 ? (
@@ -202,73 +206,79 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
             {(teams ?? []).map((t) => {
               const list = playersByTeam.get(t.id) ?? []
               const mgrList = managersByTeam.get(t.id) ?? []
+              const activeCount = list.filter((p) => p.is_active).length
               return (
-                <div key={t.id} className="rounded border p-3 space-y-3">
-                  <h2 className="font-medium text-sm">{t.name}</h2>
+                <details key={t.id} className="rounded border p-3" open>
+                  <summary className="cursor-pointer list-none flex items-center justify-between gap-2">
+                    <span className="font-medium text-sm">{t.name}</span>
+                    <span className="text-xs text-gray-500">팀인원 {activeCount}/{list.length}명</span>
+                  </summary>
 
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-semibold text-gray-700">팀장 계정</h3>
-                    <form action={createTeamManager} className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                      <input type="hidden" name="channelId" value={channel.id} />
-                      <input type="hidden" name="teamId" value={t.id} />
-                      <input className="rounded border px-2 py-1.5 text-sm" name="login_id" placeholder="팀장 로그인ID" required />
-                      <input className="rounded border px-2 py-1.5 text-sm" name="password" type="password" placeholder="임시 비밀번호" required />
-                      <button className="rounded border px-3 py-2 text-sm" type="submit">팀장 계정 추가/수정</button>
-                    </form>
-                    {mgrList.length === 0 ? (
-                      <p className="text-xs text-gray-500">등록된 팀장 계정이 없습니다.</p>
-                    ) : (
-                      <ul className="space-y-1">
-                        {mgrList.map((m) => (
-                          <li key={m.id} className="rounded border px-2 py-1.5 flex items-center justify-between text-sm">
-                            <span>
-                              {m.login_id}
-                              {!m.is_active ? <span className="text-xs text-gray-400"> (비활성)</span> : null}
-                            </span>
-                            <form action={toggleManagerActive}>
-                              <input type="hidden" name="channelId" value={channel.id} />
-                              <input type="hidden" name="managerId" value={m.id} />
-                              <input type="hidden" name="next" value={m.is_active ? '0' : '1'} />
-                              <button className="text-xs underline" type="submit">{m.is_active ? '비활성화' : '활성화'}</button>
-                            </form>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                  <div className="mt-3 space-y-3">
+                    <section className="space-y-2">
+                      <h3 className="text-xs font-semibold text-gray-700">팀장 계정</h3>
+                      <form action={createTeamManager} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <input type="hidden" name="channelId" value={channel.id} />
+                        <input type="hidden" name="teamId" value={t.id} />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="login_id" placeholder="팀장 로그인ID" required />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="password" type="password" placeholder="임시 비밀번호" required />
+                        <button className="rounded border px-3 py-2 text-sm" type="submit">팀장 계정 추가/수정</button>
+                      </form>
+                      {mgrList.length === 0 ? (
+                        <p className="text-xs text-gray-500">등록된 팀장 계정이 없습니다.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {mgrList.map((m) => (
+                            <li key={m.id} className="rounded border px-2 py-1.5 flex items-center justify-between text-sm">
+                              <span>
+                                {m.login_id}
+                                {!m.is_active ? <span className="text-xs text-gray-400"> (비활성)</span> : null}
+                              </span>
+                              <form action={toggleManagerActive}>
+                                <input type="hidden" name="channelId" value={channel.id} />
+                                <input type="hidden" name="managerId" value={m.id} />
+                                <input type="hidden" name="next" value={m.is_active ? '0' : '1'} />
+                                <button className="text-xs underline" type="submit">{m.is_active ? '비활성화' : '활성화'}</button>
+                              </form>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
 
-                  <section className="space-y-2">
-                    <h3 className="text-xs font-semibold text-gray-700">팀 선수 멤버</h3>
-                    <form action={addPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <input type="hidden" name="channelId" value={channel.id} />
-                    <input type="hidden" name="teamId" value={t.id} />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="jersey_no" placeholder="등번호" required />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="player_name" placeholder="이름" required />
-                    <button className="rounded border px-3 py-2 text-sm" type="submit">멤버 추가/수정</button>
-                  </form>
+                    <section className="space-y-2">
+                      <h3 className="text-xs font-semibold text-gray-700">팀 선수 멤버</h3>
+                      <form action={addPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <input type="hidden" name="channelId" value={channel.id} />
+                        <input type="hidden" name="teamId" value={t.id} />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="jersey_no" placeholder="등번호" required />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="player_name" placeholder="이름" required />
+                        <button className="rounded border px-3 py-2 text-sm" type="submit">멤버 추가/수정</button>
+                      </form>
 
-                  {list.length === 0 ? (
-                    <p className="text-xs text-gray-500">등록된 멤버가 없습니다.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {list.map((p) => (
-                        <li key={p.id} className="rounded border px-2 py-1.5 flex items-center justify-between text-sm">
-                          <span>
-                            #{p.jersey_no} {p.player_name}
-                            {!p.is_active ? <span className="text-xs text-gray-400"> (비활성)</span> : null}
-                          </span>
-                          <form action={togglePlayerActive}>
-                            <input type="hidden" name="channelId" value={channel.id} />
-                            <input type="hidden" name="playerId" value={p.id} />
-                            <input type="hidden" name="next" value={p.is_active ? '0' : '1'} />
-                            <button className="text-xs underline" type="submit">{p.is_active ? '비활성화' : '활성화'}</button>
-                          </form>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  </section>
-                </div>
+                      {list.length === 0 ? (
+                        <p className="text-xs text-gray-500">등록된 멤버가 없습니다.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {list.map((p) => (
+                            <li key={p.id} className="rounded border px-2 py-1.5 flex items-center justify-between text-sm">
+                              <span>
+                                #{p.jersey_no} {p.player_name}
+                                {!p.is_active ? <span className="text-xs text-gray-400"> (비활성)</span> : null}
+                              </span>
+                              <form action={togglePlayerActive}>
+                                <input type="hidden" name="channelId" value={channel.id} />
+                                <input type="hidden" name="playerId" value={p.id} />
+                                <input type="hidden" name="next" value={p.is_active ? '0' : '1'} />
+                                <button className="text-xs underline" type="submit">{p.is_active ? '비활성화' : '활성화'}</button>
+                              </form>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  </div>
+                </details>
               )
             })}
           </section>

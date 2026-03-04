@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { isEditAuthorized } from '@/lib/editAuth'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type Team = { id: string; name: string; last_used_at: string }
@@ -22,8 +21,7 @@ async function canManageChannel(channelId: string) {
   const isAdmin = await isAdminAuthorized()
   if (isAdmin) return { allowed: true, channel }
 
-  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
-  return { allowed: isEditor, channel }
+  return { allowed: false, channel }
 }
 
 async function createTeam(formData: FormData) {

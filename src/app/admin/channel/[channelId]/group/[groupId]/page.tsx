@@ -391,7 +391,10 @@ export default async function AdminGroupPage({
         </datalist>
 
         <section className="rounded border p-4 space-y-2">
-          <h2 className="text-sm font-semibold">경기 추가</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">경기 추가</h2>
+            <Link className="text-xs underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리는 별도 화면에서</Link>
+          </div>
           <form action={createMatch} className="grid md:grid-cols-4 gap-2">
             <input type="hidden" name="channelId" value={channel.id} />
             <input type="hidden" name="groupId" value={group.id} />

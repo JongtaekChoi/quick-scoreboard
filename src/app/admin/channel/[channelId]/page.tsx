@@ -107,8 +107,9 @@ export default async function AdminChannelPage({
           </div>
           <h1 className="text-2xl font-semibold">{channel.name} 경기그룹 관리</h1>
           <p className="text-sm text-gray-600">채널: /{channel.slug}</p>
-          <div>
-            <Link className="underline text-sm" href={`/admin/channel/${channel.id}/roster`}>팀 멤버 관리</Link>
+          <div className="flex items-center gap-3 text-sm">
+            <Link className="underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리</Link>
+            <Link className="underline" href={`/admin/channel/${channel.id}/roster`}>팀 멤버 관리</Link>
           </div>
         </header>
 

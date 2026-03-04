@@ -251,7 +251,7 @@ export default async function ChannelPage({
                 팀장 계정 정보가 올바르지 않아.
               </span>
             ) : null}
-            {canEdit ? (
+            {canEdit || managerTeamId ? (
               <Link
                 className="underline"
                 href={`/admin/channel/${channel.id}?from=channel`}

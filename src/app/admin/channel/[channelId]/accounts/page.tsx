@@ -48,6 +48,9 @@ async function upsertAccount(formData: FormData) {
   if (!channelId || !loginId || !password) return
   if (!['admin', 'editor', 'manager'].includes(role)) return
   if (role === 'manager' && !teamId) return
+  if (role !== 'manager' && teamId) {
+    redirect(`/admin/channel/${channelId}/accounts?err=team_role`)
+  }
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
@@ -157,6 +160,7 @@ export default async function AdminAccountsPage({
           <p className="text-sm text-gray-600">{channel.name} · 권한 계정(admin/editor/manager) 관리</p>
           {saved === '1' ? <p className="text-xs text-green-700">계정이 저장되었습니다.</p> : null}
           {err === 'last_admin' ? <p className="text-xs text-red-600">활성 어드민 계정은 최소 1개 이상 유지되어야 합니다.</p> : null}
+          {err === 'team_role' ? <p className="text-xs text-red-600">팀 지정은 팀관리자(manager) 계정에만 가능합니다.</p> : null}
         </header>
 
         <section className="rounded border p-4 space-y-2">
@@ -179,7 +183,7 @@ export default async function AdminAccountsPage({
             </select>
             <button className="rounded border px-3 py-2 text-sm" type="submit">저장</button>
           </form>
-          <p className="text-[11px] text-gray-500">※ manager 역할은 팀 지정이 필요합니다.</p>
+          <p className="text-[11px] text-gray-500">※ 팀 지정은 팀관리자(manager) 역할에서만 가능합니다.</p>
         </section>
 
         <section className="space-y-2">

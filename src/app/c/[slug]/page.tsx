@@ -246,7 +246,7 @@ export default async function ChannelPage({
               어드민: {isAdmin ? "로그인" : "미로그인"}
             </span>
             <span className={`rounded px-2 py-1 border ${canEdit ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
-              채널관리자/골입력자: {canEdit ? "로그인" : "미로그인"}
+              골입력자(편집자): {canEdit ? "로그인" : "미로그인"}
             </span>
             <span className={`rounded px-2 py-1 border ${managerTeamId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
               팀관리자: {managerTeamId ? "로그인" : "미로그인"}
@@ -262,7 +262,7 @@ export default async function ChannelPage({
                 팀장 계정 정보가 올바르지 않습니다.
               </span>
             ) : null}
-            {canEdit || managerTeamId ? (
+            {isAdmin || managerTeamId ? (
               <Link
                 className="underline"
                 href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}

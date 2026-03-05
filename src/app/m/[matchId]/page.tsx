@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isEditAuthorized } from '@/lib/editAuth'
+import { isAdminAuthorized } from '@/lib/adminAuth'
+import { getManagerSession } from '@/lib/managerAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
 import ScoreActions from './ScoreActions'
 import LiveScoreboard from './LiveScoreboard'
@@ -40,6 +42,8 @@ type GoalEvent = {
 
 type Alias = { jersey_no: string | null; player_name: string | null }
 
+type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean }
+
 function formatKstDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })
 }
@@ -51,14 +55,46 @@ function toDateTimeLocalValue(iso: string | null) {
   return kst.toISOString().slice(0, 16)
 }
 
+async function getChannelPermission(channelSlug: string, channelVersion: number): Promise<GoalPermission> {
+  const isAdmin = await isAdminAuthorized()
+  if (isAdmin) return { canGoalEdit: true, canManageMatch: true }
+
+  const isEditor = await isEditAuthorized(channelSlug, channelVersion)
+  if (isEditor) return { canGoalEdit: true, canManageMatch: false }
+
+  const manager = await getManagerSession(channelSlug)
+  if (!manager) return { canGoalEdit: false, canManageMatch: false }
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return { canGoalEdit: false, canManageMatch: false }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('id')
+    .eq('slug', channelSlug)
+    .maybeSingle<{ id: string }>()
+
+  if (!channel) return { canGoalEdit: false, canManageMatch: false }
+
+  const { data: account } = await supabase
+    .from('team_manager_accounts')
+    .select('team_id,session_version,is_active')
+    .eq('channel_id', channel.id)
+    .eq('login_id', manager.loginId)
+    .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
+
+  const ok = !!account && account.is_active && account.team_id === manager.teamId && account.session_version === manager.version
+  return { canGoalEdit: ok, canManageMatch: ok }
+}
+
 async function addGoal(matchId: string, teamSide: 'A' | 'B', channelSlug: string, channelVersion: number) {
   'use server'
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canGoalEdit) return
 
   const { data: match } = await supabase
     .from('matches')
@@ -135,8 +171,8 @@ async function startMatch(matchId: string, channelSlug: string, channelVersion: 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canManageMatch) return
 
   await supabase
     .from('matches')
@@ -153,8 +189,8 @@ async function endMatch(matchId: string, channelSlug: string, channelVersion: nu
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canManageMatch) return
 
   await supabase
     .from('matches')
@@ -171,8 +207,8 @@ async function resumeMatch(matchId: string, channelSlug: string, channelVersion:
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canManageMatch) return
 
   await supabase
     .from('matches')
@@ -189,8 +225,8 @@ async function reserveMatchStart(matchId: string, channelSlug: string, channelVe
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canManageMatch) return
 
   const localValue = String(formData.get('scheduled_start_at') || '').trim()
   if (!localValue) {
@@ -220,8 +256,8 @@ async function delayMatch(matchId: string, channelSlug: string, channelVersion: 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canManageMatch) return
 
   await supabase
     .from('matches')
@@ -238,8 +274,8 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canGoalEdit) return
 
   const scorer = String(formData.get('scorer') || '').trim()
   const assist = String(formData.get('assist') || '').trim()
@@ -287,8 +323,8 @@ async function deleteGoalEvent(matchId: string, goalId: string, teamSide: 'A' | 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  const canEdit = await isEditAuthorized(channelSlug, channelVersion)
-  if (!canEdit) return
+  const permission = await getChannelPermission(channelSlug, channelVersion)
+  if (!permission.canGoalEdit) return
 
   await supabase.from('goal_events').update({ deleted_at: new Date().toISOString() }).eq('id', goalId).eq('match_id', matchId)
 
@@ -405,7 +441,11 @@ export default async function MatchDetailPage({
     .limit(50)
     .returns<Alias[]>()
 
-  const canEdit = channel ? await isEditAuthorized(channel.slug, channel.edit_session_version) : false
+  const permission = channel
+    ? await getChannelPermission(channel.slug, channel.edit_session_version)
+    : { canGoalEdit: false, canManageMatch: false }
+  const canGoalEdit = permission.canGoalEdit
+  const canManageMatch = permission.canManageMatch
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`
 
   const activeGoalId = goalParam || (goals?.[0]?.id ?? '')
@@ -454,15 +494,15 @@ export default async function MatchDetailPage({
           {match.status === 'scheduled' && match.scheduled_start_at ? (
             <p className="text-xs text-blue-700">{formatKstDateTime(match.scheduled_start_at)} 시작 예정</p>
           ) : null}
-          <p className={`text-xs ${canEdit ? 'text-green-700' : 'text-gray-500'}`}>
-            {canEdit ? '편집모드 ON' : '읽기모드 (채널에서 편집 비밀번호 입력 필요)'}
+          <p className={`text-xs ${canGoalEdit ? 'text-green-700' : 'text-gray-500'}`}>
+            {canGoalEdit ? '골입력 가능 모드 ON' : '읽기모드'}
           </p>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
         </header>
 
         <LiveScoreboard
           matchId={matchId}
-          readonly={!canEdit}
+          readonly={!canGoalEdit}
           matchStatus={match.status}
           initialMatch={{
             id: match.id,
@@ -483,7 +523,7 @@ export default async function MatchDetailPage({
           }))}
         />
 
-        {canEdit ? (
+        {canManageMatch ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
             <div className="flex flex-wrap gap-2">
               {match.status !== 'live' ? (
@@ -521,7 +561,7 @@ export default async function MatchDetailPage({
           </section>
         ) : null}
 
-        {canEdit && match.status !== 'ended' ? (
+        {canGoalEdit && match.status !== 'ended' ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-700">현재 편집 이벤트</h2>
             {!activeGoal || !channel ? (
@@ -567,7 +607,7 @@ export default async function MatchDetailPage({
               ))}
             </datalist>
           </section>
-        ) : canEdit ? (
+        ) : canGoalEdit ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 shadow-sm">
             골을 편집하려면 경기 재개를 눌러주세요.
           </section>

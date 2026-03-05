@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { isEditAuthorized } from '@/lib/editAuth'
 import { getManagerSession } from '@/lib/managerAuth'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
@@ -34,9 +33,6 @@ async function canManageChannel(channelId: string) {
 
   const isAdmin = await isAdminAuthorized()
   if (isAdmin) return { allowed: true, channel }
-
-  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
-  if (isEditor) return { allowed: true, channel, managerTeamId: null as string | null }
 
   const mgr = await getManagerSession(channel.slug)
   if (!mgr) return { allowed: false, channel, managerTeamId: null as string | null }

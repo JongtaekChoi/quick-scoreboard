@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 
 type MenuItem = { href: string; label: string }
 
-function isActive(pathname: string, href: string) {
+function isActive(pathname: string, href: string, exact = false) {
+  if (exact) return pathname === href
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
@@ -89,7 +90,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                         key={item.href}
                         href={item.href}
                         className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                          isActive(pathname, item.href)
+                          isActive(pathname, item.href, item.href === '/admin')
                             ? 'bg-gray-900 text-white shadow-sm'
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
@@ -114,7 +115,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                         key={item.href}
                         href={item.href}
                         className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                          isActive(pathname, item.href)
+                          isActive(pathname, item.href, item.href === `/admin/channel/${channelId}`)
                             ? 'bg-gray-900 text-white shadow-sm'
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}

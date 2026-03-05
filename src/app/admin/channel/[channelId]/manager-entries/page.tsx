@@ -56,7 +56,7 @@ export default async function ManagerEntriesPage({ params }: { params: Promise<{
   }
 
   const channel = manage.channel
-  if (!channel) return <main className="p-6">채널을 찾을 수 없습니다.</main>
+  if (!channel) return <main className="p-6">리그를 찾을 수 없습니다.</main>
 
   const { data: groups } = await supabase
     .from('match_groups')
@@ -71,7 +71,7 @@ export default async function ManagerEntriesPage({ params }: { params: Promise<{
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Link className="underline" href={`/c/${channel.slug}`}>채널 경기목록</Link>
+            <Link className="underline" href={`/c/${channel.slug}`}>리그 경기목록</Link>
             <span>›</span>
             <span>내 팀 엔트리 관리</span>
           </div>

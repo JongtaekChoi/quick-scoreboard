@@ -90,7 +90,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
   }
 
   const channel = manage.channel
-  if (!channel) return <main className="p-6">채널을 찾을 수 없습니다.</main>
+  if (!channel) return <main className="p-6">리그를 찾을 수 없습니다.</main>
 
   const [{ data: teams }, { data: players }] = await Promise.all([
     supabase.from('teams').select('id,name').eq('channel_id', channelId).order('name', { ascending: true }).returns<Team[]>(),
@@ -118,7 +118,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Link className="underline" href={`/c/${channel.slug}`}>채널 경기목록</Link>
+            <Link className="underline" href={`/c/${channel.slug}`}>리그 경기목록</Link>
             <span>›</span>
             <Link className="underline" href={`/admin/channel/${channel.id}?from=channel`}>경기그룹 관리</Link>
             <span>›</span>

@@ -6,7 +6,7 @@
 - 경기목록(날짜 필터 + 그룹)
 - 경기상세(+1 즉시 저장)
 - 득점 이벤트 사후 보정(번호/이름)
-- 회원가입 없는 채널 비밀번호 편집모드
+- 회원가입 없는 리그 비밀번호 편집모드
 
 상세 스펙: `docs/mvp-v1.md`
 
@@ -18,7 +18,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-채널 경기목록: `/c/{channel-slug}`
+리그 경기목록: `/c/{channel-slug}`
 관리자 페이지: `/admin` (비밀번호는 `ADMIN_PASSWORD`)
 
 ## DB Migration

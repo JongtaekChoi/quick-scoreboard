@@ -92,8 +92,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
             {channelId ? (
               <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1">채널</div>
-                <div className="text-xs text-gray-700 mb-2 px-1">{channelName ?? '채널 로딩 중...'}</div>
+                <div className="text-xs font-semibold text-gray-500 mb-1">리그</div>
+                <div className="text-xs text-gray-700 mb-2 px-1">{channelName ?? '리그 로딩 중...'}</div>
                 <nav className="space-y-1">
                   {channelItems.map((item) => (
                     <Link
@@ -112,7 +112,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 </nav>
               </div>
             ) : (
-              <p className="text-xs text-gray-500">채널 페이지로 이동하면 채널 메뉴가 표시됩니다.</p>
+              <p className="text-xs text-gray-500">리그 페이지로 이동하면 리그 메뉴가 표시됩니다.</p>
             )}
           </div>
         </aside>

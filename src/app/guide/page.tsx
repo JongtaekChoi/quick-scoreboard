@@ -13,15 +13,15 @@ export default function GuidePage() {
 
         <ol className="space-y-3 text-sm list-decimal pl-5">
           <li>
-            <div className="font-medium">채널 경기목록 열기</div>
+            <div className="font-medium">리그 경기목록 열기</div>
             <p className="text-gray-600">
-              공유받은 채널 링크(`/c/슬러그`)로 들어갑니다.
+              공유받은 리그 링크(`/c/슬러그`)로 들어갑니다.
             </p>
           </li>
           <li>
             <div className="font-medium">편집모드 시작</div>
             <p className="text-gray-600">
-              채널 상단에서 편집 비밀번호를 입력하면 편집모드가 켜집니다.
+              리그 상단에서 편집 비밀번호를 입력하면 편집모드가 켜집니다.
             </p>
           </li>
           <li>
@@ -52,7 +52,7 @@ export default function GuidePage() {
             홈
           </Link>
           <Link className="underline" href="/c/sample">
-            샘플 채널 열기
+            샘플 리그 열기
           </Link>
         </div>
       </section>

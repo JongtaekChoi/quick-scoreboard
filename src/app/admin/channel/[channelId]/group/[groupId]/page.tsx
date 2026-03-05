@@ -346,7 +346,7 @@ export default async function AdminGroupPage({
     supabase.from('match_group_guests').select('id,team_id,source_team_id,guest_name').eq('match_group_id', groupId).returns<GroupGuest[]>(),
   ])
 
-  if (!channel || !group) return <main className="p-6">채널/그룹을 찾을 수 없습니다.</main>
+  if (!channel || !group) return <main className="p-6">리그/그룹을 찾을 수 없습니다.</main>
 
   const playersByTeam = new Map<string, TeamPlayer[]>()
   for (const p of players ?? []) {
@@ -375,7 +375,7 @@ export default async function AdminGroupPage({
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
-              {fromChannel ? '채널 경기목록' : '관리자 홈'}
+              {fromChannel ? '리그 경기목록' : '관리자 홈'}
             </Link>
             <span>›</span>
             <Link className="underline" href={`/admin/channel/${channel.id}?from=${fromChannel ? 'channel' : 'admin'}`}>

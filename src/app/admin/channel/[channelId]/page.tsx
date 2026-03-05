@@ -100,7 +100,7 @@ export default async function AdminChannelPage({
 
   const channel = manage.channel
   const managerTeamId = manage.managerTeamId
-  if (!channel) return <main className="p-6">채널을 찾을 수 없습니다.</main>
+  if (!channel) return <main className="p-6">리그를 찾을 수 없습니다.</main>
   if (managerTeamId) {
     redirect(`/admin/channel/${channelId}/manager-entries`)
   }
@@ -119,13 +119,13 @@ export default async function AdminChannelPage({
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
-              {fromChannel ? '채널 경기목록' : '관리자 홈'}
+              {fromChannel ? '리그 경기목록' : '관리자 홈'}
             </Link>
             <span>›</span>
             <span>경기그룹 관리</span>
           </div>
           <h1 className="text-2xl font-semibold">{channel.name} 경기그룹 관리</h1>
-          <p className="text-sm text-gray-600">채널: /{channel.slug}</p>
+          <p className="text-sm text-gray-600">리그: /{channel.slug}</p>
           {managerTeamId ? (
             <p className="text-xs text-blue-700">팀장 모드: 엔트리 관리만 가능합니다.</p>
           ) : (

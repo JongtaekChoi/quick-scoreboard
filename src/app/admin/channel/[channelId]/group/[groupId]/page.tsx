@@ -38,8 +38,9 @@ async function canManageChannel(channelId: string) {
   if (!mgr) return { allowed: false, channel, managerTeamId: null as string | null }
 
   const { data: account } = await supabase
-    .from('team_manager_accounts')
+    .from('channel_accounts')
     .select('team_id,session_version,is_active')
+    .eq('role', 'manager')
     .eq('channel_id', channel.id)
     .eq('login_id', mgr.loginId)
     .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()

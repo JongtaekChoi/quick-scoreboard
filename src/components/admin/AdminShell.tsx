@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type MenuItem = { href: string; label: string }
 
@@ -20,6 +20,26 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const m = pathname.match(/^\/admin\/channel\/([^/]+)/)
     return m?.[1] ?? null
   }, [pathname])
+  const [channelName, setChannelName] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    if (!channelId) return
+    fetch(`/api/admin/channel/${channelId}/meta`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!mounted) return
+        setChannelName(json?.name ?? null)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setChannelName(null)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [channelId])
 
   const commonItems: MenuItem[] = [{ href: '/admin', label: '관리자 홈' }]
 
@@ -73,6 +93,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             {channelId ? (
               <div>
                 <div className="text-xs font-semibold text-gray-500 mb-1">채널</div>
+                <div className="text-xs text-gray-700 mb-2 px-1">{channelName ?? '채널 로딩 중...'}</div>
                 <nav className="space-y-1">
                   {channelItems.map((item) => (
                     <Link

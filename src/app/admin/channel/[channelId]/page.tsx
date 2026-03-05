@@ -132,6 +132,7 @@ export default async function AdminChannelPage({
             <div className="flex items-center gap-3 text-sm">
               <Link className="underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리</Link>
               <Link className="underline" href={`/admin/channel/${channel.id}/roster`}>팀 멤버 관리</Link>
+              <Link className="underline" href={`/admin/channel/${channel.id}/accounts`}>계정 관리</Link>
             </div>
           )}
           {err === 'forbidden' ? <p className="text-xs text-red-600">팀장 계정은 경기그룹 생성 권한이 없습니다.</p> : null}

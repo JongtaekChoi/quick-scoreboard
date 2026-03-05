@@ -11,7 +11,7 @@ export default function Home() {
 
         <section className="rounded border p-4 space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">빠른 시작</h2>
-          <p className="text-sm text-gray-600">채널 슬러그로 경기목록 진입</p>
+          <p className="text-sm text-gray-600">리그 코드로 경기목록 진입</p>
           <div className="flex flex-col gap-1 text-sm">
             <Link className="underline" href="/c/sample">
               /c/sample 열기

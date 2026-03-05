@@ -46,7 +46,7 @@ export async function generateMetadata({
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
-    return { title: `채널 ${slug}` };
+    return { title: `리그 ${slug}` };
   }
 
   const { data: channel } = await supabase
@@ -56,8 +56,8 @@ export async function generateMetadata({
     .maybeSingle<{ name: string }>();
 
   return {
-    title: channel ? channel.name : `채널 ${slug}`,
-    description: channel ? `${channel.name} 경기목록` : "채널 경기목록",
+    title: channel ? channel.name : `리그 ${slug}`,
+    description: channel ? `${channel.name} 경기목록` : "리그 경기목록",
   };
 }
 
@@ -85,7 +85,7 @@ export default async function ChannelPage({
     return (
       <main className="min-h-screen p-4 md:p-6">
         <section className="max-w-4xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">채널 경기목록</h1>
+          <h1 className="text-2xl font-semibold">리그 경기목록</h1>
           <p className="text-sm text-amber-700">
             Supabase 환경변수가 없어서 데이터 연결을 건너뛰었습니다.
           </p>
@@ -108,7 +108,7 @@ export default async function ChannelPage({
     return (
       <main className="min-h-screen p-4 md:p-6">
         <section className="max-w-4xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">채널을 찾을 수 없음</h1>
+          <h1 className="text-2xl font-semibold">리그를 찾을 수 없음</h1>
           <p className="text-sm text-gray-600">유효한 링크인지 확인해 주세요.</p>
         </section>
       </main>

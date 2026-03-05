@@ -50,7 +50,7 @@ export default async function AdminPage() {
         <header className="flex items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold">Admin</h1>
-            <p className="text-sm text-gray-600">채널/그룹/경기 운영</p>
+            <p className="text-sm text-gray-600">리그/그룹/경기 운영</p>
           </div>
           <form action="/admin/auth" method="post">
             <input type="hidden" name="action" value="logout" />
@@ -59,19 +59,19 @@ export default async function AdminPage() {
         </header>
 
         <section className="rounded border p-4 space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700">채널 생성</h2>
+          <h2 className="text-sm font-semibold text-gray-700">리그 생성</h2>
           <form action={createChannel} className="grid md:grid-cols-4 gap-2">
-            <input className="rounded border px-3 py-2 text-sm" name="name" placeholder="채널명" required />
+            <input className="rounded border px-3 py-2 text-sm" name="name" placeholder="리그명" required />
             <input className="rounded border px-3 py-2 text-sm" name="slug" placeholder="slug (예: bulamsan)" required />
-            <input className="rounded border px-3 py-2 text-sm" type="password" name="password" placeholder="채널 편집 비밀번호" required />
+            <input className="rounded border px-3 py-2 text-sm" type="password" name="password" placeholder="리그 편집 비밀번호" required />
             <button className="rounded bg-black text-white px-3 py-2 text-sm" type="submit">생성</button>
           </form>
         </section>
 
         <section className="rounded border p-4 space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700">채널 목록</h2>
+          <h2 className="text-sm font-semibold text-gray-700">리그 목록</h2>
           {(channels ?? []).length === 0 ? (
-            <p className="text-sm text-gray-500">채널이 없습니다.</p>
+            <p className="text-sm text-gray-500">리그가 없습니다.</p>
           ) : (
             <ul className="space-y-2">
               {(channels ?? []).map((c) => (

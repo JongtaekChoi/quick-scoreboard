@@ -1,63 +1,78 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-type MenuItem = { href: string; label: string }
+type MenuItem = { href: string; label: string };
+type ChannelRole = "admin" | "editor" | "manager" | null;
 
 function isActive(pathname: string, href: string, exact = false) {
-  if (exact) return pathname === href
-  return pathname === href || pathname.startsWith(`${href}/`)
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AdminShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const [open, setOpen] = useState(false)
+export default function AdminShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
 
-  const isStandalone = pathname === '/admin/login' || pathname === '/admin/auth'
+  const isStandalone =
+    pathname === "/admin/login" || pathname === "/admin/auth";
 
   const channelId = useMemo(() => {
-    const m = pathname.match(/^\/admin\/channel\/([^/]+)/)
-    return m?.[1] ?? null
-  }, [pathname])
-  const [channelName, setChannelName] = useState<string | null>(null)
+    const m = pathname.match(/^\/admin\/channel\/([^/]+)/);
+    return m?.[1] ?? null;
+  }, [pathname]);
+  const [channelName, setChannelName] = useState<string | null>(null);
+  const [channelRole, setChannelRole] = useState<ChannelRole>(null);
 
   useEffect(() => {
-    let mounted = true
-    if (!channelId) return
-    fetch(`/api/admin/channel/${channelId}/meta`, { cache: 'no-store' })
+    let mounted = true;
+    if (!channelId) {
+      setChannelName(null);
+      setChannelRole(null);
+      return;
+    }
+    fetch(`/api/admin/channel/${channelId}/meta`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (!mounted) return
-        setChannelName(json?.name ?? null)
+        if (!mounted) return;
+        console.log(json);
+        setChannelName(json?.name ?? null);
+        setChannelRole((json?.role as ChannelRole) ?? null);
       })
-      .catch(() => {
-        if (!mounted) return
-        setChannelName(null)
-      })
+      .catch((e) => {
+        console.error(e);
+        if (!mounted) return;
+        setChannelName(null);
+        setChannelRole(null);
+      });
 
     return () => {
-      mounted = false
-    }
-  }, [channelId])
+      mounted = false;
+    };
+  }, [channelId]);
 
-  const isManagerView = pathname.includes('/manager-entries')
+  const isManagerView = channelRole === "manager";
 
   const commonItems: MenuItem[] = isManagerView
     ? []
-    : [{ href: '/admin', label: '관리자 홈' }]
+    : [{ href: "/admin", label: "관리자 홈" }];
 
   const channelItems: MenuItem[] = channelId
     ? [
-        { href: `/admin/channel/${channelId}`, label: '경기그룹 관리' },
-        { href: `/admin/channel/${channelId}/teams`, label: '팀 관리' },
-        { href: `/admin/channel/${channelId}/roster`, label: '팀 멤버 관리' },
-        { href: `/admin/channel/${channelId}/accounts`, label: '계정 관리' },
+        { href: `/admin/channel/${channelId}`, label: "경기그룹 관리" },
+        { href: `/admin/channel/${channelId}/teams`, label: "팀 관리" },
+        { href: `/admin/channel/${channelId}/roster`, label: "팀 멤버 관리" },
+        { href: `/admin/channel/${channelId}/accounts`, label: "계정 관리" },
       ]
-    : []
+    : [];
 
-  if (isStandalone) return <>{children}</>
+  if (isStandalone) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -73,26 +88,32 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </div>
 
       <div className="mx-auto max-w-7xl md:grid md:grid-cols-[260px_1fr] md:gap-5 px-3 md:px-5 py-3 md:py-5">
-        <aside className={`${open ? 'block' : 'hidden'} md:block`}>
+        <aside className={`${open ? "block" : "hidden"} md:block`}>
           <div className="sticky top-5 rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="p-3 border-b border-gray-100">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">quick-scoreboard</p>
-              <p className="text-sm font-semibold text-gray-900 mt-0.5">운영 센터</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                quick-scoreboard
+              </p>
+              <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                운영 센터
+              </p>
             </div>
 
             <div className="p-3 space-y-4">
               {commonItems.length > 0 ? (
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">관리</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">
+                    관리
+                  </div>
                   <nav className="space-y-1">
                     {commonItems.map((item) => (
                       <Link
                         key={item.href}
                         href={item.href}
                         className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                          isActive(pathname, item.href, item.href === '/admin')
-                            ? 'bg-gray-900 text-white shadow-sm'
-                            : 'text-gray-700 hover:bg-gray-100'
+                          isActive(pathname, item.href, item.href === "/admin")
+                            ? "bg-gray-900 text-white shadow-sm"
+                            : "text-gray-700 hover:bg-gray-100"
                         }`}
                         onClick={() => setOpen(false)}
                       >
@@ -105,9 +126,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
               {channelId ? (
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">리그</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">
+                    리그
+                  </div>
                   <div className="mx-1 mb-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-700">
-                    {channelName ?? '리그 로딩 중...'}
+                    {channelName ?? "리그 로딩 중..."}
                   </div>
                   <nav className="space-y-1">
                     {channelItems.map((item) => (
@@ -115,9 +138,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                         key={item.href}
                         href={item.href}
                         className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                          isActive(pathname, item.href, item.href === `/admin/channel/${channelId}`)
-                            ? 'bg-gray-900 text-white shadow-sm'
-                            : 'text-gray-700 hover:bg-gray-100'
+                          isActive(
+                            pathname,
+                            item.href,
+                            item.href === `/admin/channel/${channelId}`,
+                          )
+                            ? "bg-gray-900 text-white shadow-sm"
+                            : "text-gray-700 hover:bg-gray-100"
                         }`}
                         onClick={() => setOpen(false)}
                       >
@@ -127,7 +154,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                   </nav>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 px-1">리그 페이지로 이동하면 리그 메뉴가 표시됩니다.</p>
+                <p className="text-xs text-gray-500 px-1">
+                  리그 페이지로 이동하면 리그 메뉴가 표시됩니다.
+                </p>
               )}
             </div>
           </div>
@@ -140,5 +169,5 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </main>
       </div>
     </div>
-  )
+  );
 }

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
+import { getAccountInfo } from '@/lib/channelSession'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type Team = { id: string; name: string; last_used_at: string }
@@ -20,6 +21,9 @@ async function canManageChannel(channelId: string) {
 
   const isAdmin = await isAdminAuthorized()
   if (isAdmin) return { allowed: true, channel }
+
+  const account = await getAccountInfo(channel.slug)
+  if (account?.role === 'admin') return { allowed: true, channel }
 
   return { allowed: false, channel }
 }

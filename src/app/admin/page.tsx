@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { hashEditPassword } from '@/lib/editAuth'
+import { hashEditPassword } from '@/lib/passwordHash'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 

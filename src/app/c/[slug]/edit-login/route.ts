@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase'
-import { hashEditPassword, setEditCookie, clearEditCookie } from '@/lib/editAuth'
+import { hashEditPassword } from '@/lib/passwordHash'
+import { createEditSession, destroyChannelSession } from '@/lib/channelSession'
 
 type Channel = {
   id: string
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!supabase) return NextResponse.redirect(new URL(`/c/${slug}?err=env`, req.url))
 
   if (action === 'logout') {
-    await clearEditCookie(slug)
+    await destroyChannelSession(slug)
     return NextResponse.redirect(new URL(`/c/${slug}`, req.url))
   }
 
@@ -35,6 +36,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.redirect(new URL(`/c/${slug}?err=password`, req.url))
   }
 
-  await setEditCookie(slug, channel.edit_session_version)
+  await createEditSession(slug, channel.edit_session_version)
   return NextResponse.redirect(new URL(`/c/${slug}?edit=1`, req.url))
 }

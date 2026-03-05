@@ -2,8 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { isEditAuthorized } from '@/lib/editAuth'
-import { getManagerSession } from '@/lib/managerAuth'
+import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -23,21 +22,11 @@ async function canManageChannel(channelId: string) {
   const isAdmin = await isAdminAuthorized()
   if (isAdmin) return { allowed: true, channel, managerTeamId: null as string | null }
 
-  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
-  if (isEditor) return { allowed: true, channel, managerTeamId: null as string | null }
+  const account = await getAccountInfo(channel.slug)
+  if (account?.role === 'admin') return { allowed: true, channel, managerTeamId: null as string | null }
 
-  const mgr = await getManagerSession(channel.slug)
-  if (!mgr) return { allowed: false, channel, managerTeamId: null as string | null }
-
-  const { data: account } = await supabase
-    .from('team_manager_accounts')
-    .select('team_id,session_version,is_active')
-    .eq('channel_id', channel.id)
-    .eq('login_id', mgr.loginId)
-    .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
-
-  const ok = !!account && account.is_active && account.team_id === mgr.teamId && account.session_version === mgr.version
-  return { allowed: ok, channel, managerTeamId: ok ? account.team_id : null }
+  const { ok, teamId } = await validateManagerAgainstDb(channel.slug, channel.id)
+  return { allowed: ok, channel, managerTeamId: teamId }
 }
 
 export default async function ManagerEntriesPage({ params }: { params: Promise<{ channelId: string }> }) {

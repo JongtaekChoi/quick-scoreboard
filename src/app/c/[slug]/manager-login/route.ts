@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase'
-import { clearManagerCookie, hashManagerPassword, setManagerCookie } from '@/lib/managerAuth'
+import { hashManagerPassword } from '@/lib/passwordHash'
+import { createManagerSession, destroyChannelSession } from '@/lib/channelSession'
 
 type Channel = { id: string; slug: string }
 type ManagerAccount = { id: string; team_id: string; login_id: string; password_hash: string; session_version: number; is_active: boolean }
@@ -16,7 +17,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   if (!supabase) return NextResponse.redirect(new URL(`/c/${slug}?mgr=env`, req.url))
 
   if (action === 'logout') {
-    await clearManagerCookie(slug)
+    await destroyChannelSession(slug)
     return NextResponse.redirect(new URL(`/c/${slug}`, req.url))
   }
 
@@ -39,6 +40,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.redirect(new URL(`/c/${slug}?mgr=password`, req.url))
   }
 
-  await setManagerCookie(slug, { teamId: account.team_id, version: account.session_version, loginId: account.login_id })
+  await createManagerSession(slug, { teamId: account.team_id, version: account.session_version, loginId: account.login_id })
   return NextResponse.redirect(new URL(`/c/${slug}?mgr=1`, req.url))
 }

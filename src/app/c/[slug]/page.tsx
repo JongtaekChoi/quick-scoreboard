@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
-import { isEditAuthorized } from "@/lib/editAuth";
+import { isEditAuthorized, getManagerInfo, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
-import { getManagerSession } from "@/lib/managerAuth";
-import { getAccountCookie } from "@/lib/accountAuth";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
 
@@ -116,13 +114,14 @@ export default async function ChannelPage({
   }
 
   const isAdmin = await isAdminAuthorized();
-  const accountSession = await getAccountCookie(channel.slug);
+  const accountSession = await getAccountInfo(channel.slug);
   const canEdit = await isEditAuthorized(
     channel.slug,
     channel.edit_session_version,
   );
-  const managerSession = await getManagerSession(channel.slug);
-  const managerTeamId = managerSession?.teamId ?? null;
+  const managerInfo = await getManagerInfo(channel.slug);
+  const managerTeamId = managerInfo?.teamId ?? null;
+  const isChannelAdmin = accountSession?.role === "admin";
   const channelUrl = `https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}`;
 
   await autoStartDueMatches(supabase);
@@ -229,7 +228,7 @@ export default async function ChannelPage({
             {acc === "1" ? (
               <span className="text-green-700">로그인되었습니다.</span>
             ) : null}
-            {isAdmin || managerTeamId ? (
+            {isAdmin || isChannelAdmin || managerTeamId ? (
               <Link
                 className="underline"
                 href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}

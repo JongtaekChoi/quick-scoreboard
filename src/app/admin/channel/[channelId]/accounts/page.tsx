@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { hashAccountPassword } from '@/lib/accountAuth'
+import { getAccountInfo } from '@/lib/channelSession'
+import { hashAccountPassword } from '@/lib/passwordHash'
 
 type Channel = { id: string; name: string; slug: string }
 type Team = { id: string; name: string }
@@ -27,7 +28,10 @@ async function canManageAccounts(channelId: string) {
 
   if (!channel) return { allowed: false, channel: null as Channel | null }
   const admin = await isAdminAuthorized()
-  return { allowed: admin, channel }
+  if (admin) return { allowed: true, channel }
+
+  const account = await getAccountInfo(channel.slug)
+  return { allowed: account?.role === 'admin', channel }
 }
 
 async function upsertAccount(formData: FormData) {

@@ -3,9 +3,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { getSupabaseServerClient } from '@/lib/supabase'
-import { isEditAuthorized } from '@/lib/editAuth'
+import { isEditAuthorized, validateManagerAgainstDb } from '@/lib/channelSession'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { getManagerSession } from '@/lib/managerAuth'
 import { autoStartDueMatches } from '@/lib/matchSchedule'
 import ScoreActions from './ScoreActions'
 import LiveScoreboard from './LiveScoreboard'
@@ -62,29 +61,18 @@ async function getChannelPermission(channelSlug: string, channelVersion: number)
   const isEditor = await isEditAuthorized(channelSlug, channelVersion)
   if (isEditor) return { canGoalEdit: true, canManageMatch: false }
 
-  const manager = await getManagerSession(channelSlug)
-  if (!manager) return { canGoalEdit: false, canManageMatch: false }
-
   const supabase = getSupabaseServerClient()
   if (!supabase) return { canGoalEdit: false, canManageMatch: false }
 
-  const { data: channel } = await supabase
+  const { data: ch } = await supabase
     .from('channels')
     .select('id')
     .eq('slug', channelSlug)
     .maybeSingle<{ id: string }>()
 
-  if (!channel) return { canGoalEdit: false, canManageMatch: false }
+  if (!ch) return { canGoalEdit: false, canManageMatch: false }
 
-  const { data: account } = await supabase
-    .from('channel_accounts')
-    .select('team_id,session_version,is_active')
-    .eq('role', 'manager')
-    .eq('channel_id', channel.id)
-    .eq('login_id', manager.loginId)
-    .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
-
-  const ok = !!account && account.is_active && account.team_id === manager.teamId && account.session_version === manager.version
+  const { ok } = await validateManagerAgainstDb(channelSlug, ch.id)
   return { canGoalEdit: ok, canManageMatch: ok }
 }
 

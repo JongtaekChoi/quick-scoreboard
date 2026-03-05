@@ -41,7 +41,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     }
   }, [channelId])
 
-  const commonItems: MenuItem[] = [{ href: '/admin', label: '관리자 홈' }]
+  const isManagerView = pathname.includes('/manager-entries')
+
+  const commonItems: MenuItem[] = isManagerView
+    ? []
+    : [{ href: '/admin', label: '관리자 홈' }]
 
   const channelItems: MenuItem[] = channelId
     ? [
@@ -76,25 +80,27 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </div>
 
             <div className="p-3 space-y-4">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">관리</div>
-                <nav className="space-y-1">
-                  {commonItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                        isActive(pathname, item.href)
-                          ? 'bg-gray-900 text-white shadow-sm'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                      onClick={() => setOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </nav>
-              </div>
+              {commonItems.length > 0 ? (
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">관리</div>
+                  <nav className="space-y-1">
+                    {commonItems.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`block rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                          isActive(pathname, item.href)
+                            ? 'bg-gray-900 text-white shadow-sm'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setOpen(false)}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </nav>
+                </div>
+              ) : null}
 
               {channelId ? (
                 <div>

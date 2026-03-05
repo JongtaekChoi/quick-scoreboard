@@ -5,6 +5,7 @@ import { isEditAuthorized } from "@/lib/editAuth";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import { getManagerSession } from "@/lib/managerAuth";
+import { getAccountCookie } from "@/lib/accountAuth";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
 
@@ -71,10 +72,11 @@ export default async function ChannelPage({
     edit?: string;
     order?: string;
     mgr?: string;
+    acc?: string;
   }>;
 }) {
   const { slug } = await params;
-  const { date, err, edit, order, mgr } = await searchParams;
+  const { date, order, acc } = await searchParams;
   const matchOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
 
   const supabase = getSupabaseServerClient();
@@ -114,6 +116,7 @@ export default async function ChannelPage({
   }
 
   const isAdmin = await isAdminAuthorized();
+  const accountSession = await getAccountCookie(channel.slug);
   const canEdit = await isEditAuthorized(
     channel.slug,
     channel.edit_session_version,
@@ -177,70 +180,42 @@ export default async function ChannelPage({
             >
               {canEdit ? "편집모드 ON" : "읽기모드"}
             </span>
-            {canEdit ? (
+            {accountSession ? (
               <form
-                action={`/c/${encodeURIComponent(channel.slug)}/edit-login`}
+                action={`/c/${encodeURIComponent(channel.slug)}/login`}
                 method="post"
               >
                 <input type="hidden" name="action" value="logout" />
                 <button className="underline" type="submit">
-                  편집모드 종료
+                  로그아웃
                 </button>
               </form>
             ) : (
               <form
-                action={`/c/${encodeURIComponent(channel.slug)}/edit-login`}
-                method="post"
-                className="flex items-center gap-2"
-              >
-                <input
-                  className="rounded border px-2 py-1"
-                  type="password"
-                  name="password"
-                  placeholder="편집 비밀번호"
-                  required
-                />
-                <button className="rounded border px-2 py-1" type="submit">
-                  편집 시작
-                </button>
-              </form>
-            )}
-            {managerTeamId ? (
-              <form
-                action={`/c/${encodeURIComponent(channel.slug)}/manager-login`}
-                method="post"
-              >
-                <input type="hidden" name="action" value="logout" />
-                <button className="underline" type="submit">
-                  팀장 로그아웃
-                </button>
-              </form>
-            ) : (
-              <form
-                action={`/c/${encodeURIComponent(channel.slug)}/manager-login`}
+                action={`/c/${encodeURIComponent(channel.slug)}/login`}
                 method="post"
                 className="flex items-center gap-2"
               >
                 <input
                   className="rounded border px-2 py-1"
                   name="login_id"
-                  placeholder="팀장ID"
+                  placeholder="계정 ID"
                   required
                 />
                 <input
                   className="rounded border px-2 py-1"
                   type="password"
                   name="password"
-                  placeholder="팀장 비밀번호"
+                  placeholder="비밀번호"
                   required
                 />
                 <button className="rounded border px-2 py-1" type="submit">
-                  팀장 로그인
+                  로그인
                 </button>
               </form>
             )}
-            {err === "password" ? (
-              <span className="text-red-600">비밀번호가 올바르지 않습니다.</span>
+            {acc === "password" ? (
+              <span className="text-red-600">계정 정보가 올바르지 않습니다.</span>
             ) : null}
             <span className={`rounded px-2 py-1 border ${isAdmin ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
               어드민: {isAdmin ? "로그인" : "미로그인"}
@@ -251,16 +226,8 @@ export default async function ChannelPage({
             <span className={`rounded px-2 py-1 border ${managerTeamId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
               팀관리자: {managerTeamId ? "로그인" : "미로그인"}
             </span>
-            {edit === "1" ? (
-              <span className="text-green-700">편집모드 인증 완료.</span>
-            ) : null}
-            {mgr === "1" ? (
-              <span className="text-green-700">팀장 로그인 완료.</span>
-            ) : null}
-            {mgr === "password" ? (
-              <span className="text-red-600">
-                팀장 계정 정보가 올바르지 않습니다.
-              </span>
+            {acc === "1" ? (
+              <span className="text-green-700">로그인되었습니다.</span>
             ) : null}
             {isAdmin || managerTeamId ? (
               <Link

@@ -40,6 +40,7 @@ npm run dev
   - `db/patch_team_players.sql`
   - `db/patch_match_group_entries.sql`
   - `db/patch_team_manager_accounts.sql`
+  - `db/patch_channel_accounts.sql`
   - `db/patch_match_group_guests.sql`
 
 ## CI

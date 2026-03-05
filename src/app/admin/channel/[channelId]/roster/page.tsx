@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
-import { hashManagerPassword } from '@/lib/managerAuth'
+import { hashAccountPassword } from '@/lib/accountAuth'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type Team = { id: string; name: string }
@@ -77,12 +77,13 @@ async function createTeamManager(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await supabase.from('team_manager_accounts').upsert(
+  await supabase.from('channel_accounts').upsert(
     {
       channel_id: channelId,
       team_id: teamId,
+      role: 'manager',
       login_id: loginId,
-      password_hash: hashManagerPassword(password),
+      password_hash: hashAccountPassword(password),
       is_active: true,
     },
     { onConflict: 'channel_id,login_id' },
@@ -108,7 +109,7 @@ async function toggleManagerActive(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await supabase.from('team_manager_accounts').update({ is_active: next }).eq('id', managerId)
+  await supabase.from('channel_accounts').update({ is_active: next }).eq('id', managerId)
   redirect(`/admin/channel/${channelId}/roster`)
 }
 
@@ -157,9 +158,10 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
       .order('jersey_no', { ascending: true })
       .returns<TeamPlayer[]>(),
     supabase
-      .from('team_manager_accounts')
+      .from('channel_accounts')
       .select('id,team_id,login_id,is_active')
       .eq('channel_id', channelId)
+      .eq('role', 'manager')
       .order('login_id', { ascending: true })
       .returns<TeamManager[]>(),
   ])

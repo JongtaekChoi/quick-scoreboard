@@ -77,8 +77,9 @@ async function getChannelPermission(channelSlug: string, channelVersion: number)
   if (!channel) return { canGoalEdit: false, canManageMatch: false }
 
   const { data: account } = await supabase
-    .from('team_manager_accounts')
+    .from('channel_accounts')
     .select('team_id,session_version,is_active')
+    .eq('role', 'manager')
     .eq('channel_id', channel.id)
     .eq('login_id', manager.loginId)
     .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()

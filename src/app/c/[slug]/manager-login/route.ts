@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase'
-import { hashManagerPassword } from '@/lib/passwordHash'
-import { createManagerSession, destroyChannelSession } from '@/lib/channelSession'
+import { hashAccountPassword } from '@/lib/passwordHash'
+import { createAccountSession, destroyChannelSession } from '@/lib/channelSession'
 
-type Channel = { id: string; slug: string }
+type Channel = { id: string; slug: string; edit_session_version: number }
 type ManagerAccount = { id: string; team_id: string; login_id: string; password_hash: string; session_version: number; is_active: boolean }
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -23,23 +23,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const { data: channel } = await supabase
     .from('channels')
-    .select('id,slug')
+    .select('id,slug,edit_session_version')
     .eq('slug', slug)
     .maybeSingle<Channel>()
 
   if (!channel) return NextResponse.redirect(new URL(`/c/${slug}?mgr=notfound`, req.url))
 
   const { data: account } = await supabase
-    .from('team_manager_accounts')
+    .from('channel_accounts')
     .select('id,team_id,login_id,password_hash,session_version,is_active')
     .eq('channel_id', channel.id)
     .eq('login_id', loginId)
+    .eq('role', 'manager')
     .maybeSingle<ManagerAccount>()
 
-  if (!account || !account.is_active || hashManagerPassword(password) !== account.password_hash) {
+  if (!account || !account.is_active || hashAccountPassword(password) !== account.password_hash) {
     return NextResponse.redirect(new URL(`/c/${slug}?mgr=password`, req.url))
   }
 
-  await createManagerSession(slug, { teamId: account.team_id, version: account.session_version, loginId: account.login_id })
+  await createAccountSession(slug, {
+    loginId: account.login_id,
+    role: 'manager',
+    teamId: account.team_id,
+    version: account.session_version,
+    editVersion: channel.edit_session_version,
+  })
   return NextResponse.redirect(new URL(`/c/${slug}?mgr=1`, req.url))
 }

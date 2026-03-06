@@ -5,5 +5,4 @@ export function hashPassword(raw: string) {
 }
 
 export const hashAccountPassword = hashPassword
-export const hashManagerPassword = hashPassword
 export const hashEditPassword = hashPassword

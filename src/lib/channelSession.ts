@@ -8,7 +8,7 @@ export type ChannelSessionData = {
   teamId: string | null
   version: number
   editVersion: number | null
-  source: 'account' | 'manager-account' | 'edit'
+  source: 'account' | 'edit'
 }
 
 function cookieName(slug: string) {
@@ -48,20 +48,6 @@ export async function createAccountSession(
   await session.save()
 }
 
-export async function createManagerSession(
-  slug: string,
-  data: { loginId: string; teamId: string; version: number },
-) {
-  const session = await getChannelSession(slug)
-  session.loginId = data.loginId
-  session.role = 'manager'
-  session.teamId = data.teamId
-  session.version = data.version
-  session.editVersion = null
-  session.source = 'manager-account'
-  await session.save()
-}
-
 export async function createEditSession(slug: string, editVersion: number) {
   const session = await getChannelSession(slug)
   session.loginId = null
@@ -97,18 +83,18 @@ export async function isEditAuthorized(slug: string, currentEditVersion: number)
   if (data.role === 'admin' || data.role === 'editor') return true
   if (data.role === 'edit-only') return data.editVersion === currentEditVersion
   if (data.role === 'manager') {
-    if (data.source === 'account' && data.editVersion === currentEditVersion) return true
+    if (data.editVersion === currentEditVersion) return true
   }
   return false
 }
 
-export async function getManagerInfo(slug: string): Promise<{ loginId: string; teamId: string; version: number; source: 'account' | 'manager-account' } | null> {
+export async function getManagerInfo(slug: string): Promise<{ loginId: string; teamId: string; version: number } | null> {
   const data = await getSessionData(slug)
   if (!data) return null
   if (data.role !== 'manager') return null
   if (!data.loginId || !data.teamId) return null
-  if (data.source !== 'account' && data.source !== 'manager-account') return null
-  return { loginId: data.loginId, teamId: data.teamId, version: data.version, source: data.source }
+  if (data.source !== 'account') return null
+  return { loginId: data.loginId, teamId: data.teamId, version: data.version }
 }
 
 export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'editor' | 'manager'; teamId: string | null; version: number } | null> {
@@ -130,19 +116,13 @@ export async function validateManagerAgainstDb(
   const supabase = getSupabaseServerClient()
   if (!supabase) return { ok: false, teamId: null }
 
-  const table = mgr.source === 'manager-account' ? 'team_manager_accounts' : 'channel_accounts'
-
-  let query = supabase
-    .from(table)
+  const { data: account } = await supabase
+    .from('channel_accounts')
     .select('team_id,session_version,is_active')
     .eq('channel_id', channelId)
     .eq('login_id', mgr.loginId)
-
-  if (mgr.source === 'account') {
-    query = query.eq('role', 'manager')
-  }
-
-  const { data: account } = await query.maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
+    .eq('role', 'manager')
+    .maybeSingle<{ team_id: string; session_version: number; is_active: boolean }>()
 
   const ok = !!account && account.is_active && account.team_id === mgr.teamId && account.session_version === mgr.version
   return { ok, teamId: ok ? account.team_id : null }

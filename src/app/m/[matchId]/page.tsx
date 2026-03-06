@@ -32,14 +32,16 @@ type GoalEvent = {
   id: string
   team_side: 'A' | 'B'
   minute: number | null
-  scorer_no: string | null
   scorer_name: string | null
-  assist_no: string | null
+  scorer_player_id: string | null
   assist_name: string | null
+  assist_player_id: string | null
   created_at: string
 }
 
 type Alias = { jersey_no: string | null; player_name: string | null }
+
+type RosterPlayer = { playerId: string; jerseyNo: string; playerName: string; value: string }
 
 type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean }
 
@@ -266,26 +268,37 @@ async function updateGoalEvent(matchId: string, goalId: string, channelSlug: str
   const permission = await getChannelPermission(channelSlug, channelVersion)
   if (!permission.canGoalEdit) return
 
-  const scorer = String(formData.get('scorer') || '').trim()
-  const assist = String(formData.get('assist') || '').trim()
+  const scorerRaw = String(formData.get('scorer') || '').trim()
+  const assistRaw = String(formData.get('assist') || '').trim()
   const minuteRaw = String(formData.get('minute') || '').trim()
   const minute = minuteRaw === '' ? null : Math.max(0, Number(minuteRaw) || 0)
+
+  const parsePlayerValue = (raw: string) => {
+    const idx = raw.indexOf('|')
+    if (idx >= 0) {
+      return { playerId: raw.slice(0, idx) || null, name: raw.slice(idx + 1) || null }
+    }
+    return { playerId: null, name: raw || null }
+  }
+
+  const scorer = parsePlayerValue(scorerRaw)
+  const assist = parsePlayerValue(assistRaw)
 
   await supabase
     .from('goal_events')
     .update({
       minute,
-      scorer_no: null,
-      scorer_name: scorer || null,
-      assist_no: null,
-      assist_name: assist || null,
+      scorer_player_id: scorer.playerId,
+      scorer_name: scorer.name,
+      assist_player_id: assist.playerId,
+      assist_name: assist.name,
     })
     .eq('id', goalId)
     .eq('match_id', matchId)
 
   const aliasPairs = [
-    { jersey_no: null, player_name: scorer || null },
-    { jersey_no: null, player_name: assist || null },
+    { jersey_no: null, player_name: scorer.name },
+    { jersey_no: null, player_name: assist.name },
   ].filter((x) => x.player_name)
 
   for (const a of aliasPairs) {
@@ -414,9 +427,72 @@ export default async function MatchDetailPage({
         .maybeSingle<MatchGroup>()
     : { data: null as MatchGroup | null }
 
+  // 엔트리/게스트 기반 roster 구성
+  let rosterA: RosterPlayer[] = []
+  let rosterB: RosterPlayer[] = []
+
+  if (match.match_group_id) {
+    const [{ data: teamARow }, { data: teamBRow }, { data: entries }, { data: guests }] = await Promise.all([
+      supabase
+        .from('channel_teams_view')
+        .select('id')
+        .eq('channel_id', match.channel_id)
+        .eq('name', match.team_a_name)
+        .maybeSingle<{ id: string }>(),
+      supabase
+        .from('channel_teams_view')
+        .select('id')
+        .eq('channel_id', match.channel_id)
+        .eq('name', match.team_b_name)
+        .maybeSingle<{ id: string }>(),
+      supabase
+        .from('match_group_entries')
+        .select('team_id, player_id, team_players(jersey_no, player_name)')
+        .eq('match_group_id', match.match_group_id)
+        .returns<{ team_id: string; player_id: string; team_players: { jersey_no: string; player_name: string } }[]>(),
+      supabase
+        .from('match_group_guests')
+        .select('team_id, guest_name, source_player_id, team_players!match_group_guests_source_player_id_fkey(jersey_no)')
+        .eq('match_group_id', match.match_group_id)
+        .returns<{ team_id: string; guest_name: string; source_player_id: string | null; team_players: { jersey_no: string } | null }[]>(),
+    ])
+
+    const teamAId = teamARow?.id
+    const teamBId = teamBRow?.id
+
+    const buildRoster = (teamId: string | undefined): RosterPlayer[] => {
+      if (!teamId) return []
+      const players: RosterPlayer[] = []
+      for (const e of entries ?? []) {
+        if (e.team_id === teamId && e.team_players) {
+          const { jersey_no, player_name } = e.team_players
+          players.push({ playerId: e.player_id, jerseyNo: jersey_no, playerName: player_name, value: `${e.player_id}|#${jersey_no} ${player_name}` })
+        }
+      }
+      for (const g of guests ?? []) {
+        if (g.team_id === teamId) {
+          const jerseyNo = g.team_players?.jersey_no ?? ''
+          const pid = g.source_player_id ?? ''
+          const displayName = jerseyNo ? `#${jerseyNo} ${g.guest_name}` : g.guest_name
+          players.push({ playerId: pid, jerseyNo, playerName: g.guest_name, value: `${pid}|${displayName}` })
+        }
+      }
+      players.sort((a, b) => {
+        const na = parseInt(a.jerseyNo, 10)
+        const nb = parseInt(b.jerseyNo, 10)
+        if (!isNaN(na) && !isNaN(nb)) return na - nb
+        return a.jerseyNo.localeCompare(b.jerseyNo)
+      })
+      return players
+    }
+
+    rosterA = buildRoster(teamAId)
+    rosterB = buildRoster(teamBId)
+  }
+
   const { data: goals } = await supabase
     .from('goal_events')
-    .select('id,team_side,minute,scorer_no,scorer_name,assist_no,assist_name,created_at')
+    .select('id,team_side,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at')
     .eq('match_id', matchId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -505,9 +581,7 @@ export default async function MatchDetailPage({
             team_side: g.team_side,
             minute: g.minute,
             scorer_name: g.scorer_name,
-            scorer_no: g.scorer_no,
             assist_name: g.assist_name,
-            assist_no: g.assist_no,
             created_at: g.created_at,
           }))}
         />
@@ -555,31 +629,59 @@ export default async function MatchDetailPage({
             <h2 className="text-sm font-semibold text-gray-700">현재 편집 이벤트</h2>
             {!activeGoal || !channel ? (
               <p className="text-sm text-gray-500">편집할 이벤트가 없습니다.</p>
-            ) : (
-              <>
-                <div className="text-sm text-gray-700">
-                  {activeGoal.team_side}팀 · {activeGoal.minute !== null ? `${activeGoal.minute}분` : '시간 미설정'}
-                </div>
-                <form
-                  key={activeGoal.id}
-                  action={updateGoalEvent.bind(null, matchId, activeGoal.id, channel.slug, channel.edit_session_version)}
-                  className="grid grid-cols-2 md:grid-cols-3 gap-2"
-                >
-                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="scorer" placeholder="득점자" defaultValue={activeGoal.scorer_name ?? activeGoal.scorer_no ?? ''} />
-                  <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시" defaultValue={activeGoal.assist_name ?? activeGoal.assist_no ?? ''} />
-                  <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
-                    <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="reset">편집 취소</button>
-                    <PendingSubmitButton className="rounded-lg border border-gray-200 px-2 py-1 text-xs" pendingText="저장중...">이벤트 저장</PendingSubmitButton>
+            ) : (() => {
+              const roster = activeGoal.team_side === 'A' ? rosterA : rosterB
+              const hasRoster = roster.length > 0
+              const scorerDefault = activeGoal.scorer_player_id
+                ? `${activeGoal.scorer_player_id}|${activeGoal.scorer_name ?? ''}`
+                : activeGoal.scorer_name ?? ''
+              const assistDefault = activeGoal.assist_player_id
+                ? `${activeGoal.assist_player_id}|${activeGoal.assist_name ?? ''}`
+                : activeGoal.assist_name ?? ''
+              return (
+                <>
+                  <div className="text-sm text-gray-700">
+                    {activeGoal.team_side}팀 · {activeGoal.minute !== null ? `${activeGoal.minute}분` : '시간 미설정'}
                   </div>
-                </form>
-                <form action={deleteGoalEvent.bind(null, matchId, activeGoal.id, activeGoal.team_side, channel.slug, channel.edit_session_version)}>
-                  <PendingSubmitButton className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" pendingText="삭제중...">이벤트 삭제</PendingSubmitButton>
-                </form>
-              </>
-            )}
+                  <form
+                    key={activeGoal.id}
+                    action={updateGoalEvent.bind(null, matchId, activeGoal.id, channel.slug, channel.edit_session_version)}
+                    className="grid grid-cols-2 md:grid-cols-3 gap-2"
+                  >
+                    <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="minute" type="number" min={0} placeholder="분" defaultValue={activeGoal.minute ?? ''} />
+                    {hasRoster ? (
+                      <select className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="scorer" defaultValue={scorerDefault}>
+                        <option value="">득점자 선택</option>
+                        {roster.map((p) => (
+                          <option key={p.value} value={p.value}>#{p.jerseyNo} {p.playerName}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="scorer" placeholder="득점자" defaultValue={activeGoal.scorer_name ?? ''} />
+                    )}
+                    {hasRoster ? (
+                      <select className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" name="assist" defaultValue={assistDefault}>
+                        <option value="">어시스트 선택</option>
+                        {roster.map((p) => (
+                          <option key={p.value} value={p.value}>#{p.jerseyNo} {p.playerName}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300" list="name-suggestions" name="assist" placeholder="어시" defaultValue={activeGoal.assist_name ?? ''} />
+                    )}
+                    <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
+                      <button className="rounded-lg border border-gray-200 px-2 py-1 text-xs" type="reset">편집 취소</button>
+                      <PendingSubmitButton className="rounded-lg border border-gray-200 px-2 py-1 text-xs" pendingText="저장중...">이벤트 저장</PendingSubmitButton>
+                    </div>
+                  </form>
+                  <form action={deleteGoalEvent.bind(null, matchId, activeGoal.id, activeGoal.team_side, channel.slug, channel.edit_session_version)}>
+                    <PendingSubmitButton className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs" pendingText="삭제중...">이벤트 삭제</PendingSubmitButton>
+                  </form>
+                </>
+              )
+            })()}
 
-            {suggestedNames.length > 0 ? (
+            {rosterA.length === 0 && rosterB.length === 0 && suggestedNames.length > 0 ? (
               <div className="space-y-1">
                 <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
                 <div className="flex flex-wrap gap-1">
@@ -590,11 +692,13 @@ export default async function MatchDetailPage({
               </div>
             ) : null}
 
-            <datalist id="name-suggestions">
-              {suggestedNames.map((name) => (
-                <option key={`name-${name}`} value={name} />
-              ))}
-            </datalist>
+            {rosterA.length === 0 && rosterB.length === 0 ? (
+              <datalist id="name-suggestions">
+                {suggestedNames.map((name) => (
+                  <option key={`name-${name}`} value={name} />
+                ))}
+              </datalist>
+            ) : null}
           </section>
         ) : canGoalEdit ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 shadow-sm">

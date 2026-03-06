@@ -29,27 +29,20 @@ export default function AdminShell({
     const m = pathname.match(/^\/admin\/channel\/([^/]+)/);
     return m?.[1] ?? null;
   }, [pathname]);
-  const [channelName, setChannelName] = useState<string | null>(null);
   const [channelRole, setChannelRole] = useState<ChannelRole>(null);
   const [adminChannels, setAdminChannels] = useState<AdminChannel[]>([]);
 
   useEffect(() => {
     let mounted = true;
-    if (!channelId) {
-      setChannelName(null);
-      setChannelRole(null);
-      return;
-    }
+    if (!channelId) return;
     fetch(`/api/admin/channel/${channelId}/meta`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (!mounted) return;
-        setChannelName(json?.name ?? null);
         setChannelRole((json?.role as ChannelRole) ?? null);
       })
       .catch(() => {
         if (!mounted) return;
-        setChannelName(null);
         setChannelRole(null);
       });
 
@@ -76,7 +69,7 @@ export default function AdminShell({
     };
   }, []);
 
-  const isManagerView = channelRole === "manager";
+  const isManagerView = !!channelId && channelRole === "manager";
 
   const commonItems: MenuItem[] = isManagerView
     ? []

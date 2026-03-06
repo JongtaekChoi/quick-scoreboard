@@ -49,8 +49,8 @@ export default async function AdminPage() {
       <section className="max-w-5xl mx-auto space-y-6">
         <header className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-semibold">Admin</h1>
-            <p className="text-sm text-gray-600">리그/그룹/경기 운영</p>
+            <h1 className="text-2xl font-semibold">리그 관리</h1>
+            <p className="text-sm text-gray-600">리그 생성 및 운영 관리</p>
           </div>
           <form action="/admin/auth" method="post">
             <input type="hidden" name="action" value="logout" />

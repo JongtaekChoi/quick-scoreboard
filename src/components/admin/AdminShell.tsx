@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type MenuItem = { href: string; label: string };
 type ChannelRole = "admin" | "editor" | "manager" | null;
+type AdminChannel = { id: string; name: string };
 
 function isActive(pathname: string, href: string, exact = false) {
   if (exact) return pathname === href;
@@ -18,6 +19,7 @@ export default function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const isStandalone =
@@ -29,6 +31,7 @@ export default function AdminShell({
   }, [pathname]);
   const [channelName, setChannelName] = useState<string | null>(null);
   const [channelRole, setChannelRole] = useState<ChannelRole>(null);
+  const [adminChannels, setAdminChannels] = useState<AdminChannel[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -41,12 +44,10 @@ export default function AdminShell({
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (!mounted) return;
-        console.log(json);
         setChannelName(json?.name ?? null);
         setChannelRole((json?.role as ChannelRole) ?? null);
       })
-      .catch((e) => {
-        console.error(e);
+      .catch(() => {
         if (!mounted) return;
         setChannelName(null);
         setChannelRole(null);
@@ -57,11 +58,29 @@ export default function AdminShell({
     };
   }, [channelId]);
 
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/admin/channels", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!mounted) return;
+        setAdminChannels(Array.isArray(json?.channels) ? json.channels : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAdminChannels([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const isManagerView = channelRole === "manager";
 
   const commonItems: MenuItem[] = isManagerView
     ? []
-    : [{ href: "/admin", label: "관리자 홈" }];
+    : [{ href: "/admin", label: "리그 관리" }];
 
   const channelItems: MenuItem[] = channelId
     ? [
@@ -77,7 +96,7 @@ export default function AdminShell({
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <div className="md:hidden border-b border-gray-200 bg-white/90 backdrop-blur px-3 py-2 flex items-center justify-between sticky top-0 z-30">
-        <span className="text-sm font-semibold tracking-tight">운영 관리</span>
+        <span className="text-sm font-semibold tracking-tight">리그 관리</span>
         <button
           type="button"
           className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs hover:bg-gray-50"
@@ -95,7 +114,7 @@ export default function AdminShell({
                 quick-scoreboard
               </p>
               <p className="text-sm font-semibold text-gray-900 mt-0.5">
-                운영 센터
+                리그 관리
               </p>
             </div>
 
@@ -124,14 +143,33 @@ export default function AdminShell({
                 </div>
               ) : null}
 
-              {channelId ? (
+              {adminChannels.length > 0 ? (
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 px-1">
                     리그
                   </div>
-                  <div className="mx-1 mb-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-700">
-                    {channelName ?? "리그 로딩 중..."}
-                  </div>
+                  <select
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-700"
+                    value={channelId ?? ""}
+                    onChange={(e) => {
+                      const nextChannelId = e.target.value;
+                      if (!nextChannelId) return;
+                      setOpen(false);
+                      router.push(`/admin/channel/${nextChannelId}?from=admin`);
+                    }}
+                  >
+                    <option value="">리그 선택...</option>
+                    {adminChannels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
+              {channelId ? (
+                <div>
                   <nav className="space-y-1">
                     {channelItems.map((item) => (
                       <Link

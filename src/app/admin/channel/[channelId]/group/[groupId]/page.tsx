@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
+import { ensureTeamInChannel } from '@/lib/teamHelpers'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = {
@@ -88,13 +89,10 @@ async function createMatch(formData: FormData) {
     status: 'scheduled',
   })
 
-  await supabase.from('teams').upsert(
-    [
-      { channel_id: channelId, name: teamA, last_used_at: new Date().toISOString() },
-      { channel_id: channelId, name: teamB, last_used_at: new Date().toISOString() },
-    ],
-    { onConflict: 'channel_id,name' },
-  )
+  await Promise.all([
+    ensureTeamInChannel(supabase, channelId, teamA),
+    ensureTeamInChannel(supabase, channelId, teamB),
+  ])
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
@@ -132,13 +130,10 @@ async function updateMatch(formData: FormData) {
     })
     .eq('id', matchId)
 
-  await supabase.from('teams').upsert(
-    [
-      { channel_id: channelId, name: teamA, last_used_at: new Date().toISOString() },
-      { channel_id: channelId, name: teamB, last_used_at: new Date().toISOString() },
-    ],
-    { onConflict: 'channel_id,name' },
-  )
+  await Promise.all([
+    ensureTeamInChannel(supabase, channelId, teamA),
+    ensureTeamInChannel(supabase, channelId, teamB),
+  ])
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
@@ -332,7 +327,7 @@ export default async function AdminGroupPage({
   const [{ data: group }, { data: matches }, { data: teams }, { data: players }, { data: entries }, { data: guests }] = await Promise.all([
     supabase.from('match_groups').select('id,play_date,venue,title,seq,entry_confirmed_at').eq('id', groupId).maybeSingle<MatchGroup>(),
     supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
-    supabase.from('teams').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
+    supabase.from('channel_teams_view').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
     supabase.from('team_players').select('id,team_id,jersey_no,player_name,is_active').eq('channel_id', channelId).eq('is_active', true).order('jersey_no', { ascending: true }).returns<TeamPlayer[]>(),
     supabase.from('match_group_entries').select('id,team_id,player_id').eq('match_group_id', groupId).returns<GroupEntry[]>(),
     supabase.from('match_group_guests').select('id,team_id,source_team_id,guest_name').eq('match_group_id', groupId).returns<GroupGuest[]>(),

@@ -55,7 +55,7 @@ async function addPlayer(formData: FormData) {
       player_name: playerName,
       is_active: true,
     },
-    { onConflict: 'team_id,jersey_no' },
+    { onConflict: 'channel_id,team_id,jersey_no' },
   )
 
   redirect(`/admin/channel/${channelId}/roster`)
@@ -97,7 +97,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
   if (!channel) return <main className="p-6">리그를 찾을 수 없습니다.</main>
 
   const [{ data: teams }, { data: players }] = await Promise.all([
-    supabase.from('teams').select('id,name').eq('channel_id', channelId).order('name', { ascending: true }).returns<Team[]>(),
+    supabase.from('channel_teams_view').select('id,name').eq('channel_id', channelId).order('name', { ascending: true }).returns<Team[]>(),
     supabase
       .from('team_players')
       .select('id,team_id,jersey_no,player_name,is_active')

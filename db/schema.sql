@@ -24,18 +24,28 @@ create table if not exists channels (
 
 create index if not exists channels_name_idx on channels (name);
 
--- 1.5) 팀 마스터(채널 내 빠른 입력/추천용)
+-- 1.5) 팀 마스터
 create table if not exists teams (
   id uuid primary key default gen_random_uuid(),
-  channel_id uuid not null references channels(id) on delete cascade,
   name text not null,
-  last_used_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create unique index if not exists teams_unique_channel_name on teams (channel_id, name);
-create index if not exists teams_channel_last_used_idx on teams (channel_id, last_used_at desc);
+-- 1.5b) 채널-팀 N:M junction
+create table if not exists channel_teams (
+  channel_id uuid not null references channels(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  last_used_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  primary key (channel_id, team_id)
+);
+
+-- 채널별 팀 조회 VIEW
+create or replace view channel_teams_view as
+select ct.channel_id, t.id, t.name, ct.last_used_at, t.created_at, t.updated_at
+from channel_teams ct
+join teams t on t.id = ct.team_id;
 
 -- 1.6) 팀별 선수 마스터 (등번호/이름)
 create table if not exists team_players (
@@ -49,8 +59,8 @@ create table if not exists team_players (
   updated_at timestamptz not null default now()
 );
 
-create unique index if not exists team_players_unique_number
-  on team_players (team_id, jersey_no);
+create unique index if not exists team_players_unique_channel_team_number
+  on team_players (channel_id, team_id, jersey_no);
 create index if not exists team_players_team_active_idx
   on team_players (team_id, is_active, jersey_no);
 

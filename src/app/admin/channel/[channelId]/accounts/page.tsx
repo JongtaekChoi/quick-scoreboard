@@ -156,7 +156,7 @@ export default async function AdminAccountsPage({
       .order("login_id", { ascending: true })
       .returns<AccountRow[]>(),
     supabase
-      .from("teams")
+      .from("channel_teams_view")
       .select("id,name")
       .eq("channel_id", channel.id)
       .order("name", { ascending: true })

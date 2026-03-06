@@ -125,15 +125,41 @@ async function toggleAccountActive(formData: FormData) {
   redirect(`/admin/channel/${channelId}/accounts`);
 }
 
+async function resetPassword(formData: FormData) {
+  "use server";
+  const channelId = String(formData.get("channelId") || "");
+  const accountId = String(formData.get("accountId") || "");
+  const newPassword = String(formData.get("newPassword") || "").trim();
+
+  const manage = await canManageAccounts(channelId);
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`);
+    redirect("/admin/login");
+  }
+
+  if (!accountId || !newPassword) return;
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  await supabase
+    .from("channel_accounts")
+    .update({ password_hash: hashAccountPassword(newPassword) })
+    .eq("id", accountId)
+    .eq("channel_id", channelId);
+
+  redirect(`/admin/channel/${channelId}/accounts?reset=1`);
+}
+
 export default async function AdminAccountsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ channelId: string }>;
-  searchParams: Promise<{ saved?: string; err?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; reset?: string }>;
 }) {
   const { channelId } = await params;
-  const { saved, err } = await searchParams;
+  const { saved, err, reset } = await searchParams;
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>;
@@ -190,6 +216,11 @@ export default async function AdminAccountsPage({
           {saved === "1" ? (
             <p className="text-xs text-green-700">계정이 저장되었습니다.</p>
           ) : null}
+          {reset === "1" ? (
+            <p className="text-xs text-green-700">
+              비밀번호가 변경되었습니다.
+            </p>
+          ) : null}
           {err === "last_admin" ? (
             <p className="text-xs text-red-600">
               활성 어드민 계정은 최소 1개 이상 유지되어야 합니다.
@@ -244,18 +275,48 @@ export default async function AdminAccountsPage({
                       </span>
                     ) : null}
                   </div>
-                  <form action={toggleAccountActive}>
-                    <input type="hidden" name="channelId" value={channel.id} />
-                    <input type="hidden" name="accountId" value={a.id} />
-                    <input
-                      type="hidden"
-                      name="next"
-                      value={a.is_active ? "0" : "1"}
-                    />
-                    <button className="text-xs underline" type="submit">
-                      {a.is_active ? "비활성화" : "활성화"}
-                    </button>
-                  </form>
+                  <div className="flex items-center gap-2">
+                    <form
+                      action={resetPassword}
+                      className="flex items-center gap-1"
+                    >
+                      <input
+                        type="hidden"
+                        name="channelId"
+                        value={channel.id}
+                      />
+                      <input type="hidden" name="accountId" value={a.id} />
+                      <input
+                        type="password"
+                        name="newPassword"
+                        placeholder="새 비밀번호"
+                        required
+                        className="border rounded px-2 py-0.5 text-xs w-28"
+                      />
+                      <button
+                        className="text-xs underline whitespace-nowrap"
+                        type="submit"
+                      >
+                        리셋
+                      </button>
+                    </form>
+                    <form action={toggleAccountActive}>
+                      <input
+                        type="hidden"
+                        name="channelId"
+                        value={channel.id}
+                      />
+                      <input type="hidden" name="accountId" value={a.id} />
+                      <input
+                        type="hidden"
+                        name="next"
+                        value={a.is_active ? "0" : "1"}
+                      />
+                      <button className="text-xs underline" type="submit">
+                        {a.is_active ? "비활성화" : "활성화"}
+                      </button>
+                    </form>
+                  </div>
                 </li>
               ))}
             </ul>

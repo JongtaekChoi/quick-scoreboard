@@ -9,7 +9,7 @@ import {
 type Channel = { id: string; slug: string; edit_session_version: number };
 type ChannelAccount = {
   id: string;
-  role: "admin" | "editor" | "manager";
+  role: "admin" | "manager";
   login_id: string;
   password_hash: string;
   team_id: string | null;
@@ -26,6 +26,12 @@ export async function POST(
   const loginId = String(form.get("login_id") || "").trim();
   const password = String(form.get("password") || "").trim();
   const action = String(form.get("action") || "login");
+  const redirectTo = String(form.get("redirect_to") || "").trim();
+
+  const safeRedirect = (fallback: string) => {
+    if (redirectTo && redirectTo.startsWith("/")) return redirectTo;
+    return fallback;
+  };
 
   const supabase = getSupabaseServerClient();
   if (!supabase)
@@ -33,7 +39,7 @@ export async function POST(
 
   if (action === "logout") {
     await destroyChannelSession(slug);
-    return NextResponse.redirect(new URL(`/c/${slug}`, req.url));
+    return NextResponse.redirect(new URL(safeRedirect(`/c/${slug}`), req.url));
   }
 
   const { data: channel } = await supabase
@@ -57,12 +63,14 @@ export async function POST(
     !account.is_active ||
     hashAccountPassword(password) !== account.password_hash
   ) {
-    return NextResponse.redirect(new URL(`/c/${slug}?acc=password`, req.url));
+    const errRedirect = redirectTo && redirectTo.startsWith("/")
+      ? `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}acc=password`
+      : `/c/${slug}?acc=password`;
+    return NextResponse.redirect(new URL(errRedirect, req.url));
   }
 
   const editVersion =
     account.role === "admin" ||
-    account.role === "editor" ||
     account.role === "manager"
       ? channel.edit_session_version
       : null;
@@ -75,5 +83,5 @@ export async function POST(
     editVersion,
   });
 
-  return NextResponse.redirect(new URL(`/c/${slug}?acc=1`, req.url));
+  return NextResponse.redirect(new URL(safeRedirect(`/c/${slug}?acc=1`), req.url));
 }

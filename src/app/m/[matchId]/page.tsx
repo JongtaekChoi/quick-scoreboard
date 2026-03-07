@@ -704,6 +704,30 @@ export default async function MatchDetailPage({
           }))}
         />
 
+        {rosterA.length === 0 && rosterB.length === 0 ? (
+          <p className="text-xs text-amber-600">엔트리가 확정되지 않았습니다.</p>
+        ) : (
+          <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+            <details>
+              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">엔트리 ({rosterA.length + rosterB.length}명)</summary>
+              <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="font-semibold text-gray-600 mb-1">{match.team_a_name}</div>
+                  {rosterA.map((p) => (
+                    <div key={p.value} className="text-gray-700">#{p.jerseyNo} {p.playerName}</div>
+                  ))}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-600 mb-1">{match.team_b_name}</div>
+                  {rosterB.map((p) => (
+                    <div key={p.value} className="text-gray-700">#{p.jerseyNo} {p.playerName}</div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </section>
+        )}
+
         {isEditMode && canManageMatch ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
             <div className="flex flex-wrap gap-2">

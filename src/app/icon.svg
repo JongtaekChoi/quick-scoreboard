@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#0b1220" />
-  <rect x="11" y="11" width="42" height="42" rx="10" fill="#111827" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="광염 풋살 리그 기록 아이콘">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f2f1f" />
+      <stop offset="100%" stop-color="#163a2a" />
+    </linearGradient>
+  </defs>
 
-  <rect x="14" y="14" width="36" height="36" rx="6" fill="#0f172a" />
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <rect x="9" y="9" width="46" height="46" rx="10" fill="#1d4a34" />
 
-  <rect x="21" y="23" width="3" height="9" rx="1.5" fill="#f8fafc" />
-  <rect x="21" y="33" width="3" height="9" rx="1.5" fill="#f8fafc" />
+  <rect x="15" y="15" width="34" height="34" rx="6" fill="none" stroke="#dcfce7" stroke-width="2" opacity="0.9" />
+  <line x1="32" y1="15" x2="32" y2="49" stroke="#dcfce7" stroke-width="2" opacity="0.9" />
+  <circle cx="32" cy="32" r="5" fill="none" stroke="#dcfce7" stroke-width="2" opacity="0.9" />
 
-  <rect x="30" y="26" width="4" height="4" rx="2" fill="#e5e7eb" />
-  <rect x="30" y="34" width="4" height="4" rx="2" fill="#e5e7eb" />
-
-  <rect x="39" y="21" width="6" height="3" rx="1.5" fill="#f8fafc" />
-  <rect x="39" y="40" width="6" height="3" rx="1.5" fill="#f8fafc" />
-  <rect x="37" y="23" width="3" height="8" rx="1.5" fill="#f8fafc" />
-  <rect x="44" y="23" width="3" height="8" rx="1.5" fill="#f8fafc" />
-  <rect x="37" y="32" width="3" height="8" rx="1.5" fill="#f8fafc" />
-  <rect x="44" y="32" width="3" height="8" rx="1.5" fill="#f8fafc" />
+  <rect x="20" y="25" width="8" height="14" rx="2" fill="#f8fafc" />
+  <rect x="36" y="25" width="8" height="14" rx="2" fill="#f8fafc" />
+  <circle cx="32" cy="32" r="2" fill="#f8fafc" />
 </svg>

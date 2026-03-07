@@ -16,8 +16,12 @@ function cookieName(slug: string) {
 }
 
 function getSessionOptions(slug: string) {
+  const sessionPassword =
+    process.env.SESSION_SECRET ||
+    'dev-only-session-secret-change-this-to-32chars-min';
+
   return {
-    password: process.env.SESSION_SECRET!,
+    password: sessionPassword,
     cookieName: cookieName(slug),
     cookieOptions: {
       httpOnly: true,

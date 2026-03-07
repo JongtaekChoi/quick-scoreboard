@@ -177,7 +177,7 @@ async function saveGroupEntries(formData: FormData) {
 
   if (!channelId || !groupId || !teamId) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
   }
 
   const supabase = getSupabaseServerClient()
@@ -200,7 +200,7 @@ async function saveGroupEntries(formData: FormData) {
     )
   }
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 async function saveGroupGuest(formData: FormData) {
@@ -218,12 +218,12 @@ async function saveGroupGuest(formData: FormData) {
 
   if (!channelId || !groupId || !teamId || !source) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
   }
   const [sourceTeamId, sourcePlayerId, guestName] = source.split('|')
   if (!sourceTeamId || !sourcePlayerId || !guestName) return
   if (teamId === sourceTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=guest_source`)
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=guest_source`)
   }
 
   const supabase = getSupabaseServerClient()
@@ -243,7 +243,7 @@ async function saveGroupGuest(formData: FormData) {
       { onConflict: 'match_group_id,team_id' },
     )
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 async function removeGroupGuest(formData: FormData) {
@@ -260,7 +260,7 @@ async function removeGroupGuest(formData: FormData) {
 
   if (!channelId || !groupId || !teamId) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=team_scope`)
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
   }
 
   const supabase = getSupabaseServerClient()
@@ -272,7 +272,7 @@ async function removeGroupGuest(formData: FormData) {
     .eq('match_group_id', groupId)
     .eq('team_id', teamId)
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 async function toggleEntryConfirm(formData: FormData) {
@@ -289,7 +289,7 @@ async function toggleEntryConfirm(formData: FormData) {
 
   if (!channelId || !groupId) return
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=forbidden`)
   }
 
   const supabase = getSupabaseServerClient()
@@ -300,7 +300,7 @@ async function toggleEntryConfirm(formData: FormData) {
     .update({ entry_confirmed_at: next === '1' ? new Date().toISOString() : null })
     .eq('id', groupId)
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 export default async function AdminGroupPage({
@@ -308,10 +308,11 @@ export default async function AdminGroupPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string; groupId: string }>
-  searchParams: Promise<{ from?: string; err?: string }>
+  searchParams: Promise<{ from?: string; err?: string; tab?: string }>
 }) {
   const { channelId, groupId } = await params
-  const { from, err } = await searchParams
+  const { from, err, tab: tabParam } = await searchParams
+  const tab = tabParam === 'entries' ? 'entries' : 'matches'
   const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
@@ -356,6 +357,13 @@ export default async function AdminGroupPage({
 
   const teamNameMap = new Map((teams ?? []).map((t) => [t.id, t.name]))
 
+  const matchTeamNames = new Set<string>()
+  for (const m of matches ?? []) {
+    matchTeamNames.add(m.team_a_name)
+    matchTeamNames.add(m.team_b_name)
+  }
+  const matchTeams = (teams ?? []).filter((t) => matchTeamNames.has(t.name))
+
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
@@ -378,50 +386,83 @@ export default async function AdminGroupPage({
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
         </header>
 
-        <section className="rounded border p-4 space-y-2">
+        {!managerTeamId && (
+          <nav className="flex gap-4 border-b">
+            <Link
+              className={`pb-2 text-sm ${tab === 'matches' ? 'border-b-2 border-black font-semibold' : 'text-gray-500'}`}
+              href={`/admin/channel/${channelId}/group/${groupId}?from=${from ?? ''}`}
+            >
+              경기
+            </Link>
+            <Link
+              className={`pb-2 text-sm ${tab === 'entries' ? 'border-b-2 border-black font-semibold' : 'text-gray-500'}`}
+              href={`/admin/channel/${channelId}/group/${groupId}?from=${from ?? ''}&tab=entries`}
+            >
+              엔트리
+            </Link>
+          </nav>
+        )}
+
+        {(managerTeamId || tab === 'entries') && (<section className="rounded border p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">엔트리 선택(=경기그룹 엔트리)</h2>
-            <form action={toggleEntryConfirm}>
-              <input type="hidden" name="channelId" value={channel.id} />
-              <input type="hidden" name="groupId" value={group.id} />
-              <input type="hidden" name="next" value={group.entry_confirmed_at ? '0' : '1'} />
-              <button className="rounded border px-3 py-1.5 text-xs" type="submit">
-                {group.entry_confirmed_at ? '엔트리 확정 해제' : '엔트리 확정'}
-              </button>
-            </form>
+            {!managerTeamId && (
+              <form action={toggleEntryConfirm}>
+                <input type="hidden" name="channelId" value={channel.id} />
+                <input type="hidden" name="groupId" value={group.id} />
+                <input type="hidden" name="next" value={group.entry_confirmed_at ? '0' : '1'} />
+                <button className="rounded border px-3 py-1.5 text-xs" type="submit">
+                  {group.entry_confirmed_at ? '엔트리 확정 해제' : '엔트리 확정'}
+                </button>
+              </form>
+            )}
           </div>
           <p className="text-xs text-gray-500">
             상태: {group.entry_confirmed_at ? `확정됨 (${new Date(group.entry_confirmed_at).toLocaleString('ko-KR')})` : '미확정'}
           </p>
 
-          {(teams ?? []).length === 0 ? (
-            <p className="text-xs text-gray-500">팀이 없습니다. 먼저 경기를 추가해 팀을 생성해 주세요.</p>
-          ) : (
+          {(() => {
+            const entryTeams = managerTeamId ? (teams ?? []).filter((t) => t.id === managerTeamId) : matchTeams
+            if ((matches ?? []).length === 0 && !managerTeamId) return <p className="text-xs text-gray-500">경기를 먼저 추가해 주세요.</p>
+            if (entryTeams.length === 0) return <p className="text-xs text-gray-500">팀이 없습니다. 먼저 경기를 추가해 팀을 생성해 주세요.</p>
+            return (
             <div className="space-y-3">
-              {(teams ?? []).map((t) => {
+              {entryTeams.map((t) => {
                 const teamPlayers = playersByTeam.get(t.id) ?? []
                 const teamEntries = entriesByTeam.get(t.id) ?? []
                 return (
                   <div key={t.id} className="rounded border p-2 space-y-2">
                     <div className="font-medium text-sm">{t.name}</div>
-                    <form action={saveGroupEntries} className="space-y-2">
-                      <input type="hidden" name="channelId" value={channel.id} />
-                      <input type="hidden" name="groupId" value={group.id} />
-                      <input type="hidden" name="teamId" value={t.id} />
+                    {(() => {
+                      const guest = guestByTeam.get(t.id)
+                      const totalCount = teamEntries.length + (guest ? 1 : 0)
+                      if (totalCount === 0) return <div className="text-xs text-gray-400 bg-gray-50 rounded px-2 py-1.5">저장된 엔트리 없음</div>
+                      const names = teamEntries.map((e) => {
+                        const p = teamPlayers.find((pl) => pl.id === e.player_id)
+                        return p ? `#${p.jersey_no} ${p.player_name}` : null
+                      }).filter(Boolean)
+                      if (guest) names.push(`${guest.guest_name}(용병)`)
+                      return (
+                        <div className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
+                          <span className="font-semibold">저장된 엔트리({totalCount}명):</span>{' '}
+                          {names.join(', ')}
+                        </div>
+                      )
+                    })()}
+                    <div className="space-y-2">
                       <div className="text-xs text-gray-500">엔트리 선택 (여러 명 선택 가능)</div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {teamPlayers.map((p) => {
                           const checked = teamEntries.some((e) => e.player_id === p.id)
                           return (
                             <label key={p.id} className="rounded border px-2 py-1 text-xs flex items-center gap-1">
-                              <input type="checkbox" name="playerIds" value={p.id} defaultChecked={checked} />
+                              <input type="checkbox" name="playerIds" value={p.id} defaultChecked={checked} form={`entry-form-${t.id}`} />
                               <span>#{p.jersey_no} {p.player_name}</span>
                             </label>
                           )
                         })}
                       </div>
-                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">엔트리 선택 저장</button>
-                    </form>
+                    </div>
 
                     <section className="rounded border p-2 space-y-2">
                       <div className="text-xs font-semibold text-gray-700">용병 (팀당 1명)</div>
@@ -431,7 +472,7 @@ export default async function AdminGroupPage({
                         <input type="hidden" name="teamId" value={t.id} />
                         <select className="rounded border px-2 py-1.5 text-xs min-w-64" name="sourcePlayer" required defaultValue="">
                           <option value="" disabled>타팀 선수 선택</option>
-                          {(teams ?? []).filter((x) => x.id !== t.id).map((teamOption) => {
+                          {(teams ?? []).filter((x) => !matchTeamNames.has(x.name)).map((teamOption) => {
                             const sourcePlayers = playersByTeam.get(teamOption.id) ?? []
                             if (sourcePlayers.length === 0) return null
                             return (
@@ -464,12 +505,20 @@ export default async function AdminGroupPage({
                         <p className="text-xs text-gray-500">등록된 용병이 없습니다.</p>
                       )}
                     </section>
+
+                    <form id={`entry-form-${t.id}`} action={saveGroupEntries}>
+                      <input type="hidden" name="channelId" value={channel.id} />
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="teamId" value={t.id} />
+                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">제출</button>
+                    </form>
                   </div>
                 )
               })}
             </div>
-          )}
-        </section>
+            )
+          })()}
+        </section>)}
 
         <datalist id="team-suggestions">
           {(teams ?? []).map((t) => (
@@ -477,7 +526,7 @@ export default async function AdminGroupPage({
           ))}
         </datalist>
 
-        {!managerTeamId ? (
+        {!managerTeamId && tab === 'matches' && (
           <>
             <section className="rounded border p-4 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -529,7 +578,7 @@ export default async function AdminGroupPage({
               )}
             </section>
           </>
-        ) : null}
+        )}
       </section>
     </main>
   )

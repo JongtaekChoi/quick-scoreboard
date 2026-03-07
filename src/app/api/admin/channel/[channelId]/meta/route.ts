@@ -26,9 +26,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
     return NextResponse.json({ id: channel.id, name: channel.name, slug: channel.slug, role: 'admin', managerTeamId: null })
   }
 
-  const isEditor = await isEditAuthorized(channel.slug, channel.edit_session_version)
-  if (isEditor) {
-    return NextResponse.json({ id: channel.id, name: channel.name, slug: channel.slug, role: 'editor', managerTeamId: null })
+  const canEdit = await isEditAuthorized(channel.slug, channel.edit_session_version)
+  if (canEdit) {
+    return NextResponse.json({ id: channel.id, name: channel.name, slug: channel.slug, role: 'admin', managerTeamId: null })
   }
 
   const { ok, teamId } = await validateManagerAgainstDb(channel.slug, channel.id)

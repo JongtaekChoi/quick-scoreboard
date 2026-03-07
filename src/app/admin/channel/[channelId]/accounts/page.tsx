@@ -10,7 +10,7 @@ type Channel = { id: string; name: string; slug: string };
 type Team = { id: string; name: string };
 type AccountRow = {
   id: string;
-  role: "admin" | "editor" | "manager";
+  role: "admin" | "manager";
   login_id: string;
   team_id: string | null;
   is_active: boolean;
@@ -40,7 +40,6 @@ async function upsertAccount(formData: FormData) {
   const channelId = String(formData.get("channelId") || "");
   const role = String(formData.get("role") || "") as
     | "admin"
-    | "editor"
     | "manager";
   const loginId = String(formData.get("login_id") || "").trim();
   const password = String(formData.get("password") || "").trim();
@@ -54,7 +53,7 @@ async function upsertAccount(formData: FormData) {
   }
 
   if (!channelId || !loginId || !password) return;
-  if (!["admin", "editor", "manager"].includes(role)) return;
+  if (!["admin", "manager"].includes(role)) return;
   if (role === "manager" && !teamId) return;
   if (role !== "manager" && teamId) {
     redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
@@ -100,7 +99,7 @@ async function toggleAccountActive(formData: FormData) {
       .eq("id", accountId)
       .maybeSingle<{
         id: string;
-        role: "admin" | "editor" | "manager";
+        role: "admin" | "manager";
         is_active: boolean;
       }>();
 
@@ -211,7 +210,7 @@ export default async function AdminAccountsPage({
           </div>
           <h1 className="text-2xl font-semibold">계정 관리</h1>
           <p className="text-sm text-gray-600">
-            {channel.name} · 권한 계정(admin/editor/manager) 관리
+            {channel.name} · 권한 계정(admin/manager) 관리
           </p>
           {saved === "1" ? (
             <p className="text-xs text-green-700">계정이 저장되었습니다.</p>

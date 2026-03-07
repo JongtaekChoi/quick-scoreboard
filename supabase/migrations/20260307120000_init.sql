@@ -62,7 +62,7 @@ create index if not exists team_players_team_active_idx
 create table if not exists channel_accounts (
   id uuid primary key default gen_random_uuid(),
   channel_id uuid not null references channels(id) on delete cascade,
-  role text not null check (role in ('admin', 'editor', 'manager')),
+  role text not null check (role in ('admin', 'manager')),
   login_id text not null,
   password_hash text not null,
   team_id uuid null references teams(id) on delete set null,

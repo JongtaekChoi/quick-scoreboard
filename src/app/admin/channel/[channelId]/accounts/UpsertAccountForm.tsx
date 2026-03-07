@@ -12,7 +12,7 @@ export default function UpsertAccountForm({
   channel,
   teams = [],
 }: Props): React.ReactElement {
-  const [selectedRole, setSelectedRole] = useState<string>("editor");
+  const [selectedRole, setSelectedRole] = useState<string>("manager");
 
   return (
     <form action={upsertAccount} className="grid md:grid-cols-5 gap-2">
@@ -26,7 +26,6 @@ export default function UpsertAccountForm({
         }}
         value={selectedRole}
       >
-        <option value="editor">골입력자(editor)</option>
         <option value="manager">팀관리자(manager)</option>
         <option value="admin">어드민(admin)</option>
       </select>

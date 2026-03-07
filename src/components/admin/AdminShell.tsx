@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type MenuItem = { href: string; label: string };
-type ChannelRole = "admin" | "editor" | "manager" | null;
+type ChannelRole = "admin" | "manager" | null;
 type AdminChannel = { id: string; name: string };
 
 function isActive(pathname: string, href: string, exact = false) {

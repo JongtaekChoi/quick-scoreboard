@@ -174,21 +174,21 @@ export default async function ChannelPage({
           </div>
           <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span
-              className={`rounded px-2 py-1 border ${canEdit ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
-            >
-              {canEdit ? "편집모드 ON" : "읽기모드"}
-            </span>
             {accountSession ? (
-              <form
-                action={`/c/${encodeURIComponent(channel.slug)}/login`}
-                method="post"
-              >
-                <input type="hidden" name="action" value="logout" />
-                <button className="underline" type="submit">
-                  로그아웃
-                </button>
-              </form>
+              <>
+                <span className="rounded px-2 py-1 border bg-green-50 border-green-200 text-green-700">
+                  {accountSession.loginId} ({accountSession.role})
+                </span>
+                <form
+                  action={`/c/${encodeURIComponent(channel.slug)}/login`}
+                  method="post"
+                >
+                  <input type="hidden" name="action" value="logout" />
+                  <button className="underline" type="submit">
+                    로그아웃
+                  </button>
+                </form>
+              </>
             ) : (
               <form
                 action={`/c/${encodeURIComponent(channel.slug)}/login`}
@@ -216,15 +216,6 @@ export default async function ChannelPage({
             {acc === "password" ? (
               <span className="text-red-600">계정 정보가 올바르지 않습니다.</span>
             ) : null}
-            <span className={`rounded px-2 py-1 border ${isAdmin ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
-              어드민: {isAdmin ? "로그인" : "미로그인"}
-            </span>
-            <span className={`rounded px-2 py-1 border ${canEdit ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
-              골입력자(편집자): {canEdit ? "로그인" : "미로그인"}
-            </span>
-            <span className={`rounded px-2 py-1 border ${managerTeamId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
-              팀관리자: {managerTeamId ? "로그인" : "미로그인"}
-            </span>
             {acc === "1" ? (
               <span className="text-green-700">로그인되었습니다.</span>
             ) : null}

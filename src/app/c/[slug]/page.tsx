@@ -71,10 +71,11 @@ export default async function ChannelPage({
     order?: string;
     mgr?: string;
     acc?: string;
+    pw?: string;
   }>;
 }) {
   const { slug } = await params;
-  const { date, order, acc } = await searchParams;
+  const { date, order, acc, pw } = await searchParams;
   const matchOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
 
   const supabase = getSupabaseServerClient();
@@ -184,6 +185,12 @@ export default async function ChannelPage({
                 <span className="rounded px-2 py-1 border bg-green-50 border-green-200 text-green-700">
                   {accountSession.loginId} ({accountSession.role})
                 </span>
+                <Link className="underline" href={`/c/${encodeURIComponent(channel.slug)}/account`}>
+                  비밀번호 변경
+                </Link>
+                {accountSession.mustChangePassword ? (
+                  <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
+                ) : null}
                 <form
                   action={`/c/${encodeURIComponent(channel.slug)}/login`}
                   method="post"
@@ -223,6 +230,9 @@ export default async function ChannelPage({
             ) : null}
             {acc === "1" ? (
               <span className="text-green-700">로그인되었습니다.</span>
+            ) : null}
+            {pw === "1" ? (
+              <span className="text-green-700">비밀번호가 변경되었습니다.</span>
             ) : null}
             {isAdmin || isChannelAdmin || managerTeamId ? (
               <Link

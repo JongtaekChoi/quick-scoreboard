@@ -13,6 +13,8 @@ type AccountRow = {
   role: "admin" | "manager" | "player";
   login_id: string;
   team_id: string | null;
+  player_id: string | null;
+  must_change_password: boolean;
   is_active: boolean;
   updated_at: string;
 };
@@ -70,10 +72,72 @@ async function upsertAccount(formData: FormData) {
       login_id: loginId,
       password_hash: hashAccountPassword(password),
       team_id: role === "admin" ? null : teamId,
+      player_id: null,
+      must_change_password: true,
       is_active: true,
     },
     { onConflict: "channel_id,login_id" },
   );
+
+  redirect(`/admin/channel/${channelId}/accounts?saved=1`);
+}
+
+async function createPlayerAccounts(formData: FormData) {
+  "use server";
+  const channelId = String(formData.get("channelId") || "");
+
+  const manage = await canManageAccounts(channelId);
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`);
+    redirect("/admin/login");
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const { data: players } = await supabase
+    .from("team_players")
+    .select("id,team_id,player_name,is_active")
+    .eq("channel_id", channelId)
+    .eq("is_active", true)
+    .returns<{ id: string; team_id: string; player_name: string; is_active: boolean }[]>();
+
+  const list = players ?? [];
+  const names = list.map((p) => p.player_name.trim()).filter(Boolean);
+  const dup = names.find((n, i) => names.indexOf(n) !== i);
+  if (dup) {
+    redirect(`/admin/channel/${channelId}/accounts?err=dup_login`);
+  }
+
+  if (names.length > 0) {
+    const { data: conflicted } = await supabase
+      .from("channel_accounts")
+      .select("login_id,role")
+      .eq("channel_id", channelId)
+      .in("login_id", names)
+      .neq("role", "player")
+      .returns<{ login_id: string; role: string }[]>();
+
+    if ((conflicted ?? []).length > 0) {
+      redirect(`/admin/channel/${channelId}/accounts?err=reserved_login`);
+    }
+  }
+
+  for (const p of list) {
+    await supabase.from("channel_accounts").upsert(
+      {
+        channel_id: channelId,
+        role: "player",
+        login_id: p.player_name.trim(),
+        password_hash: hashAccountPassword("1234"),
+        team_id: p.team_id,
+        player_id: p.id,
+        must_change_password: true,
+        is_active: true,
+      },
+      { onConflict: "channel_id,login_id" },
+    );
+  }
 
   redirect(`/admin/channel/${channelId}/accounts?saved=1`);
 }
@@ -144,7 +208,10 @@ async function resetPassword(formData: FormData) {
 
   await supabase
     .from("channel_accounts")
-    .update({ password_hash: hashAccountPassword(newPassword) })
+    .update({
+      password_hash: hashAccountPassword(newPassword),
+      must_change_password: true,
+    })
     .eq("id", accountId)
     .eq("channel_id", channelId);
 
@@ -176,7 +243,7 @@ export default async function AdminAccountsPage({
   const [{ data: accounts }, { data: teams }] = await Promise.all([
     supabase
       .from("channel_accounts")
-      .select("id,role,login_id,team_id,is_active,updated_at")
+      .select("id,role,login_id,team_id,player_id,must_change_password,is_active,updated_at")
       .eq("channel_id", channel.id)
       .order("role", { ascending: true })
       .order("login_id", { ascending: true })
@@ -217,9 +284,7 @@ export default async function AdminAccountsPage({
             <p className="text-xs text-green-700">계정이 저장되었습니다.</p>
           ) : null}
           {reset === "1" ? (
-            <p className="text-xs text-green-700">
-              비밀번호가 변경되었습니다.
-            </p>
+            <p className="text-xs text-green-700">비밀번호가 변경되었습니다.</p>
           ) : null}
           {err === "last_admin" ? (
             <p className="text-xs text-red-600">
@@ -229,6 +294,16 @@ export default async function AdminAccountsPage({
           {err === "team_role" ? (
             <p className="text-xs text-red-600">
               팀 지정은 팀관리자(manager) 또는 팀원(player) 계정에만 가능합니다.
+            </p>
+          ) : null}
+          {err === "dup_login" ? (
+            <p className="text-xs text-red-600">
+              동일 선수명이 있어 일괄 계정 생성을 중단했습니다. 로그인 ID 중복을 먼저 정리해 주세요.
+            </p>
+          ) : null}
+          {err === "reserved_login" ? (
+            <p className="text-xs text-red-600">
+              기존 관리자/팀장 계정과 동일한 로그인 ID가 있어 일괄 생성을 중단했습니다.
             </p>
           ) : null}
         </header>
@@ -243,6 +318,12 @@ export default async function AdminAccountsPage({
             teams={teams}
             channel={channel}
           />
+          <form action={createPlayerAccounts}>
+            <input type="hidden" name="channelId" value={channel.id} />
+            <button className="rounded border px-3 py-2 text-sm" type="submit">
+              선수 계정 일괄 생성 (ID=선수명, PW=1234)
+            </button>
+          </form>
           <p className="text-[11px] text-gray-500">
             ※ 팀 지정은 팀관리자(manager), 팀원(player) 역할에서만 가능합니다.
           </p>
@@ -261,30 +342,22 @@ export default async function AdminAccountsPage({
                 >
                   <div>
                     <span className="font-medium">{a.login_id}</span>
-                    <span className="ml-2 text-xs text-gray-600">
-                      [{a.role}]
-                    </span>
+                    <span className="ml-2 text-xs text-gray-600">[{a.role}]</span>
                     {a.team_id ? (
                       <span className="ml-2 text-xs text-gray-500">
                         팀: {teamNameById.get(a.team_id) ?? a.team_id}
                       </span>
                     ) : null}
+                    {a.must_change_password ? (
+                      <span className="ml-2 text-xs text-amber-700">(비번변경필요)</span>
+                    ) : null}
                     {!a.is_active ? (
-                      <span className="ml-2 text-xs text-gray-400">
-                        (비활성)
-                      </span>
+                      <span className="ml-2 text-xs text-gray-400">(비활성)</span>
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
-                    <form
-                      action={resetPassword}
-                      className="flex items-center gap-1"
-                    >
-                      <input
-                        type="hidden"
-                        name="channelId"
-                        value={channel.id}
-                      />
+                    <form action={resetPassword} className="flex items-center gap-1">
+                      <input type="hidden" name="channelId" value={channel.id} />
                       <input type="hidden" name="accountId" value={a.id} />
                       <input
                         type="password"
@@ -293,25 +366,14 @@ export default async function AdminAccountsPage({
                         required
                         className="border rounded px-2 py-0.5 text-xs w-28"
                       />
-                      <button
-                        className="text-xs underline whitespace-nowrap"
-                        type="submit"
-                      >
+                      <button className="text-xs underline whitespace-nowrap" type="submit">
                         리셋
                       </button>
                     </form>
                     <form action={toggleAccountActive}>
-                      <input
-                        type="hidden"
-                        name="channelId"
-                        value={channel.id}
-                      />
+                      <input type="hidden" name="channelId" value={channel.id} />
                       <input type="hidden" name="accountId" value={a.id} />
-                      <input
-                        type="hidden"
-                        name="next"
-                        value={a.is_active ? "0" : "1"}
-                      />
+                      <input type="hidden" name="next" value={a.is_active ? "0" : "1"} />
                       <button className="text-xs underline" type="submit">
                         {a.is_active ? "비활성화" : "활성화"}
                       </button>

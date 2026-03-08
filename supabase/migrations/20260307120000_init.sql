@@ -67,6 +67,7 @@ create table if not exists channel_accounts (
   password_hash text not null,
   team_id uuid null references teams(id) on delete set null,
   player_id uuid null references team_players(id) on delete set null,
+  must_change_password boolean not null default false,
   session_version int not null default 1,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),

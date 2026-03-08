@@ -15,6 +15,7 @@ type ChannelAccount = {
   team_id: string | null;
   session_version: number;
   is_active: boolean;
+  must_change_password: boolean;
 };
 
 export async function POST(
@@ -53,7 +54,7 @@ export async function POST(
 
   const { data: account } = await supabase
     .from("channel_accounts")
-    .select("id,role,login_id,password_hash,team_id,session_version,is_active")
+    .select("id,role,login_id,password_hash,team_id,session_version,is_active,must_change_password")
     .eq("channel_id", channel.id)
     .eq("login_id", loginId)
     .maybeSingle<ChannelAccount>();
@@ -82,7 +83,14 @@ export async function POST(
     teamId: account.team_id,
     version: account.session_version,
     editVersion,
+    mustChangePassword: !!account.must_change_password,
   });
+
+  if (account.must_change_password) {
+    const next = safeRedirect(`/c/${slug}`)
+    const qs = new URLSearchParams({ force: '1', next })
+    return NextResponse.redirect(new URL(`/c/${slug}/account?${qs.toString()}`, req.url))
+  }
 
   return NextResponse.redirect(new URL(safeRedirect(`/c/${slug}?acc=1`), req.url));
 }

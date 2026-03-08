@@ -8,6 +8,7 @@ export type ChannelSessionData = {
   teamId: string | null
   version: number
   editVersion: number | null
+  mustChangePassword: boolean
   source: 'account' | 'edit'
 }
 
@@ -40,7 +41,7 @@ export async function getChannelSession(slug: string) {
 
 export async function createAccountSession(
   slug: string,
-  data: { loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number; editVersion: number | null },
+  data: { loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number; editVersion: number | null; mustChangePassword?: boolean },
 ) {
   const session = await getChannelSession(slug)
   session.loginId = data.loginId
@@ -48,6 +49,7 @@ export async function createAccountSession(
   session.teamId = data.teamId
   session.version = data.version
   session.editVersion = data.editVersion
+  session.mustChangePassword = !!data.mustChangePassword
   session.source = 'account'
   await session.save()
 }
@@ -59,6 +61,7 @@ export async function createEditSession(slug: string, editVersion: number) {
   session.teamId = null
   session.version = 0
   session.editVersion = editVersion
+  session.mustChangePassword = false
   session.source = 'edit'
   await session.save()
 }
@@ -77,6 +80,7 @@ export async function getSessionData(slug: string): Promise<ChannelSessionData |
     teamId: session.teamId,
     version: session.version,
     editVersion: session.editVersion,
+    mustChangePassword: !!session.mustChangePassword,
     source: session.source,
   }
 }
@@ -101,13 +105,13 @@ export async function getManagerInfo(slug: string): Promise<{ loginId: string; t
   return { loginId: data.loginId, teamId: data.teamId, version: data.version }
 }
 
-export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number } | null> {
+export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number; mustChangePassword: boolean } | null> {
   const data = await getSessionData(slug)
   if (!data) return null
   if (data.source !== 'account') return null
   if (!data.loginId) return null
   if (data.role === 'edit-only') return null
-  return { loginId: data.loginId, role: data.role as 'admin' | 'manager' | 'player', teamId: data.teamId, version: data.version }
+  return { loginId: data.loginId, role: data.role as 'admin' | 'manager' | 'player', teamId: data.teamId, version: data.version, mustChangePassword: !!data.mustChangePassword }
 }
 
 export async function validateManagerAgainstDb(

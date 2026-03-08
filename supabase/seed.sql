@@ -27,8 +27,8 @@ END $$;
 INSERT INTO channels (id, name, slug, is_public_view, edit_password_hash)
 VALUES (
   '00000000-0000-4000-a000-000000000001',
-  '샘플 리그 2026',
-  'sample-league',
+  '샘플 리그',
+  'sample',
   true,
   current_setting('seed.pw_hash')
 );

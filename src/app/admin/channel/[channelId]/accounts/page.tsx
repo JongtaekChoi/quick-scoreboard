@@ -103,7 +103,8 @@ async function createPlayerAccounts(formData: FormData) {
     .returns<{ id: string; team_id: string; player_name: string; is_active: boolean }[]>();
 
   if (playersError) {
-    redirect(`/admin/channel/${channelId}/accounts?err=players_query_failed`);
+    const detail = encodeURIComponent(`${playersError.code ?? 'unknown'}:${playersError.message ?? 'query failed'}`);
+    redirect(`/admin/channel/${channelId}/accounts?err=players_query_failed&detail=${detail}`);
   }
 
   const list = (players ?? []).filter((p) => p.player_name?.trim());
@@ -126,7 +127,8 @@ async function createPlayerAccounts(formData: FormData) {
     .returns<{ login_id: string; role: string }[]>();
 
   if (conflictedError) {
-    redirect(`/admin/channel/${channelId}/accounts?err=reserved_check_failed`);
+    const detail = encodeURIComponent(`${conflictedError.code ?? 'unknown'}:${conflictedError.message ?? 'reserved check failed'}`);
+    redirect(`/admin/channel/${channelId}/accounts?err=reserved_check_failed&detail=${detail}`);
   }
   if ((conflicted ?? []).length > 0) {
     redirect(`/admin/channel/${channelId}/accounts?err=reserved_login`);
@@ -148,7 +150,8 @@ async function createPlayerAccounts(formData: FormData) {
     .upsert(rows, { onConflict: "channel_id,login_id" });
 
   if (upsertError) {
-    redirect(`/admin/channel/${channelId}/accounts?err=bulk_create_failed`);
+    const detail = encodeURIComponent(`${upsertError.code ?? 'unknown'}:${upsertError.message ?? 'bulk create failed'}`);
+    redirect(`/admin/channel/${channelId}/accounts?err=bulk_create_failed&detail=${detail}`);
   }
 
   redirect(`/admin/channel/${channelId}/accounts?saved=1`);
@@ -235,10 +238,10 @@ export default async function AdminAccountsPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string }>;
-  searchParams: Promise<{ saved?: string; err?: string; reset?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; reset?: string; detail?: string }>;
 }) {
   const { channelId } = await params;
-  const { saved, err, reset } = await searchParams;
+  const { saved, err, reset, detail } = await searchParams;
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>;
@@ -325,7 +328,7 @@ export default async function AdminAccountsPage({
           ) : null}
           {err === "players_query_failed" || err === "reserved_check_failed" || err === "bulk_create_failed" ? (
             <p className="text-xs text-red-600">
-              일괄 생성 중 DB 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
+              일괄 생성 중 DB 오류가 발생했습니다. {detail ? `(${decodeURIComponent(detail)})` : "잠시 후 다시 시도해 주세요."}
             </p>
           ) : null}
         </header>

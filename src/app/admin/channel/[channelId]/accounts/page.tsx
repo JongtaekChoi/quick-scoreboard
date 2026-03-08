@@ -157,57 +157,14 @@ async function createPlayerAccounts(formData: FormData) {
   redirect(`/admin/channel/${channelId}/accounts?saved=1`);
 }
 
-async function toggleAccountActive(formData: FormData) {
+async function updateAccount(formData: FormData) {
   "use server";
   const channelId = String(formData.get("channelId") || "");
   const accountId = String(formData.get("accountId") || "");
-  const next = String(formData.get("next") || "") === "1";
-
-  const manage = await canManageAccounts(channelId);
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`);
-    redirect("/admin/login");
-  }
-
-  const supabase = getSupabaseServerClient();
-  if (!supabase || !accountId) return;
-
-  if (!next) {
-    const { data: current } = await supabase
-      .from("channel_accounts")
-      .select("id,role,is_active")
-      .eq("id", accountId)
-      .maybeSingle<{
-        id: string;
-        role: "admin" | "manager" | "player";
-        is_active: boolean;
-      }>();
-
-    if (current?.role === "admin" && current.is_active) {
-      const { count } = await supabase
-        .from("channel_accounts")
-        .select("*", { count: "exact", head: true })
-        .eq("channel_id", channelId)
-        .eq("role", "admin")
-        .eq("is_active", true);
-
-      if ((count ?? 0) <= 1) {
-        redirect(`/admin/channel/${channelId}/accounts?err=last_admin`);
-      }
-    }
-  }
-
-  await supabase
-    .from("channel_accounts")
-    .update({ is_active: next })
-    .eq("id", accountId);
-  redirect(`/admin/channel/${channelId}/accounts`);
-}
-
-async function resetPassword(formData: FormData) {
-  "use server";
-  const channelId = String(formData.get("channelId") || "");
-  const accountId = String(formData.get("accountId") || "");
+  const role = String(formData.get("role") || "") as "admin" | "manager" | "player";
+  const teamIdRaw = String(formData.get("team_id") || "").trim();
+  const teamId = teamIdRaw || null;
+  const isActive = String(formData.get("is_active") || "") === "1";
   const newPassword = String(formData.get("newPassword") || "").trim();
 
   const manage = await canManageAccounts(channelId);
@@ -216,21 +173,42 @@ async function resetPassword(formData: FormData) {
     redirect("/admin/login");
   }
 
-  if (!accountId || !newPassword) return;
+  if (!accountId) return;
+  if (!["admin", "manager", "player"].includes(role)) return;
+  if ((role === "manager" || role === "player") && !teamId) {
+    redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
+  }
+  if (role === "admin" && teamId) {
+    redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
+  }
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
+  const updatePayload: {
+    role: "admin" | "manager" | "player";
+    team_id: string | null;
+    is_active: boolean;
+    password_hash?: string;
+    must_change_password?: boolean;
+  } = {
+    role,
+    team_id: role === "admin" ? null : teamId,
+    is_active: isActive,
+  };
+
+  if (newPassword) {
+    updatePayload.password_hash = hashAccountPassword(newPassword);
+    updatePayload.must_change_password = true;
+  }
+
   await supabase
     .from("channel_accounts")
-    .update({
-      password_hash: hashAccountPassword(newPassword),
-      must_change_password: true,
-    })
+    .update(updatePayload)
     .eq("id", accountId)
     .eq("channel_id", channelId);
 
-  redirect(`/admin/channel/${channelId}/accounts?reset=1`);
+  redirect(`/admin/channel/${channelId}/accounts?saved=1`);
 }
 
 export default async function AdminAccountsPage({
@@ -238,10 +216,10 @@ export default async function AdminAccountsPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string }>;
-  searchParams: Promise<{ saved?: string; err?: string; reset?: string; detail?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; reset?: string; detail?: string; modal?: string; edit?: string }>;
 }) {
   const { channelId } = await params;
-  const { saved, err, reset, detail } = await searchParams;
+  const { saved, err, reset, detail, modal, edit } = await searchParams;
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>;
@@ -333,16 +311,16 @@ export default async function AdminAccountsPage({
           ) : null}
         </header>
 
-        <section className="rounded border p-4 space-y-2">
-          <h2 className="text-sm font-semibold">계정 추가/수정</h2>
-          <p className="text-xs text-gray-500">
-            동일 로그인 ID가 있으면 비밀번호/권한/팀이 갱신됩니다.
-          </p>
-          <UpsertAccountForm
-            upsertAccount={upsertAccount}
-            teams={teams}
-            channel={channel}
-          />
+        <section className="rounded border p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">계정 관리</h2>
+            <Link
+              href={`/admin/channel/${channel.id}/accounts?modal=create`}
+              className="rounded border px-3 py-1.5 text-xs"
+            >
+              + 계정 추가
+            </Link>
+          </div>
           <form action={createPlayerAccounts}>
             <input type="hidden" name="channelId" value={channel.id} />
             <button className="rounded border px-3 py-2 text-sm" type="submit">
@@ -350,7 +328,7 @@ export default async function AdminAccountsPage({
             </button>
           </form>
           <p className="text-[11px] text-gray-500">
-            ※ 팀 지정은 팀관리자(manager), 팀원(player) 역할에서만 가능합니다.
+            계정을 클릭하면 편집 화면이 열립니다.
           </p>
         </section>
 
@@ -361,54 +339,95 @@ export default async function AdminAccountsPage({
           ) : (
             <ul className="space-y-1">
               {(accounts ?? []).map((a) => (
-                <li
-                  key={a.id}
-                  className="rounded border px-3 py-2 flex items-center justify-between gap-2 text-sm"
-                >
-                  <div>
-                    <span className="font-medium">{a.login_id}</span>
-                    <span className="ml-2 text-xs text-gray-600">[{a.role}]</span>
-                    {a.team_id ? (
-                      <span className="ml-2 text-xs text-gray-500">
-                        팀: {teamNameById.get(a.team_id) ?? a.team_id}
-                      </span>
-                    ) : null}
-                    {a.must_change_password ? (
-                      <span className="ml-2 text-xs text-amber-700">(비번변경필요)</span>
-                    ) : null}
-                    {!a.is_active ? (
-                      <span className="ml-2 text-xs text-gray-400">(비활성)</span>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <form action={resetPassword} className="flex items-center gap-1">
-                      <input type="hidden" name="channelId" value={channel.id} />
-                      <input type="hidden" name="accountId" value={a.id} />
-                      <input
-                        type="password"
-                        name="newPassword"
-                        placeholder="새 비밀번호"
-                        required
-                        className="border rounded px-2 py-0.5 text-xs w-28"
-                      />
-                      <button className="text-xs underline whitespace-nowrap" type="submit">
-                        리셋
-                      </button>
-                    </form>
-                    <form action={toggleAccountActive}>
-                      <input type="hidden" name="channelId" value={channel.id} />
-                      <input type="hidden" name="accountId" value={a.id} />
-                      <input type="hidden" name="next" value={a.is_active ? "0" : "1"} />
-                      <button className="text-xs underline" type="submit">
-                        {a.is_active ? "비활성화" : "활성화"}
-                      </button>
-                    </form>
-                  </div>
+                <li key={a.id}>
+                  <Link
+                    href={`/admin/channel/${channel.id}/accounts?modal=edit&edit=${a.id}`}
+                    className="rounded border px-3 py-2 flex items-center justify-between gap-2 text-sm hover:bg-gray-50"
+                  >
+                    <div>
+                      <span className="font-medium">{a.login_id}</span>
+                      <span className="ml-2 text-xs text-gray-600">[{a.role}]</span>
+                      {a.team_id ? (
+                        <span className="ml-2 text-xs text-gray-500">
+                          팀: {teamNameById.get(a.team_id) ?? a.team_id}
+                        </span>
+                      ) : null}
+                      {a.must_change_password ? (
+                        <span className="ml-2 text-xs text-amber-700">(비번변경필요)</span>
+                      ) : null}
+                      {!a.is_active ? (
+                        <span className="ml-2 text-xs text-gray-400">(비활성)</span>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-gray-500">편집</span>
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
         </section>
+
+        {modal === "create" ? (
+          <div className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center">
+            <div className="w-full max-w-2xl rounded-xl border bg-white p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">계정 추가</h3>
+                <Link className="text-xs underline" href={`/admin/channel/${channel.id}/accounts`}>닫기</Link>
+              </div>
+              <UpsertAccountForm upsertAccount={upsertAccount} teams={teams} channel={channel} />
+              <p className="text-[11px] text-gray-500">※ 팀 지정은 manager/player 역할에서만 가능합니다.</p>
+            </div>
+          </div>
+        ) : null}
+
+        {modal === "edit" && edit ? (
+          (() => {
+            const target = (accounts ?? []).find((a) => a.id === edit);
+            if (!target) return null;
+            return (
+              <div className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center">
+                <div className="w-full max-w-2xl rounded-xl border bg-white p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">계정 편집 · {target.login_id}</h3>
+                    <Link className="text-xs underline" href={`/admin/channel/${channel.id}/accounts`}>닫기</Link>
+                  </div>
+                  <form action={updateAccount} className="grid md:grid-cols-2 gap-2">
+                    <input type="hidden" name="channelId" value={channel.id} />
+                    <input type="hidden" name="accountId" value={target.id} />
+                    <label className="text-xs text-gray-600">권한
+                      <select className="mt-1 w-full rounded border px-2 py-1.5 text-sm" name="role" defaultValue={target.role}>
+                        <option value="player">팀원(player)</option>
+                        <option value="manager">팀관리자(manager)</option>
+                        <option value="admin">어드민(admin)</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-gray-600">팀
+                      <select className="mt-1 w-full rounded border px-2 py-1.5 text-sm" name="team_id" defaultValue={target.team_id ?? ""}>
+                        <option value="">(팀 없음)</option>
+                        {(teams ?? []).map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs text-gray-600">새 비밀번호(선택)
+                      <input className="mt-1 w-full rounded border px-2 py-1.5 text-sm" type="password" name="newPassword" placeholder="입력 시 비밀번호 갱신" />
+                    </label>
+                    <label className="text-xs text-gray-600">활성 여부
+                      <select className="mt-1 w-full rounded border px-2 py-1.5 text-sm" name="is_active" defaultValue={target.is_active ? "1" : "0"}>
+                        <option value="1">활성</option>
+                        <option value="0">비활성</option>
+                      </select>
+                    </label>
+                    <div className="md:col-span-2 flex justify-end gap-2">
+                      <Link className="rounded border px-3 py-2 text-sm" href={`/admin/channel/${channel.id}/accounts`}>취소</Link>
+                      <button className="rounded border px-3 py-2 text-sm" type="submit">저장</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()
+        ) : null}
       </section>
     </main>
   );

@@ -40,6 +40,12 @@ export default function AdminShell({
       .then((json) => {
         if (!mounted) return;
         setChannelRole((json?.role as ChannelRole) ?? null);
+        if (json?.id && json?.name) {
+          setAdminChannels((prev) => {
+            if (prev.some((c) => c.id === json.id)) return prev;
+            return [...prev, { id: json.id, name: json.name }];
+          });
+        }
       })
       .catch(() => {
         if (!mounted) return;

@@ -10,7 +10,7 @@ type Channel = { id: string; name: string; slug: string };
 type Team = { id: string; name: string };
 type AccountRow = {
   id: string;
-  role: "admin" | "manager";
+  role: "admin" | "manager" | "player";
   login_id: string;
   team_id: string | null;
   is_active: boolean;
@@ -40,7 +40,8 @@ async function upsertAccount(formData: FormData) {
   const channelId = String(formData.get("channelId") || "");
   const role = String(formData.get("role") || "") as
     | "admin"
-    | "manager";
+    | "manager"
+    | "player";
   const loginId = String(formData.get("login_id") || "").trim();
   const password = String(formData.get("password") || "").trim();
   const teamIdRaw = String(formData.get("team_id") || "").trim();
@@ -53,9 +54,9 @@ async function upsertAccount(formData: FormData) {
   }
 
   if (!channelId || !loginId || !password) return;
-  if (!["admin", "manager"].includes(role)) return;
-  if (role === "manager" && !teamId) return;
-  if (role !== "manager" && teamId) {
+  if (!["admin", "manager", "player"].includes(role)) return;
+  if ((role === "manager" || role === "player") && !teamId) return;
+  if (role === "admin" && teamId) {
     redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
   }
 
@@ -68,7 +69,7 @@ async function upsertAccount(formData: FormData) {
       role,
       login_id: loginId,
       password_hash: hashAccountPassword(password),
-      team_id: role === "manager" ? teamId : null,
+      team_id: role === "admin" ? null : teamId,
       is_active: true,
     },
     { onConflict: "channel_id,login_id" },
@@ -99,7 +100,7 @@ async function toggleAccountActive(formData: FormData) {
       .eq("id", accountId)
       .maybeSingle<{
         id: string;
-        role: "admin" | "manager";
+        role: "admin" | "manager" | "player";
         is_active: boolean;
       }>();
 
@@ -210,7 +211,7 @@ export default async function AdminAccountsPage({
           </div>
           <h1 className="text-2xl font-semibold">계정 관리</h1>
           <p className="text-sm text-gray-600">
-            {channel.name} · 권한 계정(admin/manager) 관리
+            {channel.name} · 권한 계정(admin/manager/player) 관리
           </p>
           {saved === "1" ? (
             <p className="text-xs text-green-700">계정이 저장되었습니다.</p>
@@ -227,7 +228,7 @@ export default async function AdminAccountsPage({
           ) : null}
           {err === "team_role" ? (
             <p className="text-xs text-red-600">
-              팀 지정은 팀관리자(manager) 계정에만 가능합니다.
+              팀 지정은 팀관리자(manager) 또는 팀원(player) 계정에만 가능합니다.
             </p>
           ) : null}
         </header>
@@ -243,7 +244,7 @@ export default async function AdminAccountsPage({
             channel={channel}
           />
           <p className="text-[11px] text-gray-500">
-            ※ 팀 지정은 팀관리자(manager) 역할에서만 가능합니다.
+            ※ 팀 지정은 팀관리자(manager), 팀원(player) 역할에서만 가능합니다.
           </p>
         </section>
 

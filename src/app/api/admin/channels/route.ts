@@ -15,11 +15,15 @@ export async function GET() {
     return NextResponse.json({ error: 'env_missing' }, { status: 500 })
   }
 
-  const { data: channels } = await supabase
+  const { data: channels, error } = await supabase
     .from('channels')
     .select('id,name')
     .order('name', { ascending: true })
     .returns<Channel[]>()
+
+  if (error) {
+    return NextResponse.json({ error: 'query_failed', detail: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ channels: channels ?? [] })
 }

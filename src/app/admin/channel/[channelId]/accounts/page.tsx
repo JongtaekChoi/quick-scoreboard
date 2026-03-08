@@ -95,48 +95,60 @@ async function createPlayerAccounts(formData: FormData) {
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const { data: players } = await supabase
+  const { data: players, error: playersError } = await supabase
     .from("team_players")
     .select("id,team_id,player_name,is_active")
     .eq("channel_id", channelId)
     .eq("is_active", true)
     .returns<{ id: string; team_id: string; player_name: string; is_active: boolean }[]>();
 
-  const list = players ?? [];
-  const names = list.map((p) => p.player_name.trim()).filter(Boolean);
+  if (playersError) {
+    redirect(`/admin/channel/${channelId}/accounts?err=players_query_failed`);
+  }
+
+  const list = (players ?? []).filter((p) => p.player_name?.trim());
+  if (list.length === 0) {
+    redirect(`/admin/channel/${channelId}/accounts?err=no_players`);
+  }
+
+  const names = list.map((p) => p.player_name.trim());
   const dup = names.find((n, i) => names.indexOf(n) !== i);
   if (dup) {
     redirect(`/admin/channel/${channelId}/accounts?err=dup_login`);
   }
 
-  if (names.length > 0) {
-    const { data: conflicted } = await supabase
-      .from("channel_accounts")
-      .select("login_id,role")
-      .eq("channel_id", channelId)
-      .in("login_id", names)
-      .neq("role", "player")
-      .returns<{ login_id: string; role: string }[]>();
+  const { data: conflicted, error: conflictedError } = await supabase
+    .from("channel_accounts")
+    .select("login_id,role")
+    .eq("channel_id", channelId)
+    .in("login_id", names)
+    .neq("role", "player")
+    .returns<{ login_id: string; role: string }[]>();
 
-    if ((conflicted ?? []).length > 0) {
-      redirect(`/admin/channel/${channelId}/accounts?err=reserved_login`);
-    }
+  if (conflictedError) {
+    redirect(`/admin/channel/${channelId}/accounts?err=reserved_check_failed`);
+  }
+  if ((conflicted ?? []).length > 0) {
+    redirect(`/admin/channel/${channelId}/accounts?err=reserved_login`);
   }
 
-  for (const p of list) {
-    await supabase.from("channel_accounts").upsert(
-      {
-        channel_id: channelId,
-        role: "player",
-        login_id: p.player_name.trim(),
-        password_hash: hashAccountPassword("1234"),
-        team_id: p.team_id,
-        player_id: p.id,
-        must_change_password: true,
-        is_active: true,
-      },
-      { onConflict: "channel_id,login_id" },
-    );
+  const rows = list.map((p) => ({
+    channel_id: channelId,
+    role: "player" as const,
+    login_id: p.player_name.trim(),
+    password_hash: hashAccountPassword("1234"),
+    team_id: p.team_id,
+    player_id: p.id,
+    must_change_password: true,
+    is_active: true,
+  }));
+
+  const { error: upsertError } = await supabase
+    .from("channel_accounts")
+    .upsert(rows, { onConflict: "channel_id,login_id" });
+
+  if (upsertError) {
+    redirect(`/admin/channel/${channelId}/accounts?err=bulk_create_failed`);
   }
 
   redirect(`/admin/channel/${channelId}/accounts?saved=1`);
@@ -304,6 +316,16 @@ export default async function AdminAccountsPage({
           {err === "reserved_login" ? (
             <p className="text-xs text-red-600">
               기존 관리자/팀장 계정과 동일한 로그인 ID가 있어 일괄 생성을 중단했습니다.
+            </p>
+          ) : null}
+          {err === "no_players" ? (
+            <p className="text-xs text-red-600">
+              활성 선수 데이터가 없어 계정을 생성하지 못했습니다. 팀 멤버 관리에서 선수 등록/활성화를 먼저 해주세요.
+            </p>
+          ) : null}
+          {err === "players_query_failed" || err === "reserved_check_failed" || err === "bulk_create_failed" ? (
+            <p className="text-xs text-red-600">
+              일괄 생성 중 DB 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
             </p>
           ) : null}
         </header>

@@ -6,7 +6,7 @@ begin;
 
 do $$
 declare
-  v_channel_slug text := 'sample';
+  v_channel_slug text := 'sls2026';
   v_play_date date := date '2026-03-08';
   v_group_title text := '2026-03-08 리그 기록';
   v_channel_id uuid;

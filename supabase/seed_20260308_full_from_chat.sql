@@ -14,7 +14,9 @@ declare
 begin
   select id into v_channel_id from channels where slug = v_channel_slug;
   if v_channel_id is null then
-    raise exception 'channel not found: %', v_channel_slug;
+    insert into channels (name, slug, is_public_view, edit_password_hash, edit_session_version)
+    values ('SLS 2026', v_channel_slug, true, md5('sls2026'), 1)
+    returning id into v_channel_id;
   end if;
 
   -- 1) 팀

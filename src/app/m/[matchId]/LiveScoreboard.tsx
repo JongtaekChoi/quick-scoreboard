@@ -13,9 +13,7 @@ type Goal = {
   team_side: "A" | "B";
   minute: number | null;
   scorer_name: string | null;
-  scorer_no: string | null;
   assist_name: string | null;
-  assist_no: string | null;
   created_at: string;
 };
 
@@ -83,9 +81,7 @@ function LiveScoreboardInner({
       team_side: "A",
       minute: null,
       scorer_name: "(기록없음)",
-      scorer_no: null,
       assist_name: null,
-      assist_no: null,
       created_at: new Date(0).toISOString(),
     });
   }
@@ -95,9 +91,7 @@ function LiveScoreboardInner({
       team_side: "B",
       minute: null,
       scorer_name: "(기록없음)",
-      scorer_no: null,
       assist_name: null,
-      assist_no: null,
       created_at: new Date(0).toISOString(),
     });
   }
@@ -151,9 +145,8 @@ function LiveScoreboardInner({
           displayGoals.map((g, idx) => {
             const who =
               g.scorer_name ??
-              g.scorer_no ??
               (g.team_side === "A" ? match.team_a_name : match.team_b_name);
-            const assist = g.assist_name ?? g.assist_no ?? "";
+            const assist = g.assist_name ?? "";
             const currentGoal = searchParams.get("goal");
             const active =
               !readonly && (currentGoal ? currentGoal === g.id : idx === 0);

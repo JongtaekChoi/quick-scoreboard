@@ -14,9 +14,7 @@ type GoalRow = {
   team_side: 'A' | 'B'
   minute: number | null
   scorer_name: string | null
-  scorer_no: string | null
   assist_name: string | null
-  assist_no: string | null
   created_at: string
 }
 
@@ -33,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ matchId: s
       .maybeSingle<MatchRow>(),
     supabase
       .from('goal_events')
-      .select('id,team_side,minute,scorer_name,scorer_no,assist_name,assist_no,created_at')
+      .select('id,team_side,minute,scorer_name,assist_name,created_at')
       .eq('match_id', matchId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })

@@ -19,9 +19,13 @@ type Match = {
 export default function GroupList({
   groups,
   matchesByGroup,
+  channelId,
+  showManagerEntryButton,
 }: {
   groups: MatchGroup[]
   matchesByGroup: Record<string, Match[]>
+  channelId: string
+  showManagerEntryButton: boolean
 }) {
   const initialOpen = useMemo(() => new Set(groups.length ? [groups[0].id] : []), [groups])
   const [openSet, setOpenSet] = useState<Set<string>>(initialOpen)
@@ -42,14 +46,21 @@ export default function GroupList({
         const open = openSet.has(g.id)
         return (
           <section key={g.id} className="rounded border p-3 space-y-2">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between gap-2 text-left"
-              onClick={() => toggle(g.id)}
-            >
-              <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
-              <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
-            </button>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className="flex-1 flex items-center justify-between gap-2 text-left"
+                onClick={() => toggle(g.id)}
+              >
+                <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
+                <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
+              </button>
+              {showManagerEntryButton ? (
+                <Link className="text-xs underline shrink-0" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
+                  내 팀 엔트리 관리
+                </Link>
+              ) : null}
+            </div>
 
             {open ? (
               list.length === 0 ? (

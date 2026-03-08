@@ -9,7 +9,7 @@ import {
 type Channel = { id: string; slug: string; edit_session_version: number };
 type ChannelAccount = {
   id: string;
-  role: "admin" | "manager";
+  role: "admin" | "manager" | "player";
   login_id: string;
   password_hash: string;
   team_id: string | null;
@@ -71,7 +71,8 @@ export async function POST(
 
   const editVersion =
     account.role === "admin" ||
-    account.role === "manager"
+    account.role === "manager" ||
+    account.role === "player"
       ? channel.edit_session_version
       : null;
 

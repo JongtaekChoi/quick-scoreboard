@@ -62,10 +62,11 @@ create index if not exists team_players_team_active_idx
 create table if not exists channel_accounts (
   id uuid primary key default gen_random_uuid(),
   channel_id uuid not null references channels(id) on delete cascade,
-  role text not null check (role in ('admin', 'manager')),
+  role text not null check (role in ('admin', 'manager', 'player')),
   login_id text not null,
   password_hash text not null,
   team_id uuid null references teams(id) on delete set null,
+  player_id uuid null references team_players(id) on delete set null,
   session_version int not null default 1,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -76,6 +77,9 @@ create unique index if not exists channel_accounts_unique_login
   on channel_accounts (channel_id, login_id);
 create index if not exists channel_accounts_role_idx
   on channel_accounts (channel_id, role, is_active);
+create unique index if not exists channel_accounts_unique_player
+  on channel_accounts (channel_id, player_id)
+  where player_id is not null;
 
 -- 2) 비공개 링크 토큰
 create table if not exists channel_share_links (

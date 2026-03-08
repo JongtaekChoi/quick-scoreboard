@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 
 export type ChannelSessionData = {
   loginId: string | null
-  role: 'admin' | 'manager' | 'edit-only'
+  role: 'admin' | 'manager' | 'player' | 'edit-only'
   teamId: string | null
   version: number
   editVersion: number | null
@@ -40,7 +40,7 @@ export async function getChannelSession(slug: string) {
 
 export async function createAccountSession(
   slug: string,
-  data: { loginId: string; role: 'admin' | 'manager'; teamId: string | null; version: number; editVersion: number | null },
+  data: { loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number; editVersion: number | null },
 ) {
   const session = await getChannelSession(slug)
   session.loginId = data.loginId
@@ -86,7 +86,7 @@ export async function isEditAuthorized(slug: string, currentEditVersion: number)
   if (!data) return false
   if (data.role === 'admin') return true
   if (data.role === 'edit-only') return data.editVersion === currentEditVersion
-  if (data.role === 'manager') {
+  if (data.role === 'manager' || data.role === 'player') {
     if (data.editVersion === currentEditVersion) return true
   }
   return false
@@ -101,13 +101,13 @@ export async function getManagerInfo(slug: string): Promise<{ loginId: string; t
   return { loginId: data.loginId, teamId: data.teamId, version: data.version }
 }
 
-export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'manager'; teamId: string | null; version: number } | null> {
+export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number } | null> {
   const data = await getSessionData(slug)
   if (!data) return null
   if (data.source !== 'account') return null
   if (!data.loginId) return null
   if (data.role === 'edit-only') return null
-  return { loginId: data.loginId, role: data.role as 'admin' | 'manager', teamId: data.teamId, version: data.version }
+  return { loginId: data.loginId, role: data.role as 'admin' | 'manager' | 'player', teamId: data.teamId, version: data.version }
 }
 
 export async function validateManagerAgainstDb(

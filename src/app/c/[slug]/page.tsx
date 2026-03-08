@@ -172,7 +172,12 @@ export default async function ChannelPage({
               className="rounded border px-2 py-1 text-xs"
             />
           </div>
-          <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
+            <Link className="text-xs underline text-gray-600" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
+              통계 보기
+            </Link>
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {accountSession ? (
               <>

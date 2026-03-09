@@ -14,6 +14,7 @@ import ScoreActions from "./ScoreActions";
 import LiveScoreboard from "./LiveScoreboard";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
+import StarRatingInput from "@/components/StarRatingInput";
 
 type Match = {
   id: string;
@@ -1033,10 +1034,8 @@ export default async function MatchDetailPage({
                       </div>
                       <form action={submitRatingAction} className="flex items-center gap-2">
                         <input type="hidden" name="target_player_id" value={p.playerId} />
-                        <select className="rounded border px-2 py-1 text-xs" name="rating" defaultValue="5">
-                          <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                        </select>
-                        <button className="rounded border px-2 py-1 text-xs" type="submit">평점 저장</button>
+                        <StarRatingInput name="rating" defaultValue={5} />
+                        <button className="rounded border px-2 py-1 text-xs" type="submit">저장</button>
                       </form>
                     </li>
                   )

@@ -70,12 +70,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
         .order('created_at', { ascending: true })
     : { data: [] as Record<string, unknown>[] }
 
-  const [teamsRes, playersRes, accountsRes, entriesRes, guestsRes] = await Promise.all([
+  const [teamsRes, playersRes, accountsRes, entriesRes, guestsRes, ratingsRes] = await Promise.all([
     supabase.from('channel_teams_view').select('*').eq('channel_id', channel.id).order('name', { ascending: true }),
     supabase.from('team_players').select('*').eq('channel_id', channel.id).order('team_id', { ascending: true }).order('jersey_no', { ascending: true }),
     supabase.from('channel_accounts').select('id,channel_id,role,login_id,team_id,player_id,is_active,must_change_password,session_version,created_at,updated_at').eq('channel_id', channel.id).order('role', { ascending: true }).order('login_id', { ascending: true }),
     supabase.from('match_group_entries').select('*').eq('channel_id', channel.id).order('match_group_id', { ascending: true }),
     supabase.from('match_group_guests').select('*').eq('channel_id', channel.id).order('match_group_id', { ascending: true }),
+    supabase.from('player_ratings').select('*').eq('channel_id', channel.id).order('created_at', { ascending: true }),
   ])
 
   const workbook = new ExcelJS.Workbook()
@@ -94,6 +95,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
       teams: teamsRes.data?.length ?? 0,
       players: playersRes.data?.length ?? 0,
       accounts: accountsRes.data?.length ?? 0,
+      ratings: ratingsRes.data?.length ?? 0,
     },
   ])
   addSheetFromRows(workbook, 'match_groups', (groupsRes.data ?? []) as Record<string, unknown>[])
@@ -104,6 +106,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
   addSheetFromRows(workbook, 'accounts', (accountsRes.data ?? []) as Record<string, unknown>[])
   addSheetFromRows(workbook, 'group_entries', (entriesRes.data ?? []) as Record<string, unknown>[])
   addSheetFromRows(workbook, 'group_guests', (guestsRes.data ?? []) as Record<string, unknown>[])
+  addSheetFromRows(workbook, 'player_ratings', (ratingsRes.data ?? []) as Record<string, unknown>[])
 
   const buffer = await workbook.xlsx.writeBuffer()
   const fileName = `quick-scoreboard_${channel.slug}_${new Date().toISOString().slice(0, 10)}.xlsx`

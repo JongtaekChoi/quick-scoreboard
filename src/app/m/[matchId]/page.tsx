@@ -132,6 +132,41 @@ async function canAccountEditThisMatch(channelSlug: string, matchId: string): Pr
   return true
 }
 
+
+async function canMutateGoals(
+  channelSlug: string,
+  channelVersion: number,
+  matchId: string,
+  action: "add" | "edit",
+): Promise<boolean> {
+  const permission = await getChannelPermission(channelSlug, channelVersion);
+  if (!permission.canGoalEdit) return false;
+
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
+  if (!canEditThisMatch) return false;
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return false;
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+    }>();
+
+  if (!match) return false;
+
+  const isAdmin = await isAdminAuthorized();
+
+  if (match.period_state === "pre") return false;
+  if (match.period_state === "halftime") return action === "edit";
+  if (match.period_state === "ended") return isAdmin;
+
+  return true;
+}
+
 async function addGoal(
   matchId: string,
   teamSide: "A" | "B",
@@ -143,10 +178,8 @@ async function addGoal(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  if (!canMutate) return;
 
   const { data: match } = await supabase
     .from("matches")
@@ -342,10 +375,8 @@ async function updateGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  if (!canMutate) return;
 
   const scorerRaw = String(formData.get("scorer") || "").trim();
   const assistRaw = String(formData.get("assist") || "").trim();
@@ -411,10 +442,8 @@ async function deleteGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  if (!canMutate) return;
 
   await supabase
     .from("goal_events")
@@ -658,7 +687,19 @@ export default async function MatchDetailPage({
   const canGoalEdit = permission.canGoalEdit && canEditThisMatch;
   const canManageMatch = permission.canManageMatch;
   const accountSession = channel ? await getAccountInfo(channel.slug) : null;
+  const isAdminSession = await isAdminAuthorized();
   const isEditMode = canGoalEdit && mode === "edit";
+  const canAddGoalNow =
+    isEditMode &&
+    (match.period_state === "first_half" ||
+      match.period_state === "second_half" ||
+      (match.period_state === "ended" && isAdminSession));
+  const canEditGoalNow =
+    isEditMode &&
+    (match.period_state === "first_half" ||
+      match.period_state === "second_half" ||
+      match.period_state === "halftime" ||
+      (match.period_state === "ended" && isAdminSession));
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
 
@@ -840,7 +881,19 @@ export default async function MatchDetailPage({
           </section>
         ) : null}
 
-        {isEditMode ? (
+                {isEditMode ? (
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            {match.period_state === "pre"
+              ? "경기 시작 전에는 스코어 입력/수정이 불가합니다."
+              : match.period_state === "halftime"
+              ? "휴식 시간에는 기존 기록 수정/삭제만 가능합니다."
+              : match.period_state === "ended" && !isAdminSession
+              ? "경기 종료 후 기록 수정은 어드민만 가능합니다."
+              : ""}
+          </section>
+        ) : null}
+
+{canAddGoalNow ? (
           <ScoreActions
             addGoalA={addGoalA}
             addGoalB={addGoalB}
@@ -849,7 +902,7 @@ export default async function MatchDetailPage({
           />
         ) : null}
 
-        {isEditMode ? (
+        {canEditGoalNow ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-700">
               현재 편집 이벤트

@@ -8,7 +8,7 @@ create table if not exists player_ratings (
   target_team_id uuid not null references teams(id) on delete cascade,
   rater_team_id uuid not null references teams(id) on delete cascade,
   rater_fingerprint text not null,
-  rating int not null check (rating between 1 and 5),
+  rating numeric(2,1) not null check (rating between 1 and 5 and mod((rating * 10)::int, 5) = 0),
   created_at timestamptz not null default now()
 );
 

@@ -537,8 +537,10 @@ async function submitAnonymousRating(
   }
 
   const targetPlayerId = String(formData.get("target_player_id") || "").trim();
-  const rating = Number(formData.get("rating") || 0);
-  if (!targetPlayerId || !Number.isFinite(rating) || rating < 1 || rating > 5) {
+  const ratingRaw = Number(formData.get("rating") || 0);
+  const rating = Number(ratingRaw.toFixed(1));
+  const isHalfStep = Number.isFinite(rating) && Number((rating * 10) % 5) === 0;
+  if (!targetPlayerId || !Number.isFinite(rating) || rating < 1 || rating > 5 || !isHalfStep) {
     redirect(`/m/${matchId}?err=rating_invalid`);
   }
 
@@ -1019,7 +1021,7 @@ export default async function MatchDetailPage({
 
         {canRate ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">무기명 평점 입력 (1~5)</h2>
+            <h2 className="text-sm font-semibold text-gray-700">무기명 평점 입력 (1.0~5.0, 0.5 단위)</h2>
             {ratingTargetRoster.length === 0 ? (
               <p className="text-xs text-gray-500">평점 대상 선수가 없습니다. (타팀 선수만 가능)</p>
             ) : (

@@ -47,6 +47,7 @@ type MatchGroup = {
 type GoalEvent = {
   id: string;
   team_side: "A" | "B";
+  period: "first_half" | "second_half";
   minute: number | null;
   scorer_name: string | null;
   scorer_player_id: string | null;
@@ -163,16 +164,17 @@ async function addGoal(
       ? Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 60000))
       : 0;
 
-  const minute =
-    match.period_state === "second_half"
-      ? 15 + elapsedFrom(match.second_half_started_at)
-      : elapsedFrom(match.first_half_started_at ?? match.started_at);
+  const isSecondHalf = match.period_state === "second_half";
+  const minute = isSecondHalf
+    ? 15 + elapsedFrom(match.second_half_started_at)
+    : elapsedFrom(match.first_half_started_at ?? match.started_at);
 
   const { data: insertedGoal, error: insertError } = await supabase
     .from("goal_events")
     .insert({
       match_id: matchId,
       team_side: teamSide,
+      period: isSecondHalf ? "second_half" : "first_half",
       minute,
     })
     .select("id")
@@ -629,7 +631,7 @@ export default async function MatchDetailPage({
   const { data: goals } = await supabase
     .from("goal_events")
     .select(
-      "id,team_side,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
+      "id,team_side,period,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)

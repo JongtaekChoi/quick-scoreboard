@@ -88,6 +88,11 @@ async function getChannelPermission(
     if (ok) return { canGoalEdit: true, canManageMatch: true };
   }
 
+  const account = await getAccountInfo(channelSlug);
+  if (account?.role === "player") {
+    return { canGoalEdit: true, canManageMatch: true };
+  }
+
   const isEditor = await isEditAuthorized(channelSlug, channelVersion);
   if (isEditor) return { canGoalEdit: true, canManageMatch: false };
 

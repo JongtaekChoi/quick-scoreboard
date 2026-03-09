@@ -838,6 +838,26 @@ export default async function MatchDetailPage({
     });
   }
 
+  const myRatingMap = new Map<string, number>();
+  const ratingAccount = channel ? await getAccountInfo(channel.slug) : null;
+  if (ratingAccount && channel) {
+    const fingerprintSalt = process.env.SESSION_SECRET || "qsb-rating-fallback-salt";
+    const raterFingerprint = createHash("sha256")
+      .update(`${fingerprintSalt}|${channel.slug}|${ratingAccount.loginId}`)
+      .digest("hex");
+
+    const { data: myRatings } = await supabase
+      .from("player_ratings")
+      .select("target_player_id,rating")
+      .eq("match_id", matchId)
+      .eq("rater_fingerprint", raterFingerprint)
+      .returns<{ target_player_id: string; rating: number }[]>();
+
+    for (const r of myRatings ?? []) {
+      myRatingMap.set(r.target_player_id, Number(r.rating));
+    }
+  }
+
   const permission = channel
     ? await getChannelPermission(channel.slug)
     : { canGoalEdit: false, canManageMatch: false };
@@ -1036,8 +1056,7 @@ export default async function MatchDetailPage({
                       </div>
                       <form action={submitRatingAction} className="flex items-center gap-2">
                         <input type="hidden" name="target_player_id" value={p.playerId} />
-                        <StarRatingInput name="rating" defaultValue={5} />
-                        <button className="rounded border px-2 py-1 text-xs" type="submit">저장</button>
+                        <StarRatingInput name="rating" defaultValue={3} initialValue={myRatingMap.get(p.playerId) ?? 3} submitLabel="저장" />
                       </form>
                     </li>
                   )

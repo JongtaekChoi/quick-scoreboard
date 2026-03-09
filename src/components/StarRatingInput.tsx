@@ -5,15 +5,21 @@ import { useMemo, useState } from "react";
 type Props = {
   name: string;
   defaultValue?: number;
+  initialValue?: number;
+  submitLabel?: string;
 };
 
-const steps = [
-  0.5, 1, 1.5, 2, 2.5,
-  3, 3.5, 4, 4.5, 5,
-];
+const steps = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
-export default function StarRatingInput({ name, defaultValue = 5 }: Props) {
-  const [value, setValue] = useState<number>(defaultValue);
+export default function StarRatingInput({
+  name,
+  defaultValue = 3,
+  initialValue,
+  submitLabel = "저장",
+}: Props) {
+  const start = initialValue ?? defaultValue;
+  const [value, setValue] = useState<number>(start);
+  const changed = Number(value.toFixed(1)) !== Number(start.toFixed(1));
 
   const label = useMemo(() => `${value.toFixed(1)}점`, [value]);
 
@@ -38,6 +44,9 @@ export default function StarRatingInput({ name, defaultValue = 5 }: Props) {
         })}
       </div>
       <span className="text-[11px] text-gray-600 min-w-10">{label}</span>
+      <button className="rounded border px-2 py-1 text-xs disabled:text-gray-300" type="submit" disabled={!changed}>
+        {submitLabel}
+      </button>
     </div>
   );
 }

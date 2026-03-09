@@ -905,7 +905,7 @@ export default async function MatchDetailPage({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {match.period_state === "pre" ? (
-                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 시작</PendingSubmitButton></form>
+                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
                   ) : null}
                   {match.period_state === "first_half" ? (
                     <form action={endFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 종료(휴식)</PendingSubmitButton></form>
@@ -914,7 +914,7 @@ export default async function MatchDetailPage({
                     <form action={startSecondAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">후반전 시작</PendingSubmitButton></form>
                   ) : null}
                   {match.period_state === "second_half" ? (
-                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">경기 종료</PendingSubmitButton></form>
+                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
                   ) : null}
                   {(match.period_state === "halftime" || match.period_state === "second_half") ? (
                     <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>

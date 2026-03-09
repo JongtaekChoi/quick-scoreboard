@@ -94,10 +94,10 @@ async function getChannelPermission(
 }
 
 
-async function canPlayerEditThisMatch(channelSlug: string, matchId: string): Promise<boolean> {
+async function canAccountEditThisMatch(channelSlug: string, matchId: string): Promise<boolean> {
   const account = await getAccountInfo(channelSlug)
   if (!account) return true
-  if (account.role !== 'player') return true
+  if (account.role !== 'player' && account.role !== 'manager') return true
   if (!account.teamId) return false
 
   const supabase = getSupabaseServerClient()
@@ -139,7 +139,7 @@ async function addGoal(
 
   const permission = await getChannelPermission(channelSlug, channelVersion);
   if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
   if (!canEditThisMatch) return;
 
   const { data: match } = await supabase
@@ -333,7 +333,7 @@ async function updateGoalEvent(
 
   const permission = await getChannelPermission(channelSlug, channelVersion);
   if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
   if (!canEditThisMatch) return;
 
   const scorerRaw = String(formData.get("scorer") || "").trim();
@@ -402,7 +402,7 @@ async function deleteGoalEvent(
 
   const permission = await getChannelPermission(channelSlug, channelVersion);
   if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
   if (!canEditThisMatch) return;
 
   await supabase
@@ -643,7 +643,7 @@ export default async function MatchDetailPage({
   const permission = channel
     ? await getChannelPermission(channel.slug, channel.edit_session_version)
     : { canGoalEdit: false, canManageMatch: false };
-  const canEditThisMatch = channel ? await canPlayerEditThisMatch(channel.slug, matchId) : false;
+  const canEditThisMatch = channel ? await canAccountEditThisMatch(channel.slug, matchId) : false;
   const canGoalEdit = permission.canGoalEdit && canEditThisMatch;
   const canManageMatch = permission.canManageMatch;
   const accountSession = channel ? await getAccountInfo(channel.slug) : null;
@@ -744,7 +744,7 @@ export default async function MatchDetailPage({
               <Link href={`/m/${matchId}`} className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-gray-700">보기모드로 돌아가기</Link>
             ) : null}
             {accountSession?.role === 'player' && !canEditThisMatch ? (
-              <span className="text-xs text-amber-700">본인 팀 경기는 점수 입력이 제한됩니다.</span>
+              <span className="text-xs text-amber-700">본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)</span>
             ) : null}
           </div>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}

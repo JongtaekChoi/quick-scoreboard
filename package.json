@@ -13,6 +13,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-query": "^5.90.21",
+    "exceljs": "^4.4.0",
     "iron-session": "^8.0.4",
     "next": "16.1.6",
     "react": "19.2.3",

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createHash } from "crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -574,14 +575,23 @@ async function submitAnonymousRating(
     redirect(`/m/${matchId}?err=rating_same_team`);
   }
 
-  await supabase.from("player_ratings").insert({
-    channel_id: match.channel_id,
-    match_id: match.id,
-    target_player_id: targetPlayer.id,
-    target_team_id: targetPlayer.team_id,
-    rater_team_id: ownTeam.id,
-    rating,
-  });
+  const fingerprintSalt = process.env.SESSION_SECRET || "qsb-rating-fallback-salt";
+  const raterFingerprint = createHash("sha256")
+    .update(`${fingerprintSalt}|${channelSlug}|${account.loginId}`)
+    .digest("hex");
+
+  await supabase.from("player_ratings").upsert(
+    {
+      channel_id: match.channel_id,
+      match_id: match.id,
+      target_player_id: targetPlayer.id,
+      target_team_id: targetPlayer.team_id,
+      rater_team_id: ownTeam.id,
+      rater_fingerprint: raterFingerprint,
+      rating,
+    },
+    { onConflict: "match_id,target_player_id,rater_fingerprint" },
+  );
 
   await logMatchChange(matchId, channelSlug, "player_rating", {
     target_player_id: targetPlayer.id,
@@ -1033,7 +1043,7 @@ export default async function MatchDetailPage({
                 })}
               </ul>
             )}
-            <p className="text-[11px] text-gray-500">입력자는 저장되지 않으며 타팀 선수에게만 점수를 줄 수 있습니다.</p>
+            <p className="text-[11px] text-gray-500">입력자 원문 정보는 저장하지 않으며, 동일 계정은 같은 선수에게 1회만 평점(재입력 시 갱신) 가능합니다.</p>
           </section>
         ) : null}
 

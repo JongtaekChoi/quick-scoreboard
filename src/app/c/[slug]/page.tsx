@@ -175,11 +175,17 @@ export default async function ChannelPage({
               통계 보기
             </Link>
             {channel.slug === "sample" ? (
-              <Link className="text-xs underline text-gray-600" href="/c/sample/guide">
+              <Link className="text-xs rounded border border-amber-300 bg-amber-50 px-2 py-1 font-medium text-amber-800" href="/c/sample/guide">
                 샘플 사용 가이드
               </Link>
             ) : null}
           </div>
+          {channel.slug === "sample" ? (
+            <section className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              처음 사용하면 <Link className="underline font-medium" href="/c/sample/guide">샘플 사용 가이드</Link>를 먼저 확인해 주세요.
+            </section>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {accountSession ? (
               <>

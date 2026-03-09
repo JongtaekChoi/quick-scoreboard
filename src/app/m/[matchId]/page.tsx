@@ -27,6 +27,12 @@ type Match = {
   started_at: string | null;
   channel_id: string;
   match_group_id: string | null;
+  period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+  first_half_started_at: string | null;
+  first_half_ended_at: string | null;
+  halftime_started_at: string | null;
+  second_half_started_at: string | null;
+  second_half_ended_at: string | null;
 };
 
 type Channel = { id: string; slug: string; edit_session_version: number };
@@ -41,6 +47,7 @@ type MatchGroup = {
 type GoalEvent = {
   id: string;
   team_side: "A" | "B";
+  period: "first_half" | "second_half";
   minute: number | null;
   scorer_name: string | null;
   scorer_player_id: string | null;
@@ -59,6 +66,43 @@ type RosterPlayer = {
 };
 
 type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean };
+
+
+type ChangeActor = { loginId: string | null; role: string | null };
+
+async function getChangeActor(channelSlug: string): Promise<ChangeActor> {
+  const isAdmin = await isAdminAuthorized();
+  if (isAdmin) return { loginId: "admin", role: "admin" };
+  const account = await getAccountInfo(channelSlug);
+  if (!account) return { loginId: null, role: null };
+  return { loginId: account.loginId, role: account.role };
+}
+
+async function logMatchChange(
+  matchId: string,
+  channelSlug: string,
+  actionType: string,
+  payload: Record<string, unknown>,
+) {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const actor = await getChangeActor(channelSlug);
+  const { data: matchRow } = await supabase
+    .from("matches")
+    .select("channel_id")
+    .eq("id", matchId)
+    .maybeSingle<{ channel_id: string | null }>();
+
+  await supabase.from("match_change_logs").insert({
+    match_id: matchId,
+    channel_id: matchRow?.channel_id ?? null,
+    action_type: actionType,
+    actor_login_id: actor.loginId,
+    actor_role: actor.role,
+    payload,
+  });
+}
 
 async function getChannelPermission(
   channelSlug: string,
@@ -81,6 +125,11 @@ async function getChannelPermission(
     if (ok) return { canGoalEdit: true, canManageMatch: true };
   }
 
+  const account = await getAccountInfo(channelSlug);
+  if (account?.role === "player") {
+    return { canGoalEdit: true, canManageMatch: true };
+  }
+
   const isEditor = await isEditAuthorized(channelSlug, channelVersion);
   if (isEditor) return { canGoalEdit: true, canManageMatch: false };
 
@@ -88,10 +137,10 @@ async function getChannelPermission(
 }
 
 
-async function canPlayerEditThisMatch(channelSlug: string, matchId: string): Promise<boolean> {
+async function canAccountEditThisMatch(channelSlug: string, matchId: string): Promise<boolean> {
   const account = await getAccountInfo(channelSlug)
   if (!account) return true
-  if (account.role !== 'player') return true
+  if (account.role !== 'player' && account.role !== 'manager') return true
   if (!account.teamId) return false
 
   const supabase = getSupabaseServerClient()
@@ -120,6 +169,41 @@ async function canPlayerEditThisMatch(channelSlug: string, matchId: string): Pro
   return true
 }
 
+
+async function canMutateGoals(
+  channelSlug: string,
+  channelVersion: number,
+  matchId: string,
+  action: "add" | "edit",
+): Promise<boolean> {
+  const permission = await getChannelPermission(channelSlug, channelVersion);
+  if (!permission.canGoalEdit) return false;
+
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
+  if (!canEditThisMatch) return false;
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return false;
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+    }>();
+
+  if (!match) return false;
+
+  const isAdmin = await isAdminAuthorized();
+
+  if (match.period_state === "pre") return false;
+  if (match.period_state === "halftime") return action === "edit";
+  if (match.period_state === "ended") return isAdmin;
+
+  return true;
+}
+
 async function addGoal(
   matchId: string,
   teamSide: "A" | "B",
@@ -131,38 +215,41 @@ async function addGoal(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  if (!canMutate) return;
 
   const { data: match } = await supabase
     .from("matches")
-    .select("id,status,started_at")
+    .select("id,status,started_at,period_state,first_half_started_at,second_half_started_at")
     .eq("id", matchId)
     .maybeSingle<{
       id: string;
       status: "scheduled" | "live" | "ended";
       started_at: string | null;
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+      first_half_started_at: string | null;
+      second_half_started_at: string | null;
     }>();
 
   if (!match) return;
 
   const now = new Date();
-  const minute = match.started_at
-    ? Math.max(
-        0,
-        Math.floor(
-          (now.getTime() - new Date(match.started_at).getTime()) / 60000,
-        ),
-      )
-    : 0;
+  const elapsedFrom = (iso: string | null) =>
+    iso
+      ? Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 60000))
+      : 0;
+
+  const isSecondHalf = match.period_state === "second_half";
+  const minute = isSecondHalf
+    ? 15 + elapsedFrom(match.second_half_started_at)
+    : elapsedFrom(match.first_half_started_at ?? match.started_at);
 
   const { data: insertedGoal, error: insertError } = await supabase
     .from("goal_events")
     .insert({
       match_id: matchId,
       team_side: teamSide,
+      period: isSecondHalf ? "second_half" : "first_half",
       minute,
     })
     .select("id")
@@ -221,14 +308,18 @@ async function addGoal(
     redirect(`/m/${matchId}?mode=edit&err=score_update_failed`);
   }
 
+  await logMatchChange(matchId, channelSlug, "goal_add", { teamSide, minute });
+
+
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
 }
 
-async function startMatch(
+async function applyPeriodAction(
   matchId: string,
   channelSlug: string,
   channelVersion: number,
+  action: "start_first" | "end_first" | "start_second" | "end_match" | "resume_previous",
 ) {
   "use server";
 
@@ -238,62 +329,76 @@ async function startMatch(
   const permission = await getChannelPermission(channelSlug, channelVersion);
   if (!permission.canManageMatch) return;
 
-  await supabase
+  const { data: match } = await supabase
     .from("matches")
-    .update({
-      status: "live",
-      started_at: new Date().toISOString(),
-      scheduled_start_at: null,
-    })
-    .eq("id", matchId);
+    .select(
+      "id,period_state,status,started_at,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
+    )
+    .eq("id", matchId)
+    .maybeSingle<{
+      id: string;
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+      status: "scheduled" | "live" | "ended";
+      started_at: string | null;
+      first_half_started_at: string | null;
+      first_half_ended_at: string | null;
+      halftime_started_at: string | null;
+      second_half_started_at: string | null;
+      second_half_ended_at: string | null;
+    }>();
 
-  revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
-}
+  if (!match) return;
 
-async function endMatch(
-  matchId: string,
-  channelSlug: string,
-  channelVersion: number,
-) {
-  "use server";
+  const now = new Date().toISOString();
+  const patch: Record<string, string | null> = {};
 
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return;
+  if (action === "start_first" && match.period_state === "pre") {
+    patch.period_state = "first_half";
+    patch.status = "live";
+    patch.started_at = match.started_at ?? now;
+    patch.first_half_started_at = match.first_half_started_at ?? now;
+    patch.scheduled_start_at = null;
+  }
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canManageMatch) return;
+  if (action === "end_first" && match.period_state === "first_half") {
+    patch.period_state = "halftime";
+    patch.status = "live";
+    patch.first_half_ended_at = now;
+    patch.halftime_started_at = now;
+  }
 
-  await supabase
-    .from("matches")
-    .update({ status: "ended", ended_at: new Date().toISOString() })
-    .eq("id", matchId);
+  if (action === "start_second" && match.period_state === "halftime") {
+    patch.period_state = "second_half";
+    patch.status = "live";
+    patch.second_half_started_at = now;
+  }
 
-  revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
-}
+  if (action === "end_match" && (match.period_state === "second_half" || match.period_state === "first_half" || match.period_state === "halftime")) {
+    patch.period_state = "ended";
+    patch.status = "ended";
+    patch.ended_at = now;
+    patch.second_half_ended_at = now;
+  }
 
-async function changeStartTime(
-  matchId: string,
-  channelSlug: string,
-  channelVersion: number,
-  formData: FormData,
-) {
-  "use server";
+  if (action === "resume_previous") {
+    if (match.period_state === "halftime" && !match.second_half_started_at) {
+      patch.period_state = "first_half";
+      patch.first_half_ended_at = null;
+      patch.halftime_started_at = null;
+      patch.status = "live";
+    } else if (match.period_state === "second_half") {
+      patch.period_state = "halftime";
+      patch.second_half_started_at = null;
+      patch.status = "live";
+    }
+  }
 
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return;
+  if (Object.keys(patch).length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+  }
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canManageMatch) return;
-
-  const minutesAgo = Math.max(0, Number(formData.get("minutes_ago")) || 0);
-  const startedAt = new Date(Date.now() - minutesAgo * 60000).toISOString();
-
-  await supabase
-    .from("matches")
-    .update({ started_at: startedAt })
-    .eq("id", matchId);
+  await supabase.from("matches").update(patch).eq("id", matchId);
+  await logMatchChange(matchId, channelSlug, "period_action", { action, patch });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -311,10 +416,8 @@ async function updateGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  if (!canMutate) return;
 
   const scorerRaw = String(formData.get("scorer") || "").trim();
   const assistRaw = String(formData.get("assist") || "").trim();
@@ -364,6 +467,8 @@ async function updateGoalEvent(
     );
   }
 
+  await logMatchChange(matchId, channelSlug, "goal_update", { goalId, minute, scorer: scorer.name, assist: assist.name });
+
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
 }
@@ -380,10 +485,8 @@ async function deleteGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canGoalEdit) return;
-  const canEditThisMatch = await canPlayerEditThisMatch(channelSlug, matchId);
-  if (!canEditThisMatch) return;
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  if (!canMutate) return;
 
   await supabase
     .from("goal_events")
@@ -407,6 +510,8 @@ async function deleteGoalEvent(
       .update({ score_a: nextA, score_b: nextB })
       .eq("id", matchId);
   }
+
+  await logMatchChange(matchId, channelSlug, "goal_delete", { goalId, teamSide });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -475,7 +580,7 @@ export default async function MatchDetailPage({
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id",
+      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
     )
     .eq("id", matchId)
     .maybeSingle<Match>();
@@ -605,7 +710,7 @@ export default async function MatchDetailPage({
   const { data: goals } = await supabase
     .from("goal_events")
     .select(
-      "id,team_side,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
+      "id,team_side,period,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)
@@ -623,14 +728,25 @@ export default async function MatchDetailPage({
   const permission = channel
     ? await getChannelPermission(channel.slug, channel.edit_session_version)
     : { canGoalEdit: false, canManageMatch: false };
-  const canEditThisMatch = channel ? await canPlayerEditThisMatch(channel.slug, matchId) : false;
+  const canEditThisMatch = channel ? await canAccountEditThisMatch(channel.slug, matchId) : false;
   const canGoalEdit = permission.canGoalEdit && canEditThisMatch;
   const canManageMatch = permission.canManageMatch;
   const accountSession = channel ? await getAccountInfo(channel.slug) : null;
+  const isAdminSession = await isAdminAuthorized();
   const isEditMode = canGoalEdit && mode === "edit";
+  const canAddGoalNow =
+    isEditMode &&
+    (match.period_state === "first_half" ||
+      match.period_state === "second_half" ||
+      (match.period_state === "ended" && isAdminSession));
+  const canEditGoalNow =
+    isEditMode &&
+    (match.period_state === "first_half" ||
+      match.period_state === "second_half" ||
+      match.period_state === "halftime" ||
+      (match.period_state === "ended" && isAdminSession));
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-
   const activeGoalId = goalParam || (goals?.[0]?.id ?? "");
   const activeGoal =
     (goals ?? []).find((g) => g.id === activeGoalId) ?? goals?.[0] ?? null;
@@ -662,28 +778,32 @@ export default async function MatchDetailPage({
         channel.edit_session_version,
       )
     : async () => {};
-  const startMatchAction = channel
-    ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version)
+  const startFirstAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_first")
+    : async () => {};
+  const endFirstAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "end_first")
+    : async () => {};
+  const startSecondAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_second")
     : async () => {};
   const endMatchAction = channel
-    ? endMatch.bind(null, matchId, channel.slug, channel.edit_session_version)
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "end_match")
     : async () => {};
-  const changeStartTimeAction = channel
-    ? changeStartTime.bind(
-        null,
-        matchId,
-        channel.slug,
-        channel.edit_session_version,
-      )
+  const resumePreviousAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "resume_previous")
     : async () => {};
 
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const elapsedMinutes = match.started_at
-    ? Math.max(
-        0,
-        Math.floor((now - new Date(match.started_at).getTime()) / 60000),
-      )
+  const activePeriodStart =
+    match.period_state === "first_half"
+      ? match.first_half_started_at
+      : match.period_state === "second_half"
+      ? match.second_half_started_at
+      : null;
+  const elapsedMinutes = activePeriodStart
+    ? Math.max(0, Math.floor((now - new Date(activePeriodStart).getTime()) / 60000))
     : null;
 
   return (
@@ -720,7 +840,7 @@ export default async function MatchDetailPage({
               <Link href={`/m/${matchId}`} className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-gray-700">보기모드로 돌아가기</Link>
             ) : null}
             {accountSession?.role === 'player' && !canEditThisMatch ? (
-              <span className="text-xs text-amber-700">본인 팀 경기는 점수 입력이 제한됩니다.</span>
+              <span className="text-xs text-amber-700">본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)</span>
             ) : null}
           </div>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
@@ -773,58 +893,51 @@ export default async function MatchDetailPage({
 
         {isEditMode && canManageMatch ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
-            <div className="flex flex-wrap gap-2">
-              {match.status === "scheduled" ? (
-                <form action={startMatchAction}>
-                  <PendingSubmitButton
-                    className="rounded border px-3 py-2 text-sm"
-                    pendingText="시작중..."
-                  >
-                    경기 시작
-                  </PendingSubmitButton>
-                </form>
-              ) : null}
-              {match.status !== "ended" ? (
-                <form action={endMatchAction}>
-                  <PendingSubmitButton
-                    className="rounded border px-3 py-2 text-sm"
-                    pendingText="종료중..."
-                  >
-                    경기 종료
-                  </PendingSubmitButton>
-                </form>
-              ) : (
-                <p className="text-xs text-gray-500">종료된 경기입니다.</p>
-              )}
+            <div className="rounded border bg-gray-50 p-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-700">구간 운영</h3>
+                <span className="text-[11px] text-gray-500">기본 전/후반 각 15분</span>
+              </div>
+              <div className="rounded border bg-white p-2 space-y-2">
+                <div className="text-[11px] text-gray-500">
+                  현재 상태: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
+                  {elapsedMinutes !== null ? ` · 경과 ${elapsedMinutes}분` : ""}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {match.period_state === "pre" ? (
+                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "first_half" ? (
+                    <form action={endFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 종료(휴식)</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "halftime" ? (
+                    <form action={startSecondAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">후반전 시작</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "second_half" ? (
+                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
+                  ) : null}
+                  {(match.period_state === "halftime" || match.period_state === "second_half") ? (
+                    <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
+                  ) : null}
+                </div>
+              </div>
             </div>
-            {match.status !== "ended" ? (
-              <form
-                action={changeStartTimeAction}
-                className="flex items-center gap-2"
-              >
-                <input
-                  className="rounded border px-2 py-1.5 text-sm w-20"
-                  name="minutes_ago"
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  defaultValue={elapsedMinutes ?? ""}
-                />
-                <span className="text-xs text-gray-500">
-                  분 전에 시작한 것으로
-                </span>
-                <PendingSubmitButton
-                  className="rounded border px-3 py-2 text-sm"
-                  pendingText="변경중..."
-                >
-                  시작시간 변경
-                </PendingSubmitButton>
-              </form>
-            ) : null}
           </section>
         ) : null}
 
-        {isEditMode ? (
+                {isEditMode ? (
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            {match.period_state === "pre"
+              ? "경기 시작 전에는 스코어 입력/수정이 불가합니다."
+              : match.period_state === "halftime"
+              ? "휴식 시간에는 기존 기록 수정/삭제만 가능합니다."
+              : match.period_state === "ended" && !isAdminSession
+              ? "경기 종료 후 기록 수정은 어드민만 가능합니다."
+              : ""}
+          </section>
+        ) : null}
+
+{canAddGoalNow ? (
           <ScoreActions
             addGoalA={addGoalA}
             addGoalB={addGoalB}
@@ -833,7 +946,7 @@ export default async function MatchDetailPage({
           />
         ) : null}
 
-        {isEditMode ? (
+        {canEditGoalNow ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-700">
               현재 편집 이벤트

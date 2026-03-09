@@ -5,6 +5,7 @@ import {
   createAccountSession,
   destroyChannelSession,
 } from "@/lib/channelSession";
+import { clearAdminCookie } from "@/lib/adminAuth";
 
 type Channel = { id: string; slug: string; edit_session_version: number };
 type ChannelAccount = {
@@ -85,6 +86,7 @@ export async function POST(
     editVersion,
     mustChangePassword: !!account.must_change_password,
   });
+  await clearAdminCookie();
 
   if (account.must_change_password) {
     const next = safeRedirect(`/c/${slug}`)

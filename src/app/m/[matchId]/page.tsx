@@ -773,6 +773,17 @@ export default async function MatchDetailPage({
 
         {isEditMode && canManageMatch ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
+            <div className="rounded border bg-gray-50 p-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-700">구간 운영 UI 미리보기 (DB 반영 전)</h3>
+                <span className="text-[11px] text-gray-500">저장/동작 없음</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 1 시작</button>
+                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>휴식 시작</button>
+                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 2 시작</button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {match.status === "scheduled" ? (
                 <form action={startMatchAction}>

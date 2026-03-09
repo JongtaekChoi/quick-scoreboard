@@ -574,6 +574,30 @@ export default async function AdminGroupPage({
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
                 </form>
 
+                <section className="rounded border bg-gray-50 p-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-gray-700">구간 운영 UI 미리보기 (DB 반영 전)</h3>
+                    <span className="text-[11px] text-gray-500">저장/동작 없음</span>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-2">
+                    <div className="rounded border bg-white p-2 space-y-1">
+                      <div className="text-[11px] text-gray-500">구간 1</div>
+                      <input className="w-full rounded border px-2 py-1 text-xs" type="time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} disabled />
+                      <button className="w-full rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 시작</button>
+                    </div>
+                    <div className="rounded border bg-white p-2 space-y-1">
+                      <div className="text-[11px] text-gray-500">휴식</div>
+                      <input className="w-full rounded border px-2 py-1 text-xs" type="time" disabled />
+                      <button className="w-full rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>휴식 시작</button>
+                    </div>
+                    <div className="rounded border bg-white p-2 space-y-1">
+                      <div className="text-[11px] text-gray-500">구간 2</div>
+                      <input className="w-full rounded border px-2 py-1 text-xs" type="time" disabled />
+                      <button className="w-full rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 시작</button>
+                    </div>
+                  </div>
+                </section>
+
                 <div className="flex items-center justify-between">
                   <Link className="underline text-xs" href={`/m/${m.id}`}>경기 화면</Link>
                   <form action={deleteMatch}>

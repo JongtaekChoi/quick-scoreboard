@@ -776,12 +776,20 @@ export default async function MatchDetailPage({
             <div className="rounded border bg-gray-50 p-2 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-gray-700">구간 운영 UI 미리보기 (DB 반영 전)</h3>
-                <span className="text-[11px] text-gray-500">저장/동작 없음</span>
+                <span className="text-[11px] text-gray-500">다음 액션 1개 + 되돌리기</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 1 시작</button>
-                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>휴식 시작</button>
-                <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>구간 2 시작</button>
+              <div className="rounded border bg-white p-2 space-y-2">
+                <div className="text-[11px] text-gray-500">
+                  현재 상태: {match.status === "scheduled" ? "대기" : match.status === "live" ? "진행중" : "종료"}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
+                    {match.status === "scheduled" ? "전반전 시작" : match.status === "live" ? "구간 종료(휴식)" : "다음 구간 시작"}
+                  </button>
+                  <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
+                    이전 구간 재개
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

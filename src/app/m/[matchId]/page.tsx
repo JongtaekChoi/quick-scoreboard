@@ -144,25 +144,29 @@ async function addGoal(
 
   const { data: match } = await supabase
     .from("matches")
-    .select("id,status,started_at")
+    .select("id,status,started_at,period_state,first_half_started_at,second_half_started_at")
     .eq("id", matchId)
     .maybeSingle<{
       id: string;
       status: "scheduled" | "live" | "ended";
       started_at: string | null;
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+      first_half_started_at: string | null;
+      second_half_started_at: string | null;
     }>();
 
   if (!match) return;
 
   const now = new Date();
-  const minute = match.started_at
-    ? Math.max(
-        0,
-        Math.floor(
-          (now.getTime() - new Date(match.started_at).getTime()) / 60000,
-        ),
-      )
-    : 0;
+  const elapsedFrom = (iso: string | null) =>
+    iso
+      ? Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 60000))
+      : 0;
+
+  const minute =
+    match.period_state === "second_half"
+      ? 15 + elapsedFrom(match.second_half_started_at)
+      : elapsedFrom(match.first_half_started_at ?? match.started_at);
 
   const { data: insertedGoal, error: insertError } = await supabase
     .from("goal_events")

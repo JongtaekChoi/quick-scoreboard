@@ -380,7 +380,11 @@ export default async function AdminGroupPage({
             <span>경기 관리</span>
           </div>
           <h1 className="text-2xl font-semibold">경기 관리</h1>
-          <p className="text-sm text-gray-600">{group.title ?? `${group.play_date} 그룹 ${group.seq}`} · {group.play_date} {group.venue ? `· ${group.venue}` : ''}</p>
+          <p className="text-sm text-gray-600">
+            {group.title
+              ? `${group.title} · ${group.play_date}${group.venue ? ` · ${group.venue}` : ''}`
+              : `${group.play_date}${group.venue ? ` · ${group.venue}` : ''}`}
+          </p>
           {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
@@ -405,7 +409,7 @@ export default async function AdminGroupPage({
 
         {(managerTeamId || tab === 'entries') && (<section className="rounded border p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">엔트리 선택(=경기그룹 엔트리)</h2>
+            <h2 className="text-sm font-semibold">출전 엔트리 선택</h2>
             {!managerTeamId && (
               <form action={toggleEntryConfirm}>
                 <input type="hidden" name="channelId" value={channel.id} />

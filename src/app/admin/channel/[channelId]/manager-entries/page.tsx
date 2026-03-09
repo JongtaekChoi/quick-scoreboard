@@ -75,7 +75,7 @@ export default async function ManagerEntriesPage({ params }: { params: Promise<{
             (groups ?? []).map((g) => (
               <div key={g.id} className="rounded border p-3 flex items-center justify-between gap-2">
                 <div>
-                  <div className="font-medium text-sm">{g.title ?? `${g.play_date} 그룹 ${g.seq}`}</div>
+                  <div className="font-medium text-sm">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</div>
                   <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
                 </div>
                 <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=channel`}>

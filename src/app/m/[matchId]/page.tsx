@@ -67,15 +67,6 @@ type RosterPlayer = {
 
 type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean };
 
-type MatchChangeLog = {
-  id: string;
-  action_type: string;
-  actor_login_id: string | null;
-  actor_role: string | null;
-  payload: Record<string, unknown> | null;
-  created_at: string;
-};
-
 
 type ChangeActor = { loginId: string | null; role: string | null };
 
@@ -565,11 +556,10 @@ export default async function MatchDetailPage({
     goal?: string;
     err?: string;
     mode?: string;
-    logPage?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { goal: goalParam, err, mode, logPage } = await searchParams;
+  const { goal: goalParam, err, mode } = await searchParams;
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -757,18 +747,6 @@ export default async function MatchDetailPage({
       (match.period_state === "ended" && isAdminSession));
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const logsPageSize = 20;
-  const logsPage = Math.max(1, Number(logPage) || 1);
-  const logsFrom = (logsPage - 1) * logsPageSize;
-
-  const { data: changeLogs, count: changeLogCount } = await supabase
-    .from("match_change_logs")
-    .select("id,action_type,actor_login_id,actor_role,payload,created_at", { count: "exact" })
-    .eq("match_id", matchId)
-    .order("created_at", { ascending: false })
-    .range(logsFrom, logsFrom + logsPageSize - 1)
-    .returns<MatchChangeLog[]>();
-
   const activeGoalId = goalParam || (goals?.[0]?.id ?? "");
   const activeGoal =
     (goals ?? []).find((g) => g.id === activeGoalId) ?? goals?.[0] ?? null;
@@ -1122,45 +1100,6 @@ export default async function MatchDetailPage({
             ) : null}
           </section>
         ) : null}
-
-        <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">변경 이력</h2>
-            <span className="text-xs text-gray-500">총 {changeLogCount ?? 0}건</span>
-          </div>
-          {(changeLogs ?? []).length === 0 ? (
-            <p className="text-sm text-gray-500">기록된 변경 이력이 없습니다.</p>
-          ) : (
-            <ul className="space-y-1 text-xs">
-              {(changeLogs ?? []).map((l) => (
-                <li key={l.id} className="rounded border px-2 py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{l.action_type}</span>
-                    <span className="text-gray-500">{new Date(l.created_at).toLocaleString("ko-KR")}</span>
-                  </div>
-                  <div className="text-gray-600">
-                    {l.actor_login_id ?? "unknown"} ({l.actor_role ?? "-"})
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex items-center justify-between text-xs">
-            <div className="text-gray-500">페이지 {logsPage}</div>
-            <div className="flex items-center gap-3">
-              {logsPage > 1 ? (
-                <Link className="underline" href={`/m/${matchId}?mode=${mode ?? ""}&logPage=${logsPage - 1}`}>
-                  이전
-                </Link>
-              ) : <span className="text-gray-300">이전</span>}
-              {(changeLogCount ?? 0) > logsPage * logsPageSize ? (
-                <Link className="underline" href={`/m/${matchId}?mode=${mode ?? ""}&logPage=${logsPage + 1}`}>
-                  다음
-                </Link>
-              ) : <span className="text-gray-300">다음</span>}
-            </div>
-          </div>
-        </section>
       </section>
     </main>
   );

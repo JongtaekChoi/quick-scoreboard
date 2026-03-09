@@ -87,6 +87,7 @@ export default function AdminShell({
         { href: `/admin/channel/${channelId}/teams`, label: "팀 관리" },
         { href: `/admin/channel/${channelId}/roster`, label: "팀 멤버 관리" },
         { href: `/admin/channel/${channelId}/accounts`, label: "계정 관리" },
+        { href: `/admin/channel/${channelId}/logs`, label: "변경 이력" },
       ]
     : [];
 

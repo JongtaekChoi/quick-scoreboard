@@ -67,6 +67,43 @@ type RosterPlayer = {
 
 type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean };
 
+
+type ChangeActor = { loginId: string | null; role: string | null };
+
+async function getChangeActor(channelSlug: string): Promise<ChangeActor> {
+  const isAdmin = await isAdminAuthorized();
+  if (isAdmin) return { loginId: "admin", role: "admin" };
+  const account = await getAccountInfo(channelSlug);
+  if (!account) return { loginId: null, role: null };
+  return { loginId: account.loginId, role: account.role };
+}
+
+async function logMatchChange(
+  matchId: string,
+  channelSlug: string,
+  actionType: string,
+  payload: Record<string, unknown>,
+) {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const actor = await getChangeActor(channelSlug);
+  const { data: matchRow } = await supabase
+    .from("matches")
+    .select("channel_id")
+    .eq("id", matchId)
+    .maybeSingle<{ channel_id: string | null }>();
+
+  await supabase.from("match_change_logs").insert({
+    match_id: matchId,
+    channel_id: matchRow?.channel_id ?? null,
+    action_type: actionType,
+    actor_login_id: actor.loginId,
+    actor_role: actor.role,
+    payload,
+  });
+}
+
 async function getChannelPermission(
   channelSlug: string,
   channelVersion: number,
@@ -271,6 +308,9 @@ async function addGoal(
     redirect(`/m/${matchId}?mode=edit&err=score_update_failed`);
   }
 
+  await logMatchChange(matchId, channelSlug, "goal_add", { teamSide, minute });
+
+
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
 }
@@ -358,6 +398,7 @@ async function applyPeriodAction(
   }
 
   await supabase.from("matches").update(patch).eq("id", matchId);
+  await logMatchChange(matchId, channelSlug, "period_action", { action, patch });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -375,7 +416,7 @@ async function updateGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
   if (!canMutate) return;
 
   const scorerRaw = String(formData.get("scorer") || "").trim();
@@ -426,6 +467,8 @@ async function updateGoalEvent(
     );
   }
 
+  await logMatchChange(matchId, channelSlug, "goal_update", { goalId, minute, scorer: scorer.name, assist: assist.name });
+
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
 }
@@ -442,7 +485,7 @@ async function deleteGoalEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "add");
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
   if (!canMutate) return;
 
   await supabase
@@ -467,6 +510,8 @@ async function deleteGoalEvent(
       .update({ score_a: nextA, score_b: nextB })
       .eq("id", matchId);
   }
+
+  await logMatchChange(matchId, channelSlug, "goal_delete", { goalId, teamSide });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);

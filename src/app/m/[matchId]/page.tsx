@@ -27,6 +27,12 @@ type Match = {
   started_at: string | null;
   channel_id: string;
   match_group_id: string | null;
+  period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+  first_half_started_at: string | null;
+  first_half_ended_at: string | null;
+  halftime_started_at: string | null;
+  second_half_started_at: string | null;
+  second_half_ended_at: string | null;
 };
 
 type Channel = { id: string; slug: string; edit_session_version: number };
@@ -225,10 +231,11 @@ async function addGoal(
   redirect(`/m/${matchId}?mode=edit`);
 }
 
-async function startMatch(
+async function applyPeriodAction(
   matchId: string,
   channelSlug: string,
   channelVersion: number,
+  action: "start_first" | "end_first" | "start_second" | "end_match" | "resume_previous",
 ) {
   "use server";
 
@@ -238,62 +245,75 @@ async function startMatch(
   const permission = await getChannelPermission(channelSlug, channelVersion);
   if (!permission.canManageMatch) return;
 
-  await supabase
+  const { data: match } = await supabase
     .from("matches")
-    .update({
-      status: "live",
-      started_at: new Date().toISOString(),
-      scheduled_start_at: null,
-    })
-    .eq("id", matchId);
+    .select(
+      "id,period_state,status,started_at,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
+    )
+    .eq("id", matchId)
+    .maybeSingle<{
+      id: string;
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+      status: "scheduled" | "live" | "ended";
+      started_at: string | null;
+      first_half_started_at: string | null;
+      first_half_ended_at: string | null;
+      halftime_started_at: string | null;
+      second_half_started_at: string | null;
+      second_half_ended_at: string | null;
+    }>();
 
-  revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
-}
+  if (!match) return;
 
-async function endMatch(
-  matchId: string,
-  channelSlug: string,
-  channelVersion: number,
-) {
-  "use server";
+  const now = new Date().toISOString();
+  const patch: Record<string, string | null> = {};
 
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return;
+  if (action === "start_first" && match.period_state === "pre") {
+    patch.period_state = "first_half";
+    patch.status = "live";
+    patch.started_at = match.started_at ?? now;
+    patch.first_half_started_at = match.first_half_started_at ?? now;
+    patch.scheduled_start_at = null;
+  }
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canManageMatch) return;
+  if (action === "end_first" && match.period_state === "first_half") {
+    patch.period_state = "halftime";
+    patch.status = "live";
+    patch.first_half_ended_at = now;
+    patch.halftime_started_at = now;
+  }
 
-  await supabase
-    .from("matches")
-    .update({ status: "ended", ended_at: new Date().toISOString() })
-    .eq("id", matchId);
+  if (action === "start_second" && match.period_state === "halftime") {
+    patch.period_state = "second_half";
+    patch.status = "live";
+    patch.second_half_started_at = now;
+  }
 
-  revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
-}
+  if (action === "end_match" && (match.period_state === "second_half" || match.period_state === "first_half" || match.period_state === "halftime")) {
+    patch.period_state = "ended";
+    patch.status = "ended";
+    patch.ended_at = now;
+    patch.second_half_ended_at = now;
+  }
 
-async function changeStartTime(
-  matchId: string,
-  channelSlug: string,
-  channelVersion: number,
-  formData: FormData,
-) {
-  "use server";
+  if (action === "resume_previous") {
+    if (match.period_state === "halftime" && !match.second_half_started_at) {
+      patch.period_state = "first_half";
+      patch.first_half_ended_at = null;
+      patch.halftime_started_at = null;
+      patch.status = "live";
+    } else if (match.period_state === "second_half") {
+      patch.period_state = "halftime";
+      patch.second_half_started_at = null;
+      patch.status = "live";
+    }
+  }
 
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return;
+  if (Object.keys(patch).length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+  }
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
-  if (!permission.canManageMatch) return;
-
-  const minutesAgo = Math.max(0, Number(formData.get("minutes_ago")) || 0);
-  const startedAt = new Date(Date.now() - minutesAgo * 60000).toISOString();
-
-  await supabase
-    .from("matches")
-    .update({ started_at: startedAt })
-    .eq("id", matchId);
+  await supabase.from("matches").update(patch).eq("id", matchId);
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -475,7 +495,7 @@ export default async function MatchDetailPage({
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id",
+      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
     )
     .eq("id", matchId)
     .maybeSingle<Match>();
@@ -662,28 +682,32 @@ export default async function MatchDetailPage({
         channel.edit_session_version,
       )
     : async () => {};
-  const startMatchAction = channel
-    ? startMatch.bind(null, matchId, channel.slug, channel.edit_session_version)
+  const startFirstAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_first")
+    : async () => {};
+  const endFirstAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "end_first")
+    : async () => {};
+  const startSecondAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_second")
     : async () => {};
   const endMatchAction = channel
-    ? endMatch.bind(null, matchId, channel.slug, channel.edit_session_version)
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "end_match")
     : async () => {};
-  const changeStartTimeAction = channel
-    ? changeStartTime.bind(
-        null,
-        matchId,
-        channel.slug,
-        channel.edit_session_version,
-      )
+  const resumePreviousAction = channel
+    ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "resume_previous")
     : async () => {};
 
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const elapsedMinutes = match.started_at
-    ? Math.max(
-        0,
-        Math.floor((now - new Date(match.started_at).getTime()) / 60000),
-      )
+  const activePeriodStart =
+    match.period_state === "first_half"
+      ? match.first_half_started_at
+      : match.period_state === "second_half"
+      ? match.second_half_started_at
+      : null;
+  const elapsedMinutes = activePeriodStart
+    ? Math.max(0, Math.floor((now - new Date(activePeriodStart).getTime()) / 60000))
     : null;
 
   return (
@@ -775,71 +799,33 @@ export default async function MatchDetailPage({
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
             <div className="rounded border bg-gray-50 p-2 space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-700">구간 운영 UI 미리보기 (DB 반영 전)</h3>
-                <span className="text-[11px] text-gray-500">다음 액션 1개 + 되돌리기</span>
+                <h3 className="text-xs font-semibold text-gray-700">구간 운영</h3>
+                <span className="text-[11px] text-gray-500">기본 전/후반 각 15분</span>
               </div>
               <div className="rounded border bg-white p-2 space-y-2">
                 <div className="text-[11px] text-gray-500">
-                  현재 상태: {match.status === "scheduled" ? "대기" : match.status === "live" ? "진행중" : "종료"}
+                  현재 상태: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
+                  {elapsedMinutes !== null ? ` · 경과 ${elapsedMinutes}분` : ""}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
-                    {match.status === "scheduled" ? "전반전 시작" : match.status === "live" ? "구간 종료(휴식)" : "다음 구간 시작"}
-                  </button>
-                  <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
-                    이전 구간 재개
-                  </button>
+                  {match.period_state === "pre" ? (
+                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 시작</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "first_half" ? (
+                    <form action={endFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 종료(휴식)</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "halftime" ? (
+                    <form action={startSecondAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">후반전 시작</PendingSubmitButton></form>
+                  ) : null}
+                  {match.period_state === "second_half" ? (
+                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">경기 종료</PendingSubmitButton></form>
+                  ) : null}
+                  {(match.period_state === "halftime" || match.period_state === "second_half") ? (
+                    <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
+                  ) : null}
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {match.status === "scheduled" ? (
-                <form action={startMatchAction}>
-                  <PendingSubmitButton
-                    className="rounded border px-3 py-2 text-sm"
-                    pendingText="시작중..."
-                  >
-                    경기 시작
-                  </PendingSubmitButton>
-                </form>
-              ) : null}
-              {match.status !== "ended" ? (
-                <form action={endMatchAction}>
-                  <PendingSubmitButton
-                    className="rounded border px-3 py-2 text-sm"
-                    pendingText="종료중..."
-                  >
-                    경기 종료
-                  </PendingSubmitButton>
-                </form>
-              ) : (
-                <p className="text-xs text-gray-500">종료된 경기입니다.</p>
-              )}
-            </div>
-            {match.status !== "ended" ? (
-              <form
-                action={changeStartTimeAction}
-                className="flex items-center gap-2"
-              >
-                <input
-                  className="rounded border px-2 py-1.5 text-sm w-20"
-                  name="minutes_ago"
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  defaultValue={elapsedMinutes ?? ""}
-                />
-                <span className="text-xs text-gray-500">
-                  분 전에 시작한 것으로
-                </span>
-                <PendingSubmitButton
-                  className="rounded border px-3 py-2 text-sm"
-                  pendingText="변경중..."
-                >
-                  시작시간 변경
-                </PendingSubmitButton>
-              </form>
-            ) : null}
           </section>
         ) : null}
 

@@ -42,11 +42,12 @@ async function canManageChannel(channelId: string) {
   return { allowed: ok, channel, managerTeamId: teamId }
 }
 
-function toDateTimeLocalValue(iso: string | null) {
-  if (!iso) return ''
+function toTimeLocalValue(iso: string | null) {
+  if (!iso) return ""
   const d = new Date(iso)
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
-  return kst.toISOString().slice(0, 16)
+  const hh = String(d.getUTCHours()).padStart(2, "0")
+  const mm = String(d.getUTCMinutes()).padStart(2, "0")
+  return `${hh}:${mm}`
 }
 
 async function createMatch(formData: FormData) {
@@ -113,8 +114,12 @@ async function updateMatch(formData: FormData) {
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
   const status = String(formData.get('status') || 'scheduled') as 'scheduled' | 'live' | 'ended'
-  const scheduledStartRaw = String(formData.get('scheduled_start_at') || '').trim()
-  const scheduledStartAt = scheduledStartRaw ? new Date(`${scheduledStartRaw}:00+09:00`).toISOString() : null
+  const groupPlayDate = String(formData.get('group_play_date') || '').trim()
+  const scheduledStartRaw = String(formData.get('scheduled_start_time') || '').trim()
+  const scheduledStartAt =
+    scheduledStartRaw && groupPlayDate
+      ? new Date(`${groupPlayDate}T${scheduledStartRaw}:00+09:00`).toISOString()
+      : null
   if (!channelId || !groupId || !matchId || !teamA || !teamB) return
 
   const supabase = getSupabaseServerClient()
@@ -564,7 +569,8 @@ export default async function AdminGroupPage({
                     <option value="live">live</option>
                     <option value="ended">ended</option>
                   </select>
-                  <input className="rounded border px-2 py-1.5 text-sm" type="datetime-local" name="scheduled_start_at" defaultValue={toDateTimeLocalValue(m.scheduled_start_at)} />
+                  <input type="hidden" name="group_play_date" value={group.play_date} />
+                  <input className="rounded border px-2 py-1.5 text-sm" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
                 </form>
 

@@ -57,6 +57,12 @@ type GoalEvent = {
 
 type Alias = { jersey_no: string | null; player_name: string | null };
 
+type PlayerRatingAgg = {
+  target_player_id: string;
+  avg_rating: number;
+  rating_count: number;
+};
+
 type RosterPlayer = {
   playerId: string;
   jerseyNo: string;
@@ -512,6 +518,81 @@ async function deleteGoalEvent(
   redirect(`/m/${matchId}?mode=edit`);
 }
 
+
+async function submitAnonymousRating(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const account = await getAccountInfo(channelSlug);
+  if (!account || (account.role !== "player" && account.role !== "manager") || !account.teamId) {
+    redirect(`/m/${matchId}?err=rating_forbidden`);
+  }
+
+  const targetPlayerId = String(formData.get("target_player_id") || "").trim();
+  const rating = Number(formData.get("rating") || 0);
+  if (!targetPlayerId || !Number.isFinite(rating) || rating < 1 || rating > 5) {
+    redirect(`/m/${matchId}?err=rating_invalid`);
+  }
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("id,channel_id,team_a_name,team_b_name,status")
+    .eq("id", matchId)
+    .maybeSingle<{ id: string; channel_id: string; team_a_name: string; team_b_name: string; status: "scheduled" | "live" | "ended" }>();
+
+  if (!match || match.status !== "ended") {
+    redirect(`/m/${matchId}?err=rating_closed`);
+  }
+
+  const [{ data: ownTeam }, { data: targetPlayer }] = await Promise.all([
+    supabase.from("teams").select("id,name").eq("id", account.teamId).maybeSingle<{ id: string; name: string }>(),
+    supabase.from("team_players").select("id,channel_id,team_id").eq("id", targetPlayerId).maybeSingle<{ id: string; channel_id: string; team_id: string }>(),
+  ]);
+
+  if (!ownTeam || !targetPlayer || targetPlayer.channel_id !== match.channel_id) {
+    redirect(`/m/${matchId}?err=rating_forbidden`);
+  }
+
+  const { data: teamRows } = await supabase
+    .from("channel_teams_view")
+    .select("id,name")
+    .eq("channel_id", match.channel_id)
+    .in("name", [match.team_a_name, match.team_b_name])
+    .returns<{ id: string; name: string }[]>();
+
+  const matchTeamIds = new Set((teamRows ?? []).map((t) => t.id));
+  if (!matchTeamIds.has(ownTeam.id) || !matchTeamIds.has(targetPlayer.team_id)) {
+    redirect(`/m/${matchId}?err=rating_forbidden`);
+  }
+  if (targetPlayer.team_id === ownTeam.id) {
+    redirect(`/m/${matchId}?err=rating_same_team`);
+  }
+
+  await supabase.from("player_ratings").insert({
+    channel_id: match.channel_id,
+    match_id: match.id,
+    target_player_id: targetPlayer.id,
+    target_team_id: targetPlayer.team_id,
+    rater_team_id: ownTeam.id,
+    rating,
+  });
+
+  await logMatchChange(matchId, channelSlug, "player_rating", {
+    target_player_id: targetPlayer.id,
+    target_team_id: targetPlayer.team_id,
+    rating,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}`);
+}
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
@@ -610,6 +691,8 @@ export default async function MatchDetailPage({
   // 엔트리/게스트 기반 roster 구성
   let rosterA: RosterPlayer[] = [];
   let rosterB: RosterPlayer[] = [];
+  let teamAId: string | undefined;
+  let teamBId: string | undefined;
 
   if (match.match_group_id) {
     const [
@@ -657,8 +740,8 @@ export default async function MatchDetailPage({
         >(),
     ]);
 
-    const teamAId = teamARow?.id;
-    const teamBId = teamBRow?.id;
+    teamAId = teamARow?.id;
+    teamBId = teamBRow?.id;
 
     const buildRoster = (teamId: string | undefined): RosterPlayer[] => {
       if (!teamId) return [];
@@ -720,6 +803,28 @@ export default async function MatchDetailPage({
     .limit(50)
     .returns<Alias[]>();
 
+  const { data: ratingAggRows } = await supabase
+    .from("player_ratings")
+    .select("target_player_id,rating")
+    .eq("match_id", matchId)
+    .returns<{ target_player_id: string; rating: number }[]>();
+
+  const ratingMap = new Map<string, PlayerRatingAgg>();
+  for (const row of ratingAggRows ?? []) {
+    const prev = ratingMap.get(row.target_player_id) ?? {
+      target_player_id: row.target_player_id,
+      avg_rating: 0,
+      rating_count: 0,
+    };
+    const total = prev.avg_rating * prev.rating_count + row.rating;
+    const count = prev.rating_count + 1;
+    ratingMap.set(row.target_player_id, {
+      target_player_id: row.target_player_id,
+      avg_rating: Number((total / count).toFixed(2)),
+      rating_count: count,
+    });
+  }
+
   const permission = channel
     ? await getChannelPermission(channel.slug)
     : { canGoalEdit: false, canManageMatch: false };
@@ -740,6 +845,18 @@ export default async function MatchDetailPage({
       match.period_state === "second_half" ||
       match.period_state === "halftime" ||
       (match.period_state === "ended" && isAdminSession));
+  const canRate =
+    !!accountSession &&
+    (accountSession.role === "player" || accountSession.role === "manager") &&
+    match.status === "ended";
+  const ratingTargetRoster =
+    accountSession?.teamId && accountSession.teamId === teamAId
+      ? rosterB
+      : accountSession?.teamId && accountSession.teamId === teamBId
+      ? rosterA
+      : [];
+  const submitRatingAction =
+    channel ? submitAnonymousRating.bind(null, matchId, channel.slug) : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
   const activeGoalId = goalParam || (goals?.[0]?.id ?? "");
@@ -839,6 +956,8 @@ export default async function MatchDetailPage({
             ) : null}
           </div>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
+          {err === "rating_same_team" ? <p className="text-xs text-red-600">같은 팀 선수는 평점 대상이 아닙니다.</p> : null}
+          {err === "rating_closed" ? <p className="text-xs text-red-600">경기 종료 후에만 평점 입력이 가능합니다.</p> : null}
         </header>
 
         <LiveScoreboard
@@ -885,6 +1004,38 @@ export default async function MatchDetailPage({
             </details>
           </section>
         )}
+
+
+        {canRate ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-700">무기명 평점 입력 (1~5)</h2>
+            {ratingTargetRoster.length === 0 ? (
+              <p className="text-xs text-gray-500">평점 대상 선수가 없습니다. (타팀 선수만 가능)</p>
+            ) : (
+              <ul className="space-y-2">
+                {ratingTargetRoster.map((p) => {
+                  const agg = ratingMap.get(p.playerId)
+                  return (
+                    <li key={`rate-${p.playerId}`} className="rounded border p-2 flex items-center justify-between gap-2">
+                      <div className="text-sm">
+                        #{p.jerseyNo} {p.playerName}
+                        {agg ? <span className="ml-2 text-xs text-gray-500">평균 {agg.avg_rating} ({agg.rating_count})</span> : null}
+                      </div>
+                      <form action={submitRatingAction} className="flex items-center gap-2">
+                        <input type="hidden" name="target_player_id" value={p.playerId} />
+                        <select className="rounded border px-2 py-1 text-xs" name="rating" defaultValue="5">
+                          <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                        </select>
+                        <button className="rounded border px-2 py-1 text-xs" type="submit">평점 저장</button>
+                      </form>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <p className="text-[11px] text-gray-500">입력자는 저장되지 않으며 타팀 선수에게만 점수를 줄 수 있습니다.</p>
+          </section>
+        ) : null}
 
         {isEditMode && canManageMatch ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">

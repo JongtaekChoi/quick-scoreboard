@@ -71,6 +71,48 @@ async function createGroup(formData: FormData) {
   redirect(`/admin/channel/${channelId}`)
 }
 
+async function updateGroupMeta(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}?from=channel&err=forbidden`)
+  }
+
+  const playDate = String(formData.get('play_date') || '').trim()
+  const venue = String(formData.get('venue') || '').trim()
+  const title = String(formData.get('title') || '').trim()
+  const firstKickoff = String(formData.get('first_kickoff_time') || '').trim()
+
+  if (!channelId || !groupId || !playDate) return
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  await supabase
+    .from('match_groups')
+    .update({ play_date: playDate, venue: venue || null, title: title || null })
+    .eq('id', groupId)
+    .eq('channel_id', channelId)
+
+  if (firstKickoff) {
+    const iso = new Date(`${playDate}T${firstKickoff}:00+09:00`).toISOString()
+    await supabase
+      .from('matches')
+      .update({ scheduled_start_at: iso })
+      .eq('match_group_id', groupId)
+      .eq('seq', 1)
+  }
+
+  redirect(`/admin/channel/${channelId}`)
+}
+
 export default async function AdminChannelPage({
   params,
   searchParams,
@@ -149,14 +191,27 @@ export default async function AdminChannelPage({
             <p className="text-sm text-gray-500">경기그룹이 없습니다.</p>
           ) : (
             (groups ?? []).map((g) => (
-              <div key={g.id} className="rounded border p-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="font-medium text-sm">{g.title ?? `${g.play_date} 그룹 ${g.seq}`}</div>
-                  <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
+              <div key={g.id} className="rounded border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-sm">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</div>
+                    <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
+                  </div>
+                  <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
+                    {managerTeamId ? '이 그룹 엔트리 관리' : '이 그룹 경기 관리'}
+                  </Link>
                 </div>
-                <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
-                  {managerTeamId ? '이 그룹 엔트리 관리' : '이 그룹 경기 관리'}
-                </Link>
+                {!managerTeamId ? (
+                  <form action={updateGroupMeta} className="grid md:grid-cols-5 gap-2 items-center">
+                    <input type="hidden" name="channelId" value={channel.id} />
+                    <input type="hidden" name="groupId" value={g.id} />
+                    <input className="rounded border px-2 py-1.5 text-sm" name="play_date" type="date" defaultValue={g.play_date} required />
+                    <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" defaultValue={g.venue ?? ''} />
+                    <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" defaultValue={g.title ?? ''} />
+                    <input className="rounded border px-2 py-1.5 text-sm" name="first_kickoff_time" type="time" placeholder="1경기 시작시간" />
+                    <button className="rounded border px-2 py-1.5 text-xs" type="submit">그룹 정보 수정</button>
+                  </form>
+                ) : null}
               </div>
             ))
           )}

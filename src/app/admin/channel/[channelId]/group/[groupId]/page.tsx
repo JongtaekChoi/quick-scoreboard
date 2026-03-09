@@ -574,27 +574,6 @@ export default async function AdminGroupPage({
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
                 </form>
 
-                <section className="rounded border bg-gray-50 p-2 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-semibold text-gray-700">구간 운영 UI 미리보기 (DB 반영 전)</h3>
-                    <span className="text-[11px] text-gray-500">다음 액션 1개 + 되돌리기</span>
-                  </div>
-                  <div className="rounded border bg-white p-2 space-y-2">
-                    <div className="text-[11px] text-gray-500">
-                      현재 상태: {m.status === 'scheduled' ? '대기' : m.status === 'live' ? '진행중' : '종료'}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
-                        {m.status === 'scheduled' ? '전반전 시작' : m.status === 'live' ? '구간 종료(휴식)' : '다음 구간 시작'}
-                      </button>
-                      <button className="rounded border px-2 py-1 text-xs text-gray-400" type="button" disabled>
-                        이전 구간 재개
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-gray-500">※ 실제 구현 시 직전 상태 되돌리기(1-step undo)로 연결 예정</p>
-                  </div>
-                </section>
-
                 <div className="flex items-center justify-between">
                   <Link className="underline text-xs" href={`/m/${m.id}`}>경기 화면</Link>
                   <form action={deleteMatch}>

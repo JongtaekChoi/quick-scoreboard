@@ -174,6 +174,11 @@ export default async function ChannelPage({
             <Link className="text-xs underline text-gray-600" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
               통계 보기
             </Link>
+            {channel.slug === "sample" ? (
+              <Link className="text-xs underline text-gray-600" href="/c/sample/guide">
+                샘플 사용 가이드
+              </Link>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {accountSession ? (

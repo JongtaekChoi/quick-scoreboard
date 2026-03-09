@@ -6,9 +6,16 @@ type TeamRow = { id: string; name: string }
 
 function isAuthorized(req: Request) {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
   const auth = req.headers.get('authorization') || ''
-  return auth === `Bearer ${secret}`
+  const isVercelCron = req.headers.has('x-vercel-cron')
+
+  // 1) CRON_SECRET 설정 시: Bearer 토큰 일치 또는 Vercel cron 호출 허용
+  if (secret) {
+    return auth === `Bearer ${secret}` || isVercelCron
+  }
+
+  // 2) CRON_SECRET 미설정 시: Vercel cron 헤더가 있을 때만 허용
+  return isVercelCron
 }
 
 export async function GET(req: Request) {

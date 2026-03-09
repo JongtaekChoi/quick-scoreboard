@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import {
-  isEditAuthorized,
   validateManagerAgainstDb,
   getAccountInfo,
 } from "@/lib/channelSession";
@@ -106,7 +105,6 @@ async function logMatchChange(
 
 async function getChannelPermission(
   channelSlug: string,
-  channelVersion: number,
 ): Promise<GoalPermission> {
   const isAdmin = await isAdminAuthorized();
   if (isAdmin) return { canGoalEdit: true, canManageMatch: true };
@@ -129,9 +127,6 @@ async function getChannelPermission(
   if (account?.role === "player") {
     return { canGoalEdit: true, canManageMatch: true };
   }
-
-  const isEditor = await isEditAuthorized(channelSlug, channelVersion);
-  if (isEditor) return { canGoalEdit: true, canManageMatch: false };
 
   return { canGoalEdit: false, canManageMatch: false };
 }
@@ -176,7 +171,7 @@ async function canMutateGoals(
   matchId: string,
   action: "add" | "edit",
 ): Promise<boolean> {
-  const permission = await getChannelPermission(channelSlug, channelVersion);
+  const permission = await getChannelPermission(channelSlug);
   if (!permission.canGoalEdit) return false;
 
   const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
@@ -326,7 +321,7 @@ async function applyPeriodAction(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const permission = await getChannelPermission(channelSlug, channelVersion);
+  const permission = await getChannelPermission(channelSlug);
   if (!permission.canManageMatch) return;
 
   const { data: match } = await supabase
@@ -726,7 +721,7 @@ export default async function MatchDetailPage({
     .returns<Alias[]>();
 
   const permission = channel
-    ? await getChannelPermission(channel.slug, channel.edit_session_version)
+    ? await getChannelPermission(channel.slug)
     : { canGoalEdit: false, canManageMatch: false };
   const canEditThisMatch = channel ? await canAccountEditThisMatch(channel.slug, matchId) : false;
   const canGoalEdit = permission.canGoalEdit && canEditThisMatch;

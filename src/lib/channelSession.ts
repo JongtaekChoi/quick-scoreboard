@@ -4,12 +4,12 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 
 export type ChannelSessionData = {
   loginId: string | null
-  role: 'admin' | 'manager' | 'player' | 'edit-only'
+  role: 'admin' | 'manager' | 'player'
   teamId: string | null
   version: number
   editVersion: number | null
   mustChangePassword: boolean
-  source: 'account' | 'edit'
+  source: 'account'
 }
 
 function cookieName(slug: string) {
@@ -54,18 +54,6 @@ export async function createAccountSession(
   await session.save()
 }
 
-export async function createEditSession(slug: string, editVersion: number) {
-  const session = await getChannelSession(slug)
-  session.loginId = null
-  session.role = 'edit-only'
-  session.teamId = null
-  session.version = 0
-  session.editVersion = editVersion
-  session.mustChangePassword = false
-  session.source = 'edit'
-  await session.save()
-}
-
 export async function destroyChannelSession(slug: string) {
   const session = await getChannelSession(slug)
   session.destroy()
@@ -89,7 +77,6 @@ export async function isEditAuthorized(slug: string, currentEditVersion: number)
   const data = await getSessionData(slug)
   if (!data) return false
   if (data.role === 'admin') return true
-  if (data.role === 'edit-only') return data.editVersion === currentEditVersion
   if (data.role === 'manager' || data.role === 'player') {
     if (data.editVersion === currentEditVersion) return true
   }
@@ -101,17 +88,14 @@ export async function getManagerInfo(slug: string): Promise<{ loginId: string; t
   if (!data) return null
   if (data.role !== 'manager') return null
   if (!data.loginId || !data.teamId) return null
-  if (data.source !== 'account') return null
   return { loginId: data.loginId, teamId: data.teamId, version: data.version }
 }
 
 export async function getAccountInfo(slug: string): Promise<{ loginId: string; role: 'admin' | 'manager' | 'player'; teamId: string | null; version: number; mustChangePassword: boolean } | null> {
   const data = await getSessionData(slug)
   if (!data) return null
-  if (data.source !== 'account') return null
   if (!data.loginId) return null
-  if (data.role === 'edit-only') return null
-  return { loginId: data.loginId, role: data.role as 'admin' | 'manager' | 'player', teamId: data.teamId, version: data.version, mustChangePassword: !!data.mustChangePassword }
+  return { loginId: data.loginId, role: data.role, teamId: data.teamId, version: data.version, mustChangePassword: !!data.mustChangePassword }
 }
 
 export async function validateManagerAgainstDb(

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
-import { isEditAuthorized, getManagerInfo, getAccountInfo } from "@/lib/channelSession";
+import { getManagerInfo, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GroupList from "./GroupList";
@@ -116,10 +116,6 @@ export default async function ChannelPage({
 
   const isAdmin = await isAdminAuthorized();
   const accountSession = await getAccountInfo(channel.slug);
-  const canEdit = await isEditAuthorized(
-    channel.slug,
-    channel.edit_session_version,
-  );
   const managerInfo = await getManagerInfo(channel.slug);
   const managerTeamId = managerInfo?.teamId ?? null;
   const isChannelAdmin = accountSession?.role === "admin";

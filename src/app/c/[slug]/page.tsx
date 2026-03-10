@@ -65,19 +65,10 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{
-    date?: string;
-    err?: string;
-    edit?: string;
-    order?: string;
-    mgr?: string;
-    acc?: string;
-    pw?: string;
-  }>;
+  searchParams: Promise<{ acc?: string; pw?: string }>;
 }) {
   const { slug } = await params;
-  const { date, order, acc, pw } = await searchParams;
-  const matchOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
+  const { acc, pw } = await searchParams;
 
   const supabase = getSupabaseServerClient();
 
@@ -124,18 +115,14 @@ export default async function ChannelPage({
 
   await autoStartDueMatches(supabase);
 
-  let groupQuery = supabase
+  const { data: groups } = await supabase
     .from("match_groups")
     .select("id,channel_id,play_date,venue,title,seq")
     .eq("channel_id", channel.id)
     .order("play_date", { ascending: false })
-    .order("seq", { ascending: true });
+    .order("seq", { ascending: true })
+    .returns<MatchGroup[]>();
 
-  if (date) {
-    groupQuery = groupQuery.eq("play_date", date);
-  }
-
-  const { data: groups } = await groupQuery.returns<MatchGroup[]>();
   const groupIds = (groups ?? []).map((g) => g.id);
 
   const { data: matches } = groupIds.length
@@ -145,7 +132,7 @@ export default async function ChannelPage({
           "id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at",
         )
         .in("match_group_id", groupIds)
-        .order("seq", { ascending: matchOrder === "asc" })
+        .order("seq", { ascending: true })
         .returns<Match[]>()
     : { data: [] as Match[] };
 
@@ -159,11 +146,11 @@ export default async function ChannelPage({
   const matchesByGroupObj = Object.fromEntries(matchesByGroup.entries());
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
+    <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6 page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
-        <header className="space-y-2">
+        <header className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-2xl font-semibold">{channel.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{channel.name}</h1>
             <div className="flex items-center gap-2">
               <ShareButton
                 url={channelUrl}
@@ -175,13 +162,16 @@ export default async function ChannelPage({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
-            <Link className="text-xs underline text-gray-600" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-gray-600">경기목록 (날짜 기준)</p>
+            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
               통계 보기
             </Link>
+            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/calendar`}>
+              달력 보기
+            </Link>
             {channel.slug === "sample" ? (
-              <Link className="text-xs rounded border border-amber-300 bg-amber-50 px-2 py-1 font-medium text-amber-800" href="/c/sample/guide">
+              <Link className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100" href="/c/sample/guide">
                 샘플 사용 가이드
               </Link>
             ) : null}
@@ -230,42 +220,10 @@ export default async function ChannelPage({
               </Link>
             ) : null}
           </div>
-          <form className="flex flex-wrap items-center gap-2" method="get">
-            <label className="text-xs text-gray-600">날짜</label>
-            <input
-              className="rounded border px-2 py-1.5 text-sm"
-              type="date"
-              name="date"
-              defaultValue={date ?? ""}
-            />
-            <label className="text-xs text-gray-600">정렬</label>
-            <select
-              className="rounded border px-2 py-1.5 text-sm"
-              name="order"
-              defaultValue={matchOrder}
-            >
-              <option value="asc">경기순 1→N</option>
-              <option value="desc">경기순 N→1</option>
-            </select>
-            <button
-              className="rounded border px-3 py-1.5 text-sm"
-              type="submit"
-            >
-              적용
-            </button>
-            {date || matchOrder !== "asc" ? (
-              <Link
-                className="text-xs underline text-gray-600"
-                href={`/c/${encodeURIComponent(channel.slug)}`}
-              >
-                초기화
-              </Link>
-            ) : null}
-          </form>
         </header>
 
         {(groups ?? []).length === 0 ? (
-          <section className="rounded border p-4 text-sm text-gray-500">
+          <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">
             표시할 경기그룹이 없습니다.
           </section>
         ) : (
@@ -277,6 +235,7 @@ export default async function ChannelPage({
           />
         )}
       </section>
+
     </main>
   );
 }

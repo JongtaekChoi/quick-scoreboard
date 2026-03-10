@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type Match = {
@@ -16,6 +16,12 @@ type Match = {
   scheduled_start_at: string | null
 }
 
+function statusLabel(status: Match['status']) {
+  if (status === 'live') return { text: '진행중', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  if (status === 'ended') return { text: '종료', cls: 'bg-gray-100 text-gray-700 border-gray-200' }
+  return { text: '예정', cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+}
+
 export default function GroupList({
   groups,
   matchesByGroup,
@@ -27,64 +33,112 @@ export default function GroupList({
   channelId: string
   showManagerEntryButton: boolean
 }) {
-  const initialOpen = useMemo(() => new Set(groups.length ? [groups[0].id] : []), [groups])
-  const [openSet, setOpenSet] = useState<Set<string>>(initialOpen)
+  const groupsByDate = groups.reduce<Record<string, MatchGroup[]>>((acc, g) => {
+    if (!acc[g.play_date]) acc[g.play_date] = []
+    acc[g.play_date].push(g)
+    return acc
+  }, {})
 
-  function toggle(id: string) {
-    setOpenSet((prev) => {
+  const dateKeys = Object.keys(groupsByDate).sort((a, b) => b.localeCompare(a))
+  const today = new Date()
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const initialOpenDate = useMemo(() => {
+    if (dateKeys.includes(todayKey)) return todayKey
+    return dateKeys[0] ?? null
+  }, [dateKeys, todayKey])
+
+  const [openDateSet, setOpenDateSet] = useState<Set<string>>(() =>
+    new Set(initialOpenDate ? [initialOpenDate] : []),
+  )
+
+  useEffect(() => {
+    const el = document.getElementById(`date-${todayKey}`)
+    if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [todayKey])
+
+  function toggleDate(dateKey: string) {
+    setOpenDateSet((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(dateKey)) next.delete(dateKey)
+      else next.add(dateKey)
       return next
     })
   }
 
   return (
     <div className="space-y-3">
-      {groups.map((g) => {
-        const list = matchesByGroup[g.id] ?? []
-        const open = openSet.has(g.id)
+      {dateKeys.map((dateKey) => {
+        const dayGroups = groupsByDate[dateKey] ?? []
+        const totalMatches = dayGroups.reduce((sum, g) => sum + (matchesByGroup[g.id]?.length ?? 0), 0)
+        const open = openDateSet.has(dateKey)
+
         return (
-          <section key={g.id} className="rounded border p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="flex-1 flex items-center justify-between gap-2 text-left"
-                onClick={() => toggle(g.id)}
-              >
-                <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
-                <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
-              </button>
-              {showManagerEntryButton ? (
-                <Link className="text-xs underline shrink-0" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
-                  내 팀 엔트리 관리
-                </Link>
-              ) : null}
-            </div>
+          <section key={dateKey} id={`date-${dateKey}`} className="rounded-2xl border bg-white p-3 shadow-sm space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 text-left"
+              onClick={() => toggleDate(dateKey)}
+            >
+              <h2 className="text-sm font-semibold text-gray-800">{dateKey}</h2>
+              <span className="text-xs text-gray-500">{open ? '▼' : '▶'} {totalMatches}경기</span>
+            </button>
 
             {open ? (
-              list.length === 0 ? (
-                <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {list.map((m) => (
-                    <li key={m.id} className="rounded border px-3 py-2 bg-white">
-                      <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
-                        <div className="text-sm">
-                          <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                          <div className="text-xs text-gray-500">상태: {m.status}</div>
-                          {m.status === 'scheduled' && m.scheduled_start_at ? (
-                            <div className="text-xs text-blue-700">
-                              {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작 예정
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )
+              <div className="space-y-2">
+                {dayGroups.map((g) => {
+                  const list = matchesByGroup[g.id] ?? []
+                  return (
+                    <section key={g.id} className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold">{g.title ?? g.venue ?? '경기'}</h3>
+                        {showManagerEntryButton ? (
+                          <Link className="shrink-0 rounded-full border px-2 py-1 text-xs text-gray-700" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
+                            내 팀 엔트리
+                          </Link>
+                        ) : null}
+                      </div>
+
+                      {list.length === 0 ? (
+                        <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {list.map((m) => {
+                            const badge = statusLabel(m.status)
+                            return (
+                              <li key={m.id} className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0 flex-1 text-sm">
+                                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 font-medium leading-tight">
+                                      <div className="text-right break-words">{m.team_a_name}</div>
+                                      <div className="px-1 text-[11px] uppercase tracking-[0.12em] text-gray-400">vs</div>
+                                      <div className="break-words">{m.team_b_name}</div>
+                                    </div>
+                                    <div className="mt-1 flex items-center gap-2 text-xs">
+                                      <span className={`rounded-full border px-2 py-0.5 ${badge.cls}`}>{badge.text}</span>
+                                      {m.status === 'scheduled' && m.scheduled_start_at ? (
+                                        <span className="text-blue-700">
+                                          {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                        </span>
+                                      ) : null}
+                                      {g.venue ? <span className="text-gray-500">· {g.venue}</span> : null}
+                                    </div>
+                                  </div>
+                                  <div className="w-16 shrink-0 text-right text-lg font-semibold tabular-nums whitespace-nowrap">
+                                    {m.score_a}
+                                    <span className="px-1 text-gray-400">:</span>
+                                    {m.score_b}
+                                  </div>
+                                </Link>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
             ) : null}
           </section>
         )

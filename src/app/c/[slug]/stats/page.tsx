@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import ExpandableRankingList from "./ExpandableRankingList";
 
 type Channel = { id: string; name: string; slug: string };
 type Match = {
@@ -281,35 +282,9 @@ export default async function StatsPage({
             {scorers.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
-              <>
-                <ul className="space-y-1 text-sm">
-                  {scorers.slice(0, 5).map((s, i) => (
-                    <li key={`${s.name}-${i}`} className="flex justify-between border-b last:border-0 py-1">
-                      <span>
-                        {i + 1}. {s.name}
-                        <span className="text-xs text-gray-500"> {s.team !== "-" ? `(${s.team}${s.jersey ? ` #${s.jersey}` : ""})` : ""}</span>
-                      </span>
-                      <span className="font-medium">{s.goals}</span>
-                    </li>
-                  ))}
-                </ul>
-                {scorers.length > 5 ? (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-gray-600 underline">더보기</summary>
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {scorers.slice(5).map((s, i) => (
-                        <li key={`${s.name}-more-${i}`} className="flex justify-between border-b last:border-0 py-1">
-                          <span>
-                            {i + 6}. {s.name}
-                            <span className="text-xs text-gray-500"> {s.team !== "-" ? `(${s.team}${s.jersey ? ` #${s.jersey}` : ""})` : ""}</span>
-                          </span>
-                          <span className="font-medium">{s.goals}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </>
+              <ExpandableRankingList
+                items={scorers.map((s) => ({ name: s.name, team: s.team, jersey: s.jersey, value: s.goals }))}
+              />
             )}
           </section>
 
@@ -318,35 +293,9 @@ export default async function StatsPage({
             {assisters.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
-              <>
-                <ul className="space-y-1 text-sm">
-                  {assisters.slice(0, 5).map((a, i) => (
-                    <li key={`${a.name}-${i}`} className="flex justify-between border-b last:border-0 py-1">
-                      <span>
-                        {i + 1}. {a.name}
-                        <span className="text-xs text-gray-500"> {a.team !== "-" ? `(${a.team}${a.jersey ? ` #${a.jersey}` : ""})` : ""}</span>
-                      </span>
-                      <span className="font-medium">{a.assists}</span>
-                    </li>
-                  ))}
-                </ul>
-                {assisters.length > 5 ? (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-gray-600 underline">더보기</summary>
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {assisters.slice(5).map((a, i) => (
-                        <li key={`${a.name}-more-${i}`} className="flex justify-between border-b last:border-0 py-1">
-                          <span>
-                            {i + 6}. {a.name}
-                            <span className="text-xs text-gray-500"> {a.team !== "-" ? `(${a.team}${a.jersey ? ` #${a.jersey}` : ""})` : ""}</span>
-                          </span>
-                          <span className="font-medium">{a.assists}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </>
+              <ExpandableRankingList
+                items={assisters.map((a) => ({ name: a.name, team: a.team, jersey: a.jersey, value: a.assists }))}
+              />
             )}
           </section>
 

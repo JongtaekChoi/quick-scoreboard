@@ -79,14 +79,15 @@ export default function GroupList({
                       <li key={m.id} className="rounded-xl border bg-white px-3 py-2">
                         <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
                           <div className="text-sm">
-                            <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
+                            <div className="font-medium">{m.team_a_name} vs {m.team_b_name}</div>
                             <div className="mt-1 flex items-center gap-2 text-xs">
                               <span className={`rounded-full border px-2 py-0.5 ${badge.cls}`}>{badge.text}</span>
                               {m.status === 'scheduled' && m.scheduled_start_at ? (
                                 <span className="text-blue-700">
-                                  {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작
+                                  {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                               ) : null}
+                              {g.venue ? <span className="text-gray-500">· {g.venue}</span> : null}
                             </div>
                           </div>
                           <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>

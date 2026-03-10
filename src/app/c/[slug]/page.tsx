@@ -230,7 +230,10 @@ export default async function ChannelPage({
               </Link>
             ) : null}
           </div>
-          <form className="flex flex-wrap items-center gap-2 rounded-xl border bg-gray-50 p-2" method="get">
+        </header>
+
+        <section className="rounded-2xl border bg-white p-3 shadow-sm">
+          <form className="flex flex-wrap items-center gap-2" method="get">
             <label className="text-xs text-gray-600">날짜</label>
             <input
               className="rounded border px-2 py-1.5 text-sm"
@@ -262,7 +265,7 @@ export default async function ChannelPage({
               </Link>
             ) : null}
           </form>
-        </header>
+        </section>
 
         {(groups ?? []).length === 0 ? (
           <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">

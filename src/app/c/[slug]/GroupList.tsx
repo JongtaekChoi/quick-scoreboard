@@ -109,9 +109,9 @@ export default function GroupList({
                               <li key={m.id} className="rounded-xl border border-gray-200 bg-white px-3 py-2">
                                 <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
                                   <div className="min-w-0 flex-1 text-sm">
-                                    <div className="font-medium leading-tight">
-                                      <div className="truncate">{m.team_a_name}</div>
-                                      <div className="py-0.5 text-[11px] uppercase tracking-[0.12em] text-gray-400">vs</div>
+                                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 font-medium leading-tight">
+                                      <div className="truncate text-right">{m.team_a_name}</div>
+                                      <div className="px-1 text-[11px] uppercase tracking-[0.12em] text-gray-400">vs</div>
                                       <div className="truncate">{m.team_b_name}</div>
                                     </div>
                                     <div className="mt-1 flex items-center gap-2 text-xs">

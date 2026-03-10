@@ -7,6 +7,7 @@ import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
 import LoginModal from "./LoginModal";
+import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = {
   id: string;
@@ -149,12 +150,15 @@ export default async function ChannelPage({
   const { data: teams } = teamIds.length
     ? await supabase
         .from("teams")
-        .select("id,name")
+        .select("id,name,color_hex")
         .in("id", teamIds)
-        .returns<{ id: string; name: string }[]>()
-    : { data: [] as { id: string; name: string }[] };
+        .returns<{ id: string; name: string; color_hex: string | null }[]>()
+    : { data: [] as { id: string; name: string; color_hex: string | null }[] };
 
   const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const teamColorById = Object.fromEntries(
+    (teams ?? []).map((t) => [t.id, resolveTeamColor({ teamId: t.id, teamName: t.name, colorHex: t.color_hex })]),
+  );
   const normalizedMatches = (matches ?? []).map((m) => ({
     ...m,
     team_a_name: m.team_a_id ? (teamNameById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name,
@@ -255,6 +259,7 @@ export default async function ChannelPage({
           <GroupList
             groups={groups ?? []}
             matchesByGroup={matchesByGroupObj}
+            teamColorById={teamColorById}
             channelId={channel.id}
             showManagerEntryButton={!!managerTeamId}
           />

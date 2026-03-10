@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import ExpandableRankingList from "./ExpandableRankingList";
+import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = { id: string; name: string; slug: string };
 type Match = {
@@ -23,7 +24,7 @@ type Goal = {
 };
 type RatingRow = { target_player_id: string; rating: number };
 type PlayerRow = { id: string; player_name: string; team_id: string; jersey_no: string | null };
-type TeamRow = { id: string; name: string };
+type TeamRow = { id: string; name: string; color_hex: string | null };
 
 type TeamStat = {
   key: string;
@@ -94,12 +95,15 @@ export default async function StatsPage({
 
   const { data: teams } = await supabase
     .from("channel_teams_view")
-    .select("id,name")
+    .select("id,name,color_hex")
     .eq("channel_id", channel.id)
     .returns<TeamRow[]>();
 
   const teamMap = new Map<string, TeamStat>();
   const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const teamColorById = new Map(
+    (teams ?? []).map((t) => [t.id, resolveTeamColor({ teamId: t.id, teamName: t.name, colorHex: t.color_hex })]),
+  );
   const getTeam = (teamId: string | null, fallbackName: string) => {
     const key = teamId ?? `name:${fallbackName}`;
     const found = teamMap.get(key);
@@ -259,7 +263,15 @@ export default async function StatsPage({
                   {teamStats.map((t, i) => (
                     <tr key={t.key} className="border-b last:border-0">
                       <td className="py-1 pr-2">{i + 1}</td>
-                      <td className="py-1 pr-2">{t.team}</td>
+                      <td className="py-1 pr-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10"
+                            style={{ backgroundColor: t.key.startsWith('name:') ? resolveTeamColor({ teamName: t.team }) : (teamColorById.get(t.key) ?? '#D1D5DB') }}
+                          />
+                          <span>{t.team}</span>
+                        </span>
+                      </td>
                       <td className="py-1 pr-2">{t.played}</td>
                       <td className="py-1 pr-2">{t.win}</td>
                       <td className="py-1 pr-2">{t.draw}</td>

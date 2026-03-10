@@ -3,7 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 
 type Channel = { id: string; name: string; slug: string };
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null };
-type Match = { id: string; match_group_id: string | null; team_a_name: string; team_b_name: string; status: "scheduled" | "live" | "ended"; scheduled_start_at: string | null };
+type Match = { id: string; match_group_id: string | null; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; status: "scheduled" | "live" | "ended"; scheduled_start_at: string | null };
 
 type DateStats = { total: number; scheduled: number; ended: number };
 
@@ -75,10 +75,33 @@ export default async function ChannelCalendarPage({
   const { data: matches } = groupIds.length
     ? await supabase
         .from("matches")
-        .select("id,match_group_id,team_a_name,team_b_name,status,scheduled_start_at")
+        .select("id,match_group_id,team_a_id,team_b_id,team_a_name,team_b_name,status,scheduled_start_at")
         .in("match_group_id", groupIds)
         .returns<Match[]>()
     : { data: [] as Match[] };
+
+  const teamIds = Array.from(
+    new Set(
+      (matches ?? [])
+        .flatMap((m) => [m.team_a_id, m.team_b_id])
+        .filter((v): v is string => Boolean(v)),
+    ),
+  );
+
+  const { data: teams } = teamIds.length
+    ? await supabase
+        .from("teams")
+        .select("id,name")
+        .in("id", teamIds)
+        .returns<{ id: string; name: string }[]>()
+    : { data: [] as { id: string; name: string }[] };
+
+  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const normalizedMatches = (matches ?? []).map((m) => ({
+    ...m,
+    team_a_name: m.team_a_id ? (teamNameById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name,
+    team_b_name: m.team_b_id ? (teamNameById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name,
+  }));
 
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
   const statsByDate = new Map<string, DateStats>();
@@ -89,7 +112,7 @@ export default async function ChannelCalendarPage({
     }
   }
 
-  for (const m of matches ?? []) {
+  for (const m of normalizedMatches) {
     if (!m.match_group_id) continue;
     const g = groupById.get(m.match_group_id);
     if (!g) continue;
@@ -114,7 +137,7 @@ export default async function ChannelCalendarPage({
     .sort((a, b) => (a.venue ?? "").localeCompare(b.venue ?? ""));
 
   const matchesByGroup = new Map<string, Match[]>();
-  for (const m of matches ?? []) {
+  for (const m of normalizedMatches) {
     if (!m.match_group_id) continue;
     const arr = matchesByGroup.get(m.match_group_id) ?? [];
     arr.push(m);

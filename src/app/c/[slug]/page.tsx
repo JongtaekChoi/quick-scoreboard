@@ -6,6 +6,7 @@ import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
+import LoginModal from "./LoginModal";
 
 type Channel = {
   id: string;
@@ -163,11 +164,16 @@ export default async function ChannelPage({
         <header className="space-y-2">
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-2xl font-semibold">{channel.name}</h1>
-            <ShareButton
-              url={channelUrl}
-              title={`${channel.name} 경기목록`}
-              className="rounded border px-2 py-1 text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <ShareButton
+                url={channelUrl}
+                title={`${channel.name} 경기목록`}
+                className="rounded border px-2 py-1 text-xs"
+              />
+              {!accountSession ? (
+                <LoginModal slug={channel.slug} accError={acc === "password"} />
+              ) : null}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
@@ -208,32 +214,6 @@ export default async function ChannelPage({
                   </button>
                 </form>
               </>
-            ) : (
-              <form
-                action={`/c/${encodeURIComponent(channel.slug)}/login`}
-                method="post"
-                className="flex items-center gap-2"
-              >
-                <input
-                  className="rounded border px-2 py-1"
-                  name="login_id"
-                  placeholder="계정 ID"
-                  required
-                />
-                <input
-                  className="rounded border px-2 py-1"
-                  type="password"
-                  name="password"
-                  placeholder="비밀번호"
-                  required
-                />
-                <button className="rounded border px-2 py-1" type="submit">
-                  로그인
-                </button>
-              </form>
-            )}
-            {acc === "password" ? (
-              <span className="text-red-600">계정 정보가 올바르지 않습니다.</span>
             ) : null}
             {acc === "1" ? (
               <span className="text-green-700">로그인되었습니다.</span>

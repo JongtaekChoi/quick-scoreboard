@@ -44,7 +44,8 @@ export default function GroupList({
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const initialOpenDate = useMemo(() => {
-    if (dateKeys.includes(todayKey)) return todayKey
+    const nearestUpcoming = [...dateKeys].sort((a, b) => a.localeCompare(b)).find((d) => d >= todayKey)
+    if (nearestUpcoming) return nearestUpcoming
     return dateKeys[0] ?? null
   }, [dateKeys, todayKey])
 
@@ -53,9 +54,10 @@ export default function GroupList({
   )
 
   useEffect(() => {
-    const el = document.getElementById(`date-${todayKey}`)
+    if (!initialOpenDate) return
+    const el = document.getElementById(`date-${initialOpenDate}`)
     if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [todayKey])
+  }, [initialOpenDate])
 
   function toggleDate(dateKey: string) {
     setOpenDateSet((prev) => {

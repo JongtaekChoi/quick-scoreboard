@@ -2,6 +2,15 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 type Channel = { id: string; name: string; slug: string; is_public_view: boolean };
+type MatchGroup = { id: string; channel_id: string; play_date: string };
+type Match = {
+  id: string;
+  match_group_id: string | null;
+  team_a_name: string;
+  team_b_name: string;
+  scheduled_start_at: string | null;
+  status: "scheduled" | "live" | "ended";
+};
 
 export default async function Home() {
   const supabase = getSupabaseServerClient();
@@ -16,6 +25,37 @@ export default async function Home() {
     : { data: [] as Channel[] };
 
   const publicChannels = channels ?? [];
+
+  const channelById = new Map(publicChannels.map((c) => [c.id, c]));
+
+  const { data: groups } = supabase
+    ? await supabase
+        .from("match_groups")
+        .select("id,channel_id,play_date")
+        .in("channel_id", publicChannels.map((c) => c.id))
+        .returns<MatchGroup[]>()
+    : { data: [] as MatchGroup[] };
+
+  const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
+  const groupIds = (groups ?? []).map((g) => g.id);
+
+  const { data: upcoming } = supabase && groupIds.length
+    ? await supabase
+        .from("matches")
+        .select("id,match_group_id,team_a_name,team_b_name,scheduled_start_at,status")
+        .in("match_group_id", groupIds)
+        .eq("status", "scheduled")
+        .not("scheduled_start_at", "is", null)
+        .order("scheduled_start_at", { ascending: true })
+        .limit(2)
+        .returns<Match[]>()
+    : { data: [] as Match[] };
+
+  const nextMatches = (upcoming ?? []).map((m) => {
+    const group = m.match_group_id ? groupById.get(m.match_group_id) : undefined;
+    const channel = group ? channelById.get(group.channel_id) : undefined;
+    return { match: m, group, channel };
+  });
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6">
@@ -43,13 +83,34 @@ export default async function Home() {
           </article>
 
           <article className="rounded-2xl border bg-white p-4 shadow-sm space-y-2">
-            <h2 className="text-base font-semibold">오늘 할 일</h2>
-            <p className="text-xs text-gray-500">가장 많이 쓰는 운영 흐름</p>
-            <ul className="space-y-1 text-sm text-gray-700">
-              <li>• 경기 일정 확인</li>
-              <li>• 경기 진행 중 점수 입력</li>
-              <li>• 종료 후 순위/통계 확인</li>
-            </ul>
+            <h2 className="text-base font-semibold">다음 경기</h2>
+            <p className="text-xs text-gray-500">가장 가까운 예정 경기</p>
+            {nextMatches.length === 0 ? (
+              <p className="text-sm text-gray-500">예정된 경기가 없습니다.</p>
+            ) : (
+              <ul className="space-y-2 pt-1">
+                {nextMatches.map(({ match, channel }, idx) => (
+                  <li key={match.id} className="rounded-xl border bg-gray-50 px-3 py-2">
+                    <div className="text-xs text-gray-500">{idx === 0 ? "가장 가까운 경기" : "다음 경기"}</div>
+                    <div className="mt-0.5 text-sm font-medium">{match.team_a_name} vs {match.team_b_name}</div>
+                    <div className="mt-0.5 text-xs text-gray-600">
+                      {new Date(match.scheduled_start_at as string).toLocaleString("ko-KR", {
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      })}
+                    </div>
+                    {channel ? (
+                      <Link href={`/c/${encodeURIComponent(channel.slug)}`} className="mt-1 inline-block text-xs underline text-gray-700">
+                        {channel.name}로 이동
+                      </Link>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </section>
 

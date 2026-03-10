@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import ExpandableRankingList from "./ExpandableRankingList";
 
 type Channel = { id: string; name: string; slug: string };
 type Match = {
@@ -14,12 +15,14 @@ type Match = {
 };
 type Goal = {
   match_id: string;
+  scorer_player_id: string | null;
+  assist_player_id: string | null;
   scorer_name: string | null;
   assist_name: string | null;
   deleted_at: string | null;
 };
 type RatingRow = { target_player_id: string; rating: number };
-type PlayerRow = { id: string; player_name: string; team_id: string };
+type PlayerRow = { id: string; player_name: string; team_id: string; jersey_no: string | null };
 type TeamRow = { id: string; name: string };
 
 type TeamStat = {
@@ -69,7 +72,7 @@ export default async function StatsPage({
   const { data: goals } = matchIds.length
     ? await supabase
         .from("goal_events")
-        .select("match_id,scorer_name,assist_name,deleted_at")
+        .select("match_id,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
         .in("match_id", matchIds)
         .is("deleted_at", null)
         .returns<Goal[]>()
@@ -85,7 +88,7 @@ export default async function StatsPage({
 
   const { data: players } = await supabase
     .from("team_players")
-    .select("id,player_name,team_id")
+    .select("id,player_name,team_id,jersey_no")
     .eq("channel_id", channel.id)
     .returns<PlayerRow[]>();
 
@@ -148,27 +151,51 @@ export default async function StatsPage({
     .map((t) => ({ ...t, gd: t.gf - t.ga }))
     .sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team));
 
-  const scorerMap = new Map<string, number>();
-  const assistMap = new Map<string, number>();
+  const playerById = new Map((players ?? []).map((p) => [p.id, p]));
+
+  const scorerMap = new Map<string, { name: string; team: string; jersey: string | null; goals: number }>();
+  const assistMap = new Map<string, { name: string; team: string; jersey: string | null; assists: number }>();
 
   for (const g of goals ?? []) {
-    if (g.scorer_name) {
-      scorerMap.set(g.scorer_name, (scorerMap.get(g.scorer_name) ?? 0) + 1);
+    if (g.scorer_player_id) {
+      const p = playerById.get(g.scorer_player_id);
+      const key = `p:${g.scorer_player_id}`;
+      const prev = scorerMap.get(key) ?? {
+        name: p?.player_name ?? g.scorer_name ?? "-",
+        team: p ? (teamNameById.get(p.team_id) ?? "-") : "-",
+        jersey: p?.jersey_no ?? null,
+        goals: 0,
+      };
+      scorerMap.set(key, { ...prev, goals: prev.goals + 1 });
+    } else if (g.scorer_name) {
+      const key = `n:${g.scorer_name}`;
+      const prev = scorerMap.get(key) ?? { name: g.scorer_name, team: "-", jersey: null, goals: 0 };
+      scorerMap.set(key, { ...prev, goals: prev.goals + 1 });
     }
-    if (g.assist_name) {
-      assistMap.set(g.assist_name, (assistMap.get(g.assist_name) ?? 0) + 1);
+
+    if (g.assist_player_id) {
+      const p = playerById.get(g.assist_player_id);
+      const key = `p:${g.assist_player_id}`;
+      const prev = assistMap.get(key) ?? {
+        name: p?.player_name ?? g.assist_name ?? "-",
+        team: p ? (teamNameById.get(p.team_id) ?? "-") : "-",
+        jersey: p?.jersey_no ?? null,
+        assists: 0,
+      };
+      assistMap.set(key, { ...prev, assists: prev.assists + 1 });
+    } else if (g.assist_name) {
+      const key = `n:${g.assist_name}`;
+      const prev = assistMap.get(key) ?? { name: g.assist_name, team: "-", jersey: null, assists: 0 };
+      assistMap.set(key, { ...prev, assists: prev.assists + 1 });
     }
   }
 
-  const scorers = [...scorerMap.entries()]
-    .map(([name, goals]) => ({ name, goals }))
+  const scorers = [...scorerMap.values()]
     .sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
 
-  const assisters = [...assistMap.entries()]
-    .map(([name, assists]) => ({ name, assists }))
+  const assisters = [...assistMap.values()]
     .sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name));
 
-  const playerById = new Map((players ?? []).map((p) => [p.id, p]));
   const ratingAgg = new Map<string, { player: string; team: string; count: number; avg: number }>();
 
   for (const r of ratings ?? []) {
@@ -255,14 +282,9 @@ export default async function StatsPage({
             {scorers.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
-              <ul className="space-y-1 text-sm">
-                {scorers.map((s, i) => (
-                  <li key={s.name} className="flex justify-between border-b last:border-0 py-1">
-                    <span>{i + 1}. {s.name}</span>
-                    <span className="font-medium">{s.goals}</span>
-                  </li>
-                ))}
-              </ul>
+              <ExpandableRankingList
+                items={scorers.map((s) => ({ name: s.name, team: s.team, jersey: s.jersey, value: s.goals }))}
+              />
             )}
           </section>
 
@@ -271,14 +293,9 @@ export default async function StatsPage({
             {assisters.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
-              <ul className="space-y-1 text-sm">
-                {assisters.map((a, i) => (
-                  <li key={a.name} className="flex justify-between border-b last:border-0 py-1">
-                    <span>{i + 1}. {a.name}</span>
-                    <span className="font-medium">{a.assists}</span>
-                  </li>
-                ))}
-              </ul>
+              <ExpandableRankingList
+                items={assisters.map((a) => ({ name: a.name, team: a.team, jersey: a.jersey, value: a.assists }))}
+              />
             )}
           </section>
 

@@ -6,6 +6,8 @@ type MatchGroup = { id: string; channel_id: string; play_date: string };
 type Match = {
   id: string;
   match_group_id: string | null;
+  team_a_id: string | null;
+  team_b_id: string | null;
   team_a_name: string;
   team_b_name: string;
   scheduled_start_at: string | null;
@@ -42,7 +44,7 @@ export default async function Home() {
   const { data: upcoming } = supabase && groupIds.length
     ? await supabase
         .from("matches")
-        .select("id,match_group_id,team_a_name,team_b_name,scheduled_start_at,status")
+        .select("id,match_group_id,team_a_id,team_b_id,team_a_name,team_b_name,scheduled_start_at,status")
         .in("match_group_id", groupIds)
         .eq("status", "scheduled")
         .not("scheduled_start_at", "is", null)
@@ -51,10 +53,33 @@ export default async function Home() {
         .returns<Match[]>()
     : { data: [] as Match[] };
 
+  const teamIds = Array.from(
+    new Set(
+      (upcoming ?? [])
+        .flatMap((m) => [m.team_a_id, m.team_b_id])
+        .filter((v): v is string => Boolean(v)),
+    ),
+  );
+
+  const { data: teams } = supabase && teamIds.length
+    ? await supabase
+        .from("teams")
+        .select("id,name")
+        .in("id", teamIds)
+        .returns<{ id: string; name: string }[]>()
+    : { data: [] as { id: string; name: string }[] };
+
+  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+
   const nextMatches = (upcoming ?? []).map((m) => {
     const group = m.match_group_id ? groupById.get(m.match_group_id) : undefined;
     const channel = group ? channelById.get(group.channel_id) : undefined;
-    return { match: m, group, channel };
+    const normalized = {
+      ...m,
+      team_a_name: m.team_a_id ? (teamNameById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name,
+      team_b_name: m.team_b_id ? (teamNameById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name,
+    };
+    return { match: normalized, group, channel };
   });
 
   return (

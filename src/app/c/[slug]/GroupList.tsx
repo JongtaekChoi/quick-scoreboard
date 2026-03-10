@@ -44,7 +44,8 @@ export default function GroupList({
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const initialOpenDate = useMemo(() => {
-    if (dateKeys.includes(todayKey)) return todayKey
+    const nearestUpcoming = [...dateKeys].sort((a, b) => a.localeCompare(b)).find((d) => d >= todayKey)
+    if (nearestUpcoming) return nearestUpcoming
     return dateKeys[0] ?? null
   }, [dateKeys, todayKey])
 
@@ -53,9 +54,10 @@ export default function GroupList({
   )
 
   useEffect(() => {
-    const el = document.getElementById(`date-${todayKey}`)
+    if (!initialOpenDate) return
+    const el = document.getElementById(`date-${initialOpenDate}`)
     if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [todayKey])
+  }, [initialOpenDate])
 
   function toggleDate(dateKey: string) {
     setOpenDateSet((prev) => {
@@ -77,7 +79,7 @@ export default function GroupList({
           <section key={dateKey} id={`date-${dateKey}`} className="rounded-2xl border bg-white p-3 shadow-sm space-y-2">
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-2 text-left"
+              className="sticky top-0 z-10 -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded-lg bg-white/95 px-1 py-1 text-left backdrop-blur"
               onClick={() => toggleDate(dateKey)}
             >
               <h2 className="text-sm font-semibold text-gray-800">{dateKey}</h2>

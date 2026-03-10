@@ -173,7 +173,7 @@ export default async function ChannelPage({
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6 page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
-        <header className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
+        <header className="sticky top-0 z-20 space-y-3 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{channel.name}</h1>
             <div className="flex items-center gap-2">

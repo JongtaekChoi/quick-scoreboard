@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function LoginModal({
   slug,
@@ -9,11 +9,7 @@ export default function LoginModal({
   slug: string;
   accError?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (accError) setOpen(true);
-  }, [accError]);
+  const [open, setOpen] = useState(!!accError);
 
   return (
     <>

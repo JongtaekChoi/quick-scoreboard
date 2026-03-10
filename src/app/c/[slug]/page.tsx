@@ -159,11 +159,11 @@ export default async function ChannelPage({
   const matchesByGroupObj = Object.fromEntries(matchesByGroup.entries());
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
+    <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6 page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
-        <header className="space-y-2">
+        <header className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-2xl font-semibold">{channel.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{channel.name}</h1>
             <div className="flex items-center gap-2">
               <ShareButton
                 url={channelUrl}
@@ -175,13 +175,13 @@ export default async function ChannelPage({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
-            <Link className="text-xs underline text-gray-600" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
+            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
               통계 보기
             </Link>
             {channel.slug === "sample" ? (
-              <Link className="text-xs rounded border border-amber-300 bg-amber-50 px-2 py-1 font-medium text-amber-800" href="/c/sample/guide">
+              <Link className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100" href="/c/sample/guide">
                 샘플 사용 가이드
               </Link>
             ) : null}
@@ -230,7 +230,7 @@ export default async function ChannelPage({
               </Link>
             ) : null}
           </div>
-          <form className="flex flex-wrap items-center gap-2" method="get">
+          <form className="flex flex-wrap items-center gap-2 rounded-xl border bg-gray-50 p-2" method="get">
             <label className="text-xs text-gray-600">날짜</label>
             <input
               className="rounded border px-2 py-1.5 text-sm"
@@ -265,7 +265,7 @@ export default async function ChannelPage({
         </header>
 
         {(groups ?? []).length === 0 ? (
-          <section className="rounded border p-4 text-sm text-gray-500">
+          <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">
             표시할 경기그룹이 없습니다.
           </section>
         ) : (
@@ -277,6 +277,26 @@ export default async function ChannelPage({
           />
         )}
       </section>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 backdrop-blur md:hidden">
+        <ul className="mx-auto grid max-w-4xl grid-cols-3">
+          <li>
+            <Link href="/" className="flex min-h-14 items-center justify-center text-xs font-medium text-gray-600">
+              홈
+            </Link>
+          </li>
+          <li>
+            <Link href={`/c/${encodeURIComponent(channel.slug)}`} className="flex min-h-14 items-center justify-center text-xs font-semibold text-gray-900">
+              경기
+            </Link>
+          </li>
+          <li>
+            <Link href={`/c/${encodeURIComponent(channel.slug)}/stats`} className="flex min-h-14 items-center justify-center text-xs font-medium text-gray-600">
+              순위/통계
+            </Link>
+          </li>
+        </ul>
+      </nav>
     </main>
   );
 }

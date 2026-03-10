@@ -16,6 +16,12 @@ type Match = {
   scheduled_start_at: string | null
 }
 
+function statusLabel(status: Match['status']) {
+  if (status === 'live') return { text: '진행중', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  if (status === 'ended') return { text: '종료', cls: 'bg-gray-100 text-gray-700 border-gray-200' }
+  return { text: '예정', cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+}
+
 export default function GroupList({
   groups,
   matchesByGroup,
@@ -45,19 +51,19 @@ export default function GroupList({
         const list = matchesByGroup[g.id] ?? []
         const open = openSet.has(g.id)
         return (
-          <section key={g.id} className="rounded border p-3 space-y-2">
+          <section key={g.id} className="space-y-2 rounded-2xl border bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                className="flex-1 flex items-center justify-between gap-2 text-left"
+                className="flex flex-1 items-center justify-between gap-2 text-left"
                 onClick={() => toggle(g.id)}
               >
                 <h2 className="text-sm font-semibold">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</h2>
                 <span className="text-xs text-gray-400">{open ? '▼' : '▶'} {list.length}경기</span>
               </button>
               {showManagerEntryButton ? (
-                <Link className="text-xs underline shrink-0" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
-                  내 팀 엔트리 관리
+                <Link className="shrink-0 rounded-full border px-2 py-1 text-xs text-gray-700" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
+                  내 팀 엔트리
                 </Link>
               ) : null}
             </div>
@@ -67,22 +73,27 @@ export default function GroupList({
                 <p className="text-sm text-gray-500">등록된 경기가 없습니다.</p>
               ) : (
                 <ul className="space-y-2">
-                  {list.map((m) => (
-                    <li key={m.id} className="rounded border px-3 py-2 bg-white">
-                      <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
-                        <div className="text-sm">
-                          <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                          <div className="text-xs text-gray-500">상태: {m.status}</div>
-                          {m.status === 'scheduled' && m.scheduled_start_at ? (
-                            <div className="text-xs text-blue-700">
-                              {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작 예정
+                  {list.map((m) => {
+                    const badge = statusLabel(m.status)
+                    return (
+                      <li key={m.id} className="rounded-xl border bg-white px-3 py-2">
+                        <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
+                          <div className="text-sm">
+                            <div className="font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
+                            <div className="mt-1 flex items-center gap-2 text-xs">
+                              <span className={`rounded-full border px-2 py-0.5 ${badge.cls}`}>{badge.text}</span>
+                              {m.status === 'scheduled' && m.scheduled_start_at ? (
+                                <span className="text-blue-700">
+                                  {new Date(m.scheduled_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 시작
+                                </span>
+                              ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                        <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
-                      </Link>
-                    </li>
-                  ))}
+                          </div>
+                          <div className="text-lg font-semibold tabular-nums">{m.score_a} : {m.score_b}</div>
+                        </Link>
+                      </li>
+                    )
+                  })}
                 </ul>
               )
             ) : null}

@@ -79,21 +79,23 @@ async function createMatch(formData: FormData) {
 
   const nextSeq = (lastMatch?.seq ?? 0) + 1
 
+  const [teamAId, teamBId] = await Promise.all([
+    ensureTeamInChannel(supabase, channelId, teamA),
+    ensureTeamInChannel(supabase, channelId, teamB),
+  ])
+
   await supabase.from('matches').insert({
     channel_id: channelId,
     match_group_id: groupId,
     seq: nextSeq,
     team_a_name: teamA,
     team_b_name: teamB,
+    team_a_id: teamAId,
+    team_b_id: teamBId,
     score_a: 0,
     score_b: 0,
     status: 'scheduled',
   })
-
-  await Promise.all([
-    ensureTeamInChannel(supabase, channelId, teamA),
-    ensureTeamInChannel(supabase, channelId, teamB),
-  ])
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
@@ -125,20 +127,22 @@ async function updateMatch(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
+  const [teamAId, teamBId] = await Promise.all([
+    ensureTeamInChannel(supabase, channelId, teamA),
+    ensureTeamInChannel(supabase, channelId, teamB),
+  ])
+
   await supabase
     .from('matches')
     .update({
       team_a_name: teamA,
       team_b_name: teamB,
+      team_a_id: teamAId,
+      team_b_id: teamBId,
       status,
       scheduled_start_at: status === 'ended' ? null : scheduledStartAt,
     })
     .eq('id', matchId)
-
-  await Promise.all([
-    ensureTeamInChannel(supabase, channelId, teamA),
-    ensureTeamInChannel(supabase, channelId, teamB),
-  ])
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }

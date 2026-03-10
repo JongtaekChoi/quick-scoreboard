@@ -358,9 +358,9 @@ export async function GET(req: Request) {
     if (insertedGroup && selectedTeams.length >= 3) {
       const [a, b, c] = selectedTeams
       await supabase.from('matches').insert([
-        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 1, team_a_name: a.name, team_b_name: b.name, status: 'scheduled' },
-        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 2, team_a_name: a.name, team_b_name: c.name, status: 'scheduled' },
-        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 3, team_a_name: b.name, team_b_name: c.name, status: 'scheduled' },
+        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 1, team_a_name: a.name, team_b_name: b.name, team_a_id: a.id, team_b_id: b.id, status: 'scheduled' },
+        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 2, team_a_name: a.name, team_b_name: c.name, team_a_id: a.id, team_b_id: c.id, status: 'scheduled' },
+        { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 3, team_a_name: b.name, team_b_name: c.name, team_a_id: b.id, team_b_id: c.id, status: 'scheduled' },
       ])
       log.push(`step4: created today group at ${venue} with teams [${selectedTeams.map((t) => t.name).join(', ')}]`)
     }

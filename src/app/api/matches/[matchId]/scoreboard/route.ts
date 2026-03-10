@@ -3,6 +3,8 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 
 type MatchRow = {
   id: string
+  team_a_id: string | null
+  team_b_id: string | null
   team_a_name: string
   team_b_name: string
   score_a: number
@@ -26,7 +28,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ matchId: s
   const [{ data: match }, { data: goals }] = await Promise.all([
     supabase
       .from('matches')
-      .select('id,team_a_name,team_b_name,score_a,score_b')
+      .select('id,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b')
       .eq('id', matchId)
       .maybeSingle<MatchRow>(),
     supabase
@@ -40,5 +42,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ matchId: s
 
   if (!match) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
-  return NextResponse.json({ match, goals: goals ?? [] })
+  const teamIds = [match.team_a_id, match.team_b_id].filter((v): v is string => Boolean(v))
+  const { data: teams } = teamIds.length
+    ? await supabase.from('teams').select('id,name').in('id', teamIds)
+    : { data: [] as { id: string; name: string }[] }
+
+  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]))
+  const normalizedMatch = {
+    ...match,
+    team_a_name: match.team_a_id ? (teamNameById.get(match.team_a_id) ?? match.team_a_name) : match.team_a_name,
+    team_b_name: match.team_b_id ? (teamNameById.get(match.team_b_id) ?? match.team_b_name) : match.team_b_name,
+  }
+
+  return NextResponse.json({ match: normalizedMatch, goals: goals ?? [] })
 }

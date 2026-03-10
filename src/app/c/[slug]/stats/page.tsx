@@ -4,6 +4,8 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 type Channel = { id: string; name: string; slug: string };
 type Match = {
   id: string;
+  team_a_id: string | null;
+  team_b_id: string | null;
   team_a_name: string;
   team_b_name: string;
   score_a: number;
@@ -21,6 +23,7 @@ type PlayerRow = { id: string; player_name: string; team_id: string };
 type TeamRow = { id: string; name: string };
 
 type TeamStat = {
+  key: string;
   team: string;
   played: number;
   win: number;
@@ -56,7 +59,7 @@ export default async function StatsPage({
 
   const { data: matches } = await supabase
     .from("matches")
-    .select("id,team_a_name,team_b_name,score_a,score_b,status")
+    .select("id,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status")
     .eq("channel_id", channel.id)
     .eq("status", "ended")
     .returns<Match[]>();
@@ -93,11 +96,14 @@ export default async function StatsPage({
     .returns<TeamRow[]>();
 
   const teamMap = new Map<string, TeamStat>();
-  const getTeam = (name: string) => {
-    const found = teamMap.get(name);
+  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const getTeam = (teamId: string | null, fallbackName: string) => {
+    const key = teamId ?? `name:${fallbackName}`;
+    const found = teamMap.get(key);
     if (found) return found;
     const init: TeamStat = {
-      team: name,
+      key,
+      team: teamId ? (teamNameById.get(teamId) ?? fallbackName) : fallbackName,
       played: 0,
       win: 0,
       draw: 0,
@@ -107,13 +113,13 @@ export default async function StatsPage({
       gd: 0,
       pts: 0,
     };
-    teamMap.set(name, init);
+    teamMap.set(key, init);
     return init;
   };
 
   for (const m of matches ?? []) {
-    const a = getTeam(m.team_a_name);
-    const b = getTeam(m.team_b_name);
+    const a = getTeam(m.team_a_id, m.team_a_name);
+    const b = getTeam(m.team_b_id, m.team_b_name);
 
     a.played += 1;
     b.played += 1;
@@ -163,7 +169,6 @@ export default async function StatsPage({
     .sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name));
 
   const playerById = new Map((players ?? []).map((p) => [p.id, p]));
-  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
   const ratingAgg = new Map<string, { player: string; team: string; count: number; avg: number }>();
 
   for (const r of ratings ?? []) {
@@ -225,7 +230,7 @@ export default async function StatsPage({
                 </thead>
                 <tbody>
                   {teamStats.map((t, i) => (
-                    <tr key={t.team} className="border-b last:border-0">
+                    <tr key={t.key} className="border-b last:border-0">
                       <td className="py-1 pr-2">{i + 1}</td>
                       <td className="py-1 pr-2">{t.team}</td>
                       <td className="py-1 pr-2">{t.played}</td>

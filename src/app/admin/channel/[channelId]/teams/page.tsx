@@ -7,7 +7,7 @@ import { ensureTeamInChannel } from '@/lib/teamHelpers'
 import ImportTeamForm from './ImportTeamForm'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
-type Team = { id: string; name: string; last_used_at: string }
+type Team = { id: string; name: string; color_hex: string | null; last_used_at: string }
 type OtherChannelTeam = { channel_id: string; id: string; name: string }
 type OtherChannel = { id: string; name: string }
 
@@ -36,6 +36,8 @@ async function createTeam(formData: FormData) {
   'use server'
   const channelId = String(formData.get('channelId') || '')
   const name = String(formData.get('name') || '').trim()
+  const colorHexRaw = String(formData.get('color_hex') || '').trim()
+  const colorHex = /^#([0-9a-fA-F]{6})$/.test(colorHexRaw) ? colorHexRaw : null
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -48,7 +50,11 @@ async function createTeam(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await ensureTeamInChannel(supabase, channelId, name)
+  const teamId = await ensureTeamInChannel(supabase, channelId, name)
+
+  if (teamId && colorHex) {
+    await supabase.from('teams').update({ color_hex: colorHex }).eq('id', teamId)
+  }
 
   redirect(`/admin/channel/${channelId}/teams`)
 }
@@ -58,6 +64,8 @@ async function renameTeam(formData: FormData) {
   const channelId = String(formData.get('channelId') || '')
   const teamId = String(formData.get('teamId') || '')
   const name = String(formData.get('name') || '').trim()
+  const colorHexRaw = String(formData.get('color_hex') || '').trim()
+  const colorHex = /^#([0-9a-fA-F]{6})$/.test(colorHexRaw) ? colorHexRaw : null
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -70,7 +78,7 @@ async function renameTeam(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await supabase.from('teams').update({ name }).eq('id', teamId)
+  await supabase.from('teams').update({ name, color_hex: colorHex }).eq('id', teamId)
   await supabase
     .from('channel_teams')
     .update({ last_used_at: new Date().toISOString() })
@@ -144,7 +152,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
   const [{ data: teams }, { data: allChannels }, { data: allChannelTeams }] = await Promise.all([
     supabase
       .from('channel_teams_view')
-      .select('id,name,last_used_at')
+      .select('id,name,color_hex,last_used_at')
       .eq('channel_id', channelId)
       .order('name', { ascending: true })
       .returns<Team[]>(),
@@ -187,9 +195,10 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
 
         <section className="rounded border p-4 space-y-2">
           <h2 className="text-sm font-semibold">팀 추가</h2>
-          <form action={createTeam} className="grid md:grid-cols-3 gap-2">
+          <form action={createTeam} className="grid md:grid-cols-4 gap-2">
             <input type="hidden" name="channelId" value={channel.id} />
             <input className="rounded border px-2 py-1.5 text-sm" name="name" placeholder="팀명" required />
+            <input className="h-10 w-full rounded border px-2 py-1.5 text-sm" type="color" name="color_hex" defaultValue="#9CA3AF" aria-label="팀 컬러" />
             <button className="rounded border px-3 py-2 text-sm" type="submit">팀 저장</button>
           </form>
         </section>
@@ -210,8 +219,10 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
                 <form action={renameTeam} className="flex flex-wrap gap-2 items-center">
                   <input type="hidden" name="channelId" value={channel.id} />
                   <input type="hidden" name="teamId" value={t.id} />
+                  <span className="inline-block h-3 w-3 rounded-sm border border-black/10" style={{ backgroundColor: t.color_hex ?? '#D1D5DB' }} />
                   <input className="rounded border px-2 py-1.5 text-sm" name="name" defaultValue={t.name} required />
-                  <button className="rounded border px-2 py-1.5 text-xs" type="submit">이름 저장</button>
+                  <input className="h-9 w-12 rounded border px-1" type="color" name="color_hex" defaultValue={t.color_hex ?? '#9CA3AF'} aria-label={`${t.name} 팀 컬러`} />
+                  <button className="rounded border px-2 py-1.5 text-xs" type="submit">저장</button>
                 </form>
               </div>
             ))

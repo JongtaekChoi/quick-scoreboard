@@ -65,19 +65,10 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{
-    date?: string;
-    err?: string;
-    edit?: string;
-    order?: string;
-    mgr?: string;
-    acc?: string;
-    pw?: string;
-  }>;
+  searchParams: Promise<{ acc?: string; pw?: string }>;
 }) {
   const { slug } = await params;
-  const { date, order, acc, pw } = await searchParams;
-  const matchOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
+  const { acc, pw } = await searchParams;
 
   const supabase = getSupabaseServerClient();
 
@@ -124,18 +115,14 @@ export default async function ChannelPage({
 
   await autoStartDueMatches(supabase);
 
-  let groupQuery = supabase
+  const { data: groups } = await supabase
     .from("match_groups")
     .select("id,channel_id,play_date,venue,title,seq")
     .eq("channel_id", channel.id)
     .order("play_date", { ascending: false })
-    .order("seq", { ascending: true });
+    .order("seq", { ascending: true })
+    .returns<MatchGroup[]>();
 
-  if (date) {
-    groupQuery = groupQuery.eq("play_date", date);
-  }
-
-  const { data: groups } = await groupQuery.returns<MatchGroup[]>();
   const groupIds = (groups ?? []).map((g) => g.id);
 
   const { data: matches } = groupIds.length
@@ -145,7 +132,7 @@ export default async function ChannelPage({
           "id,match_group_id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at",
         )
         .in("match_group_id", groupIds)
-        .order("seq", { ascending: matchOrder === "asc" })
+        .order("seq", { ascending: true })
         .returns<Match[]>()
     : { data: [] as Match[] };
 
@@ -176,9 +163,12 @@ export default async function ChannelPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-gray-600">경기목록 (날짜/그룹 단위)</p>
+            <p className="text-sm text-gray-600">경기목록 (날짜 기준)</p>
             <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
               통계 보기
+            </Link>
+            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/calendar`}>
+              달력 보기
             </Link>
             {channel.slug === "sample" ? (
               <Link className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100" href="/c/sample/guide">
@@ -231,41 +221,6 @@ export default async function ChannelPage({
             ) : null}
           </div>
         </header>
-
-        <section className="rounded-2xl border bg-white p-3 shadow-sm">
-          <form className="flex flex-wrap items-center gap-2" method="get">
-            <label className="text-xs text-gray-600">날짜</label>
-            <input
-              className="rounded border px-2 py-1.5 text-sm"
-              type="date"
-              name="date"
-              defaultValue={date ?? ""}
-            />
-            <label className="text-xs text-gray-600">정렬</label>
-            <select
-              className="rounded border px-2 py-1.5 text-sm"
-              name="order"
-              defaultValue={matchOrder}
-            >
-              <option value="asc">경기순 1→N</option>
-              <option value="desc">경기순 N→1</option>
-            </select>
-            <button
-              className="rounded border px-3 py-1.5 text-sm"
-              type="submit"
-            >
-              적용
-            </button>
-            {date || matchOrder !== "asc" ? (
-              <Link
-                className="text-xs underline text-gray-600"
-                href={`/c/${encodeURIComponent(channel.slug)}`}
-              >
-                초기화
-              </Link>
-            ) : null}
-          </form>
-        </section>
 
         {(groups ?? []).length === 0 ? (
           <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">

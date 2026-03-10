@@ -183,7 +183,7 @@ export default async function ChannelCalendarPage({
                 >
                   <div className="flex items-center justify-between">
                     <div className={`font-medium ${dayColor}`}>{c.day}</div>
-                    {isToday ? <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-700">오늘</span> : null}
+                    {isToday ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="오늘" /> : null}
                   </div>
                   <div className="mt-1 text-[11px] text-gray-600 leading-tight">
                     {stats.total > 0 ? (
@@ -191,7 +191,7 @@ export default async function ChannelCalendarPage({
                         <span className="md:hidden">{stats.total}경기</span>
                         <span className="hidden md:inline">완료 {stats.ended} · 예정 {stats.scheduled}</span>
                       </>
-                    ) : "-"}
+                    ) : null}
                   </div>
                 </Link>
               );

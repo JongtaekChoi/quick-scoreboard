@@ -8,6 +8,8 @@ type Match = {
   id: string
   match_group_id: string | null
   seq: number
+  team_a_id: string | null
+  team_b_id: string | null
   team_a_name: string
   team_b_name: string
   score_a: number
@@ -25,11 +27,13 @@ function statusLabel(status: Match['status']) {
 export default function GroupList({
   groups,
   matchesByGroup,
+  teamColorById,
   channelId,
   showManagerEntryButton,
 }: {
   groups: MatchGroup[]
   matchesByGroup: Record<string, Match[]>
+  teamColorById: Record<string, string>
   channelId: string
   showManagerEntryButton: boolean
 }) {
@@ -112,9 +116,15 @@ export default function GroupList({
                                 <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
                                   <div className="min-w-0 flex-1 text-sm">
                                     <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 font-medium leading-tight">
-                                      <div className="text-right break-words">{m.team_a_name}</div>
+                                      <div className="flex items-center justify-end gap-1.5 text-right break-words">
+                                        <span className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10" style={{ backgroundColor: m.team_a_id ? (teamColorById[m.team_a_id] ?? '#D1D5DB') : '#D1D5DB' }} />
+                                        <span>{m.team_a_name}</span>
+                                      </div>
                                       <div className="px-1 text-[11px] uppercase tracking-[0.12em] text-gray-400">vs</div>
-                                      <div className="break-words">{m.team_b_name}</div>
+                                      <div className="flex items-center gap-1.5 break-words">
+                                        <span className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10" style={{ backgroundColor: m.team_b_id ? (teamColorById[m.team_b_id] ?? '#D1D5DB') : '#D1D5DB' }} />
+                                        <span>{m.team_b_name}</span>
+                                      </div>
                                     </div>
                                     <div className="mt-1 flex items-center gap-2 text-xs">
                                       <span className={`rounded-full border px-2 py-0.5 ${badge.cls}`}>{badge.text}</span>

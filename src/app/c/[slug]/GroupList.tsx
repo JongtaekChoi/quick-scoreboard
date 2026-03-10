@@ -79,7 +79,7 @@ export default function GroupList({
           <section key={dateKey} id={`date-${dateKey}`} className="rounded-2xl border bg-white p-3 shadow-sm space-y-2">
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-2 text-left"
+              className="sticky top-0 z-10 -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded-lg bg-white/95 px-1 py-1 text-left backdrop-blur"
               onClick={() => toggleDate(dateKey)}
             >
               <h2 className="text-sm font-semibold text-gray-800">{dateKey}</h2>

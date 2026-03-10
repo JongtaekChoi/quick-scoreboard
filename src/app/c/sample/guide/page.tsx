@@ -12,7 +12,7 @@ export default function SampleGuidePage() {
           </div>
           <h1 className="text-2xl font-semibold">샘플 리그 사용 가이드</h1>
           <p className="text-sm text-gray-600">
-            샘플 리그는 테스트/체험용입니다. 데이터는 주기적으로 초기화될 수 있습니다.
+            샘플 리그는 테스트/체험용입니다. 12일이 지난 기록은 자동 정리되며, 3일마다 새 경기가 생성됩니다.
           </p>
         </header>
 
@@ -43,7 +43,7 @@ export default function SampleGuidePage() {
           <h2 className="font-semibold">주의사항</h2>
           <ul className="list-disc pl-5 text-gray-700 space-y-1">
             <li>샘플 데이터는 운영 데이터가 아닙니다.</li>
-            <li>초기화 시 기존 입력 내용이 사라질 수 있습니다.</li>
+            <li>12일이 지난 경기 데이터는 자동으로 삭제됩니다.</li>
             <li>실제 리그 계정/데이터는 샘플과 분리해서 사용하세요.</li>
           </ul>
         </section>

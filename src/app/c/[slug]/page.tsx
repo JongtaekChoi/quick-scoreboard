@@ -236,25 +236,6 @@ export default async function ChannelPage({
         )}
       </section>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 backdrop-blur md:hidden">
-        <ul className="mx-auto grid max-w-4xl grid-cols-3">
-          <li>
-            <Link href="/" className="flex min-h-14 items-center justify-center text-xs font-medium text-gray-600">
-              홈
-            </Link>
-          </li>
-          <li>
-            <Link href={`/c/${encodeURIComponent(channel.slug)}`} className="flex min-h-14 items-center justify-center text-xs font-semibold text-gray-900">
-              경기
-            </Link>
-          </li>
-          <li>
-            <Link href={`/c/${encodeURIComponent(channel.slug)}/stats`} className="flex min-h-14 items-center justify-center text-xs font-medium text-gray-600">
-              순위/통계
-            </Link>
-          </li>
-        </ul>
-      </nav>
     </main>
   );
 }

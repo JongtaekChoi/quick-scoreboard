@@ -932,6 +932,18 @@ export default async function MatchDetailPage({
     .order("created_at", { ascending: false })
     .returns<ParticipationEvent[]>();
 
+  const startingCountA = new Set(
+    (participationEvents ?? [])
+      .filter((e) => e.team_side === "A" && e.event_type === "in" && e.minute === 0)
+      .map((e) => e.player_id || `name:${e.player_name ?? ""}`),
+  ).size;
+  const startingCountB = new Set(
+    (participationEvents ?? [])
+      .filter((e) => e.team_side === "B" && e.event_type === "in" && e.minute === 0)
+      .map((e) => e.player_id || `name:${e.player_name ?? ""}`),
+  ).size;
+  const isBeforeKickoff = match.period_state === "pre";
+
   const { data: aliases } = await supabase
     .from("match_player_aliases")
     .select("jersey_no,player_name")
@@ -1149,7 +1161,7 @@ export default async function MatchDetailPage({
         ) : (
           <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
             <details>
-              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">엔트리 ({rosterA.length + rosterB.length}명)</summary>
+              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">전체 엔트리 ({rosterA.length + rosterB.length}명)</summary>
               <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div className="font-semibold text-gray-600 mb-1">{match.team_a_name}</div>
@@ -1170,64 +1182,66 @@ export default async function MatchDetailPage({
 
         {isEditMode ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">출전기록 (MVP)</h2>
+            <h2 className="text-sm font-semibold text-gray-700">출전기록</h2>
 
-            <div className="grid md:grid-cols-2 gap-3">
-              <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
-                <input type="hidden" name="team_side" value="A" />
-                <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅(0분 IN)</div>
-                <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
-                  {rosterA.map((p) => (
-                    <option key={`sa-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
-                  ))}
-                </select>
-                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
+            {isBeforeKickoff ? (
+              <div className="grid md:grid-cols-2 gap-3">
+                <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
+                  <input type="hidden" name="team_side" value="A" />
+                  <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅(0분 IN) · 현재 {startingCountA}명</div>
+                  <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                    {rosterA.map((p) => (
+                      <option key={`sa-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                    ))}
+                  </select>
+                  <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
+                </form>
+
+                <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
+                  <input type="hidden" name="team_side" value="B" />
+                  <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅(0분 IN) · 현재 {startingCountB}명</div>
+                  <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                    {rosterB.map((p) => (
+                      <option key={`sb-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                    ))}
+                  </select>
+                  <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
+                </form>
+              </div>
+            ) : (
+              <form action={addParticipationAction} className="rounded border p-3 grid md:grid-cols-5 gap-2 items-end">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">팀</label>
+                  <select name="team_side" className="w-full rounded border px-2 py-1.5 text-sm">
+                    <option value="A">A ({match.team_a_name})</option>
+                    <option value="B">B ({match.team_b_name})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">이벤트</label>
+                  <select name="event_type" className="w-full rounded border px-2 py-1.5 text-sm">
+                    <option value="in">IN</option>
+                    <option value="out">OUT</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">분</label>
+                  <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-gray-600 mb-1">선수</label>
+                  <input name="player_value" list="roster-options" className="w-full rounded border px-2 py-1.5 text-sm" placeholder="선수 선택" required />
+                  <datalist id="roster-options">
+                    {[...rosterA, ...rosterB].map((p) => (
+                      <option key={`p-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                    ))}
+                  </datalist>
+                </div>
+                <div className="md:col-span-5">
+                  <PendingSubmitButton className="rounded border px-2 py-1 text-xs">출전 이벤트 추가</PendingSubmitButton>
+                </div>
               </form>
-
-              <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
-                <input type="hidden" name="team_side" value="B" />
-                <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅(0분 IN)</div>
-                <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
-                  {rosterB.map((p) => (
-                    <option key={`sb-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
-                  ))}
-                </select>
-                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
-              </form>
-            </div>
-
-            <form action={addParticipationAction} className="rounded border p-3 grid md:grid-cols-5 gap-2 items-end">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">팀</label>
-                <select name="team_side" className="w-full rounded border px-2 py-1.5 text-sm">
-                  <option value="A">A ({match.team_a_name})</option>
-                  <option value="B">B ({match.team_b_name})</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">이벤트</label>
-                <select name="event_type" className="w-full rounded border px-2 py-1.5 text-sm">
-                  <option value="in">IN</option>
-                  <option value="out">OUT</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">분</label>
-                <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">선수</label>
-                <input name="player_value" list="roster-options" className="w-full rounded border px-2 py-1.5 text-sm" placeholder="선수 선택" required />
-                <datalist id="roster-options">
-                  {[...rosterA, ...rosterB].map((p) => (
-                    <option key={`p-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="md:col-span-5">
-                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">출전 이벤트 추가</PendingSubmitButton>
-              </div>
-            </form>
+            )}
 
             <div className="rounded border p-3">
               <div className="text-xs font-medium text-gray-600 mb-2">출전 이벤트 타임라인</div>

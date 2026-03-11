@@ -57,6 +57,16 @@ type GoalEvent = {
   created_at: string;
 };
 
+type ParticipationEvent = {
+  id: string;
+  team_side: "A" | "B";
+  player_id: string | null;
+  player_name: string | null;
+  event_type: "in" | "out";
+  minute: number;
+  created_at: string;
+};
+
 type Alias = { jersey_no: string | null; player_name: string | null };
 
 type PlayerRatingAgg = {
@@ -606,6 +616,111 @@ async function submitAnonymousRating(
   redirect(`/m/${matchId}`);
 }
 
+async function addParticipationEvent(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  if (!canMutate) return;
+
+  const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
+  const eventType = String(formData.get("event_type") || "").trim() as "in" | "out";
+  const minute = Number(formData.get("minute") || 0);
+  const playerValue = String(formData.get("player_value") || "").trim();
+
+  if ((teamSide !== "A" && teamSide !== "B") || (eventType !== "in" && eventType !== "out")) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_invalid`);
+  }
+  if (!Number.isFinite(minute) || minute < 0 || minute > 200) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_minute`);
+  }
+  if (!playerValue) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
+  }
+
+  const [playerIdRaw, displayNameRaw] = playerValue.split("|");
+  const playerId = playerIdRaw?.trim() || null;
+  const playerName = (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "");
+
+  await supabase.from("match_participation_events").insert({
+    match_id: matchId,
+    team_side: teamSide,
+    player_id: playerId || null,
+    player_name: playerName || null,
+    event_type: eventType,
+    minute,
+  });
+
+  await logMatchChange(matchId, channelSlug, "participation_event_add", {
+    teamSide,
+    eventType,
+    minute,
+    playerId,
+    playerName,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
+async function addStartingLineup(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  if (!canMutate) return;
+
+  const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
+  if (teamSide !== "A" && teamSide !== "B") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_invalid`);
+  }
+
+  const playerValues = formData
+    .getAll("player_values")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
+  if (playerValues.length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
+  }
+
+  const rows = playerValues.map((value) => {
+    const [playerIdRaw, displayNameRaw] = value.split("|");
+    return {
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: playerIdRaw?.trim() || null,
+      player_name: (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "") || null,
+      event_type: "in" as const,
+      minute: 0,
+    };
+  });
+
+  await supabase.from("match_participation_events").insert(rows);
+
+  await logMatchChange(matchId, channelSlug, "participation_starting_add", {
+    teamSide,
+    count: rows.length,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
@@ -808,6 +923,15 @@ export default async function MatchDetailPage({
     .order("created_at", { ascending: false })
     .returns<GoalEvent[]>();
 
+  const { data: participationEvents } = await supabase
+    .from("match_participation_events")
+    .select("id,team_side,player_id,player_name,event_type,minute,created_at")
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .order("minute", { ascending: false })
+    .order("created_at", { ascending: false })
+    .returns<ParticipationEvent[]>();
+
   const { data: aliases } = await supabase
     .from("match_player_aliases")
     .select("jersey_no,player_name")
@@ -922,6 +1046,12 @@ export default async function MatchDetailPage({
         channel.slug,
         channel.edit_session_version,
       )
+    : async () => {};
+  const addParticipationAction = channel
+    ? addParticipationEvent.bind(null, matchId, channel.slug, channel.edit_session_version)
+    : async () => {};
+  const addStartingLineupAction = channel
+    ? addStartingLineup.bind(null, matchId, channel.slug, channel.edit_session_version)
     : async () => {};
   const startFirstAction = channel
     ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_first")
@@ -1038,6 +1168,84 @@ export default async function MatchDetailPage({
           </section>
         )}
 
+        {isEditMode ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-700">출전기록 (MVP)</h2>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
+                <input type="hidden" name="team_side" value="A" />
+                <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅(0분 IN)</div>
+                <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                  {rosterA.map((p) => (
+                    <option key={`sa-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                  ))}
+                </select>
+                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
+              </form>
+
+              <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
+                <input type="hidden" name="team_side" value="B" />
+                <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅(0분 IN)</div>
+                <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                  {rosterB.map((p) => (
+                    <option key={`sb-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                  ))}
+                </select>
+                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
+              </form>
+            </div>
+
+            <form action={addParticipationAction} className="rounded border p-3 grid md:grid-cols-5 gap-2 items-end">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">팀</label>
+                <select name="team_side" className="w-full rounded border px-2 py-1.5 text-sm">
+                  <option value="A">A ({match.team_a_name})</option>
+                  <option value="B">B ({match.team_b_name})</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">이벤트</label>
+                <select name="event_type" className="w-full rounded border px-2 py-1.5 text-sm">
+                  <option value="in">IN</option>
+                  <option value="out">OUT</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">분</label>
+                <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-600 mb-1">선수</label>
+                <input name="player_value" list="roster-options" className="w-full rounded border px-2 py-1.5 text-sm" placeholder="선수 선택" required />
+                <datalist id="roster-options">
+                  {[...rosterA, ...rosterB].map((p) => (
+                    <option key={`p-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="md:col-span-5">
+                <PendingSubmitButton className="rounded border px-2 py-1 text-xs">출전 이벤트 추가</PendingSubmitButton>
+              </div>
+            </form>
+
+            <div className="rounded border p-3">
+              <div className="text-xs font-medium text-gray-600 mb-2">출전 이벤트 타임라인</div>
+              {(participationEvents ?? []).length === 0 ? (
+                <p className="text-xs text-gray-500">아직 기록이 없습니다.</p>
+              ) : (
+                <ul className="space-y-1 text-xs">
+                  {(participationEvents ?? []).map((e) => (
+                    <li key={e.id} className="flex items-center justify-between border-b last:border-0 py-1">
+                      <span>{e.minute}’ · {e.team_side} · {e.event_type.toUpperCase()} · {e.player_name ?? '선수'}</span>
+                      <span className="text-gray-400">{new Date(e.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         {canRate ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">

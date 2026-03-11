@@ -111,7 +111,7 @@ INSERT INTO team_players (id, channel_id, team_id, jersey_no, player_name) VALUE
 INSERT INTO channel_accounts (id, channel_id, role, login_id, password_hash, team_id, player_id) VALUES
   ('00000000-0000-4000-d000-000000000001',
    '00000000-0000-4000-a000-000000000001',
-   'admin', 'admin',
+   'admin', '샘플리그운영자',
    current_setting('seed.pw_hash'), NULL, NULL);
 
 -- managers: 팀 대표 선수 (비밀번호: 1234, 로그인ID: 선수이름)

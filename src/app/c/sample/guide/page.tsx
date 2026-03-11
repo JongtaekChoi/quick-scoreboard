@@ -21,7 +21,7 @@ export default function SampleGuidePage() {
 
           <div>
             <p className="text-gray-600 mb-1">
-              <span className="font-medium">admin</span> — 비밀번호: <span className="font-medium">test1234</span>
+              <span className="font-medium">샘플리그운영자</span> — 비밀번호: <span className="font-medium">test1234</span>
             </p>
           </div>
 

@@ -645,7 +645,7 @@ async function submitAnonymousRating(
   redirect(`/m/${matchId}`);
 }
 
-async function addParticipationEvent(
+async function addSubstitutionEvent(
   matchId: string,
   channelSlug: string,
   formData: FormData,
@@ -661,39 +661,53 @@ async function addParticipationEvent(
   }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
-  const eventType = String(formData.get("event_type") || "").trim() as "in" | "out";
   const minute = Number(formData.get("minute") || 0);
-  const playerValue = String(formData.get("player_value") || "").trim();
+  const playerOutValue = String(formData.get("player_out_value") || "").trim();
+  const playerInValue = String(formData.get("player_in_value") || "").trim();
 
-  if ((teamSide !== "A" && teamSide !== "B") || (eventType !== "in" && eventType !== "out")) {
+  if (teamSide !== "A" && teamSide !== "B") {
     redirect(`/m/${matchId}?mode=edit&err=participation_invalid`);
   }
   if (!Number.isFinite(minute) || minute < 0 || minute > 200) {
     redirect(`/m/${matchId}?mode=edit&err=participation_minute`);
   }
-  if (!playerValue) {
+  if (!playerOutValue || !playerInValue) {
     redirect(`/m/${matchId}?mode=edit&err=participation_player`);
   }
 
-  const [playerIdRaw, displayNameRaw] = playerValue.split("|");
-  const playerId = playerIdRaw?.trim() || null;
-  const playerName = (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "");
+  const [outIdRaw, outDisplayRaw] = playerOutValue.split("|");
+  const [inIdRaw, inDisplayRaw] = playerInValue.split("|");
+  const outId = outIdRaw?.trim() || null;
+  const inId = inIdRaw?.trim() || null;
+  const outName = (outDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
+  const inName = (inDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
 
-  await supabase.from("match_participation_events").insert({
-    match_id: matchId,
-    team_side: teamSide,
-    player_id: playerId || null,
-    player_name: playerName || null,
-    event_type: eventType,
-    minute,
-  });
+  await supabase.from("match_participation_events").insert([
+    {
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: outId || null,
+      player_name: outName || null,
+      event_type: "out",
+      minute,
+    },
+    {
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: inId || null,
+      player_name: inName || null,
+      event_type: "in",
+      minute,
+    },
+  ]);
 
-  await logMatchChange(matchId, channelSlug, "participation_event_add", {
+  await logMatchChange(matchId, channelSlug, "participation_substitution_add", {
     teamSide,
-    eventType,
     minute,
-    playerId,
-    playerName,
+    outId,
+    outName,
+    inId,
+    inName,
   });
 
   revalidatePath(`/m/${matchId}`);
@@ -1095,8 +1109,8 @@ export default async function MatchDetailPage({
         channel.edit_session_version,
       )
     : async () => {};
-  const addParticipationAction = channel
-    ? addParticipationEvent.bind(null, matchId, channel.slug)
+  const addSubstitutionAction = channel
+    ? addSubstitutionEvent.bind(null, matchId, channel.slug)
     : async () => {};
   const addStartingLineupAction = channel
     ? addStartingLineup.bind(null, matchId, channel.slug)
@@ -1271,38 +1285,67 @@ export default async function MatchDetailPage({
                     </form>
                   </details>
                 ) : (
-                  <form action={addParticipationAction} className="rounded border p-3 grid md:grid-cols-5 gap-2 items-end">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">팀</label>
-                      <select name="team_side" className="w-full rounded border px-2 py-1.5 text-sm">
-                        <option value="A">A ({match.team_a_name})</option>
-                        <option value="B">B ({match.team_b_name})</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">이벤트</label>
-                      <select name="event_type" className="w-full rounded border px-2 py-1.5 text-sm">
-                        <option value="in">IN</option>
-                        <option value="out">OUT</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">분</label>
-                      <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs text-gray-600 mb-1">선수</label>
-                      <input name="player_value" list="roster-options" className="w-full rounded border px-2 py-1.5 text-sm" placeholder="선수 선택" required />
-                      <datalist id="roster-options">
-                        {[...rosterA, ...rosterB].map((p) => (
-                          <option key={`p-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
-                        ))}
-                      </datalist>
-                    </div>
-                    <div className="md:col-span-5">
-                      <PendingSubmitButton className="rounded border px-2 py-1 text-xs">출전 이벤트 추가</PendingSubmitButton>
-                    </div>
-                  </form>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <form action={addSubstitutionAction} className="rounded border p-3 grid grid-cols-4 gap-2 items-end">
+                      <input type="hidden" name="team_side" value="A" />
+                      <div className="col-span-4 text-xs font-medium text-gray-600">{match.team_a_name} 교체 등록</div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">분</label>
+                        <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs text-gray-600 mb-1">나가는 선수</label>
+                        <select name="player_out_value" className="w-full rounded border px-2 py-1.5 text-sm" required>
+                          <option value="">선수 선택</option>
+                          {rosterA.map((p) => (
+                            <option key={`a-out-${p.value}`} value={p.value}>{p.playerName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs text-gray-600 mb-1">들어가는 선수</label>
+                        <select name="player_in_value" className="w-full rounded border px-2 py-1.5 text-sm" required>
+                          <option value="">선수 선택</option>
+                          {rosterA.map((p) => (
+                            <option key={`a-in-${p.value}`} value={p.value}>{p.playerName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <PendingSubmitButton className="rounded border px-2 py-1 text-xs">교체 저장</PendingSubmitButton>
+                      </div>
+                    </form>
+
+                    <form action={addSubstitutionAction} className="rounded border p-3 grid grid-cols-4 gap-2 items-end">
+                      <input type="hidden" name="team_side" value="B" />
+                      <div className="col-span-4 text-xs font-medium text-gray-600">{match.team_b_name} 교체 등록</div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">분</label>
+                        <input type="number" name="minute" min={0} max={200} defaultValue={0} className="w-full rounded border px-2 py-1.5 text-sm" />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs text-gray-600 mb-1">나가는 선수</label>
+                        <select name="player_out_value" className="w-full rounded border px-2 py-1.5 text-sm" required>
+                          <option value="">선수 선택</option>
+                          {rosterB.map((p) => (
+                            <option key={`b-out-${p.value}`} value={p.value}>{p.playerName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs text-gray-600 mb-1">들어가는 선수</label>
+                        <select name="player_in_value" className="w-full rounded border px-2 py-1.5 text-sm" required>
+                          <option value="">선수 선택</option>
+                          {rosterB.map((p) => (
+                            <option key={`b-in-${p.value}`} value={p.value}>{p.playerName}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <PendingSubmitButton className="rounded border px-2 py-1 text-xs">교체 저장</PendingSubmitButton>
+                      </div>
+                    </form>
+                  </div>
                 )}
 
                 <div className="rounded border p-3">

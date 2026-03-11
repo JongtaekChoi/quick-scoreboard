@@ -15,7 +15,7 @@ import LiveScoreboard from "./LiveScoreboard";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
 import StarRatingInput from "@/components/StarRatingInput";
-import SubstitutionForm from "./SubstitutionForm";
+import SubstitutionActions from "./SubstitutionActions";
 
 type Match = {
   id: string;
@@ -1431,16 +1431,21 @@ export default async function MatchDetailPage({
                     </form>
                   </details>
                 ) : (
-                  <SubstitutionForm
-                    action={addSubstitutionAction}
-                    teamAName={match.team_a_name}
-                    teamBName={match.team_b_name}
-                    activeA={rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`))}
-                    benchA={rosterA.filter((p) => !activeKeysA.has(p.playerId || `name:${p.playerName}`))}
-                    activeB={rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`))}
-                    benchB={rosterB.filter((p) => !activeKeysB.has(p.playerId || `name:${p.playerName}`))}
-                    disabled={match.period_state === "ended"}
-                  />
+                  <div className="rounded border p-3">
+                    <SubstitutionActions
+                      action={addSubstitutionAction}
+                      teamAName={match.team_a_name}
+                      teamBName={match.team_b_name}
+                      activeA={rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                      benchA={rosterA.filter((p) => !activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                      activeB={rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                      benchB={rosterB.filter((p) => !activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                      disabled={match.period_state === "ended"}
+                      periodState={match.period_state}
+                      firstHalfStartedAt={match.first_half_started_at}
+                      secondHalfStartedAt={match.second_half_started_at}
+                    />
+                  </div>
                 )}
 
                 <div className="rounded border p-3">

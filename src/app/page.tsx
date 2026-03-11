@@ -86,7 +86,7 @@ export default async function Home() {
     <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6">
       <section className="mx-auto max-w-4xl space-y-4">
         <header className="rounded-2xl border bg-white p-4 md:p-5 shadow-sm">
-          <h1 className="text-2xl font-semibold">광염풋쌀리그운영</h1>
+          <h1 className="text-2xl font-semibold">풋살이그운영</h1>
           <p className="mt-1 text-sm text-gray-600">빠르게 확인하고, 바로 기록하는 리그 운영 대시보드</p>
           <div className="mt-3 inline-flex rounded-full border bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700">
             공개 리그 {publicChannels.length}개 운영 중

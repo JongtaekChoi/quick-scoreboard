@@ -976,6 +976,8 @@ export default async function MatchDetailPage({
   const startingCountB = new Set(starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`)).size;
   const starterNamesA = Array.from(new Set(starterEventsA.map((e) => e.player_name).filter(Boolean))) as string[];
   const starterNamesB = Array.from(new Set(starterEventsB.map((e) => e.player_name).filter(Boolean))) as string[];
+  const starterKeySetA = new Set(starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`));
+  const starterKeySetB = new Set(starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`));
   const isBeforeKickoff = match.period_state === "pre";
 
   const { data: aliases } = await supabase
@@ -1236,36 +1238,45 @@ export default async function MatchDetailPage({
                 </details>
 
                 {isBeforeKickoff ? (
-                  <form action={addStartingLineupAction} className="rounded border p-3 space-y-3">
-                    <div className="grid md:grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅 후보</div>
-                        <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
-                          {rosterA.map((p) => (
-                            <label key={`sa-${p.value}`} className="flex items-center gap-2">
-                              <input type="checkbox" name="player_values_a" value={p.value} />
-                              <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
-                            </label>
-                          ))}
+                  <details className="rounded border p-3" open={startingCountA === 0 && startingCountB === 0}>
+                    <summary className="cursor-pointer text-xs font-medium text-gray-600">스타팅 편집</summary>
+                    <form action={addStartingLineupAction} className="mt-3 space-y-3">
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅 후보</div>
+                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
+                            {rosterA.map((p) => {
+                              const key = p.playerId || `name:${p.playerName}`
+                              return (
+                                <label key={`sa-${p.value}`} className="flex items-center gap-2">
+                                  <input type="checkbox" name="player_values_a" value={p.value} defaultChecked={starterKeySetA.has(key)} />
+                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅 후보</div>
+                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
+                            {rosterB.map((p) => {
+                              const key = p.playerId || `name:${p.playerName}`
+                              return (
+                                <label key={`sb-${p.value}`} className="flex items-center gap-2">
+                                  <input type="checkbox" name="player_values_b" value={p.value} defaultChecked={starterKeySetB.has(key)} />
+                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅 후보</div>
-                        <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
-                          {rosterB.map((p) => (
-                            <label key={`sb-${p.value}`} className="flex items-center gap-2">
-                              <input type="checkbox" name="player_values_b" value={p.value} />
-                              <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
-                            </label>
-                          ))}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 저장</PendingSubmitButton>
+                        <span className="text-[11px] text-gray-500">기존 선발은 체크된 상태로 표시돼.</span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 저장</PendingSubmitButton>
-                      <span className="text-[11px] text-gray-500">등록 후에도 체크 수정해서 다시 저장할 수 있어.</span>
-                    </div>
-                  </form>
+                    </form>
+                  </details>
                 ) : (
                   <form action={addParticipationAction} className="rounded border p-3 grid md:grid-cols-5 gap-2 items-end">
                     <div>

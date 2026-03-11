@@ -217,6 +217,35 @@ async function canMutateGoals(
   return true;
 }
 
+async function canMutateParticipation(
+  channelSlug: string,
+  matchId: string,
+): Promise<boolean> {
+  const permission = await getChannelPermission(channelSlug);
+  if (!permission.canGoalEdit) return false;
+
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
+  if (!canEditThisMatch) return false;
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return false;
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+    }>();
+
+  if (!match) return false;
+
+  const isAdmin = await isAdminAuthorized();
+
+  if (match.period_state === "ended") return isAdmin;
+  return true;
+}
+
 async function addGoal(
   matchId: string,
   teamSide: "A" | "B",
@@ -619,7 +648,6 @@ async function submitAnonymousRating(
 async function addParticipationEvent(
   matchId: string,
   channelSlug: string,
-  channelVersion: number,
   formData: FormData,
 ) {
   "use server";
@@ -627,7 +655,7 @@ async function addParticipationEvent(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
     redirect(`/m/${matchId}?mode=edit&err=forbidden`);
   }
@@ -675,7 +703,6 @@ async function addParticipationEvent(
 async function addStartingLineup(
   matchId: string,
   channelSlug: string,
-  channelVersion: number,
   formData: FormData,
 ) {
   "use server";
@@ -683,7 +710,7 @@ async function addStartingLineup(
   const supabase = getSupabaseServerClient();
   if (!supabase) return;
 
-  const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
     redirect(`/m/${matchId}?mode=edit&err=forbidden`);
   }
@@ -1064,10 +1091,10 @@ export default async function MatchDetailPage({
       )
     : async () => {};
   const addParticipationAction = channel
-    ? addParticipationEvent.bind(null, matchId, channel.slug, channel.edit_session_version)
+    ? addParticipationEvent.bind(null, matchId, channel.slug)
     : async () => {};
   const addStartingLineupAction = channel
-    ? addStartingLineup.bind(null, matchId, channel.slug, channel.edit_session_version)
+    ? addStartingLineup.bind(null, matchId, channel.slug)
     : async () => {};
   const startFirstAction = channel
     ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_first")

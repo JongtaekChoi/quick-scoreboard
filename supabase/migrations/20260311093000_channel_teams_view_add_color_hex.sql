@@ -1,6 +1,8 @@
 begin;
 
-create or replace view public.channel_teams_view as
+drop view if exists public.channel_teams_view;
+
+create view public.channel_teams_view as
 select
   ct.channel_id,
   t.id,

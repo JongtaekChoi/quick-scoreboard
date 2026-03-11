@@ -1,14 +1,18 @@
 import Link from "next/link";
+import LoginModal from "@/app/c/[slug]/LoginModal";
 
 export default function SampleGuidePage() {
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-3xl mx-auto space-y-5">
         <header className="space-y-2">
-          <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Link className="underline" href="/c/sample">샘플 리그</Link>
-            <span>›</span>
-            <span>사용 가이드</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs text-gray-500 flex items-center gap-1">
+              <Link className="underline" href="/c/sample">샘플 리그</Link>
+              <span>›</span>
+              <span>사용 가이드</span>
+            </div>
+            <LoginModal slug="sample" />
           </div>
           <h1 className="text-2xl font-semibold">샘플 리그 사용 가이드</h1>
           <p className="text-sm text-gray-600">

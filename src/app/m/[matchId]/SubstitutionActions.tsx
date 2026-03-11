@@ -94,7 +94,11 @@ export default function SubstitutionActions({
                 </select>
               </div>
               <div className="flex justify-end">
-                <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm" disabled={outRoster.length === 0 || inRoster.length === 0}>교체</PendingSubmitButton>
+                {outRoster.length === 0 || inRoster.length === 0 ? (
+                  <button type="button" className="rounded border px-3 py-1.5 text-sm opacity-50" disabled>교체</button>
+                ) : (
+                  <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm">교체</PendingSubmitButton>
+                )}
               </div>
             </form>
           </div>

@@ -67,7 +67,11 @@ export default function SubstitutionForm({
         </select>
       </div>
       <div>
-        <PendingSubmitButton className="rounded border px-2 py-1 text-xs" disabled={disabled || outRoster.length === 0 || inRoster.length === 0}>교체</PendingSubmitButton>
+        {disabled || outRoster.length === 0 || inRoster.length === 0 ? (
+          <button type="button" className="rounded border px-2 py-1 text-xs opacity-50" disabled>교체</button>
+        ) : (
+          <PendingSubmitButton className="rounded border px-2 py-1 text-xs">교체</PendingSubmitButton>
+        )}
       </div>
     </form>
   )

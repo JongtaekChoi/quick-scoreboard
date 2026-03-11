@@ -1,7 +1,8 @@
 -- ============================================================
 -- Sample League Seed Data
 -- 채널 1개 · 팀 4개(각 10명) · 경기그룹 2개(각 3팀 라운드로빈)
--- 계정: admin×1, manager×4 (비밀번호: test1234)
+-- 계정: admin×1 (비밀번호: test1234)
+--        manager×4, player×4 (비밀번호: 1234, 로그인ID: 선수이름)
 -- ============================================================
 
 BEGIN;
@@ -15,11 +16,16 @@ DELETE FROM teams WHERE id IN (
   '00000000-0000-4000-b000-000000000004'
 );
 
--- ── 0. 비밀번호 해시 (sha256 of "test1234") ──────────────
--- Node: createHash('sha256').update('test1234').digest('hex')
+-- ── 0. 비밀번호 해시 ──────────────────────────────────────
+-- Node: createHash('sha256').update(password).digest('hex')
 DO $$ BEGIN
+  -- admin 비밀번호: test1234
   PERFORM set_config('seed.pw_hash',
     '937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244',
+    true);
+  -- manager/player 비밀번호: 1234
+  PERFORM set_config('seed.pw_hash_1234',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
     true);
 END $$;
 
@@ -100,34 +106,75 @@ INSERT INTO team_players (id, channel_id, team_id, jersey_no, player_name) VALUE
   ('00000000-0000-4000-c004-000000000009', '00000000-0000-4000-a000-000000000001', '00000000-0000-4000-b000-000000000004', '18', '표재욱'),
   ('00000000-0000-4000-c004-000000000010', '00000000-0000-4000-a000-000000000001', '00000000-0000-4000-b000-000000000004', '21', '빈준형');
 
--- ── 5. Channel Accounts (비밀번호: test1234) ─────────────
-INSERT INTO channel_accounts (id, channel_id, role, login_id, password_hash, team_id) VALUES
-  -- admin
+-- ── 5. Channel Accounts ─────────────────────────────────
+-- admin (비밀번호: test1234)
+INSERT INTO channel_accounts (id, channel_id, role, login_id, password_hash, team_id, player_id) VALUES
   ('00000000-0000-4000-d000-000000000001',
    '00000000-0000-4000-a000-000000000001',
    'admin', 'admin',
-   current_setting('seed.pw_hash'), NULL),
-  -- managers (팀별)
+   current_setting('seed.pw_hash'), NULL, NULL);
+
+-- managers: 팀 대표 선수 (비밀번호: 1234, 로그인ID: 선수이름)
+INSERT INTO channel_accounts (id, channel_id, role, login_id, password_hash, team_id, player_id) VALUES
+  -- FC 레드 매니저 = 김민수
   ('00000000-0000-4000-d000-000000000002',
    '00000000-0000-4000-a000-000000000001',
-   'manager', 'mgr-red',
-   current_setting('seed.pw_hash'),
-   '00000000-0000-4000-b000-000000000001'),
+   'manager', '김민수',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000001',
+   '00000000-0000-4000-c001-000000000001'),
+  -- FC 블루 매니저 = 장동혁
   ('00000000-0000-4000-d000-000000000003',
    '00000000-0000-4000-a000-000000000001',
-   'manager', 'mgr-blue',
-   current_setting('seed.pw_hash'),
-   '00000000-0000-4000-b000-000000000002'),
+   'manager', '장동혁',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000002',
+   '00000000-0000-4000-c002-000000000001'),
+  -- FC 그린 매니저 = 조현식
   ('00000000-0000-4000-d000-000000000004',
    '00000000-0000-4000-a000-000000000001',
-   'manager', 'mgr-green',
-   current_setting('seed.pw_hash'),
-   '00000000-0000-4000-b000-000000000003'),
+   'manager', '조현식',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000003',
+   '00000000-0000-4000-c003-000000000001'),
+  -- FC 옐로 매니저 = 나상호
   ('00000000-0000-4000-d000-000000000005',
    '00000000-0000-4000-a000-000000000001',
-   'manager', 'mgr-yellow',
-   current_setting('seed.pw_hash'),
-   '00000000-0000-4000-b000-000000000004');
+   'manager', '나상호',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000004',
+   '00000000-0000-4000-c004-000000000001');
+
+-- players: 팀별 일반 팀원 (비밀번호: 1234, 로그인ID: 선수이름)
+INSERT INTO channel_accounts (id, channel_id, role, login_id, password_hash, team_id, player_id) VALUES
+  -- FC 레드 팀원 = 이정호
+  ('00000000-0000-4000-d000-000000000006',
+   '00000000-0000-4000-a000-000000000001',
+   'player', '이정호',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000001',
+   '00000000-0000-4000-c001-000000000002'),
+  -- FC 블루 팀원 = 임상우
+  ('00000000-0000-4000-d000-000000000007',
+   '00000000-0000-4000-a000-000000000001',
+   'player', '임상우',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000002',
+   '00000000-0000-4000-c002-000000000002'),
+  -- FC 그린 팀원 = 문지훈
+  ('00000000-0000-4000-d000-000000000008',
+   '00000000-0000-4000-a000-000000000001',
+   'player', '문지훈',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000003',
+   '00000000-0000-4000-c003-000000000002'),
+  -- FC 옐로 팀원 = 허성민
+  ('00000000-0000-4000-d000-000000000009',
+   '00000000-0000-4000-a000-000000000001',
+   'player', '허성민',
+   current_setting('seed.pw_hash_1234'),
+   '00000000-0000-4000-b000-000000000004',
+   '00000000-0000-4000-c004-000000000002');
 
 -- ── 6. Match Groups ──────────────────────────────────────
 -- 그룹 1: FC 레드, FC 블루, FC 그린 (3월 15일)

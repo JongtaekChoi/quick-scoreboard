@@ -16,16 +16,34 @@ export default function SampleGuidePage() {
           </p>
         </header>
 
-        <section className="rounded border p-4 space-y-2 text-sm">
+        <section className="rounded border p-4 space-y-3 text-sm">
           <h2 className="font-semibold">샘플 계정 (공개)</h2>
-          <p className="text-gray-600">아래 계정 비밀번호는 모두 <span className="font-medium">test1234</span> 입니다.</p>
-          <ul className="list-disc pl-5 text-gray-700 space-y-1">
-            <li>admin</li>
-            <li>mgr-red</li>
-            <li>mgr-blue</li>
-            <li>mgr-green</li>
-            <li>mgr-yellow</li>
-          </ul>
+
+          <div>
+            <p className="text-gray-600 mb-1">
+              <span className="font-medium">admin</span> — 비밀번호: <span className="font-medium">test1234</span>
+            </p>
+          </div>
+
+          <div>
+            <p className="text-gray-600 mb-1">매니저 계정 (비밀번호: <span className="font-medium">1234</span>)</p>
+            <ul className="list-disc pl-5 text-gray-700 space-y-1">
+              <li>김민수 — FC 레드 매니저</li>
+              <li>장동혁 — FC 블루 매니저</li>
+              <li>조현식 — FC 그린 매니저</li>
+              <li>나상호 — FC 옐로 매니저</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-gray-600 mb-1">팀원 계정 (비밀번호: <span className="font-medium">1234</span>)</p>
+            <ul className="list-disc pl-5 text-gray-700 space-y-1">
+              <li>이정호 — FC 레드</li>
+              <li>임상우 — FC 블루</li>
+              <li>문지훈 — FC 그린</li>
+              <li>허성민 — FC 옐로</li>
+            </ul>
+          </div>
         </section>
 
         <section className="rounded border p-4 space-y-2 text-sm">

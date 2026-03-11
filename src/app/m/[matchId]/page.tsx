@@ -628,7 +628,9 @@ async function addParticipationEvent(
   if (!supabase) return;
 
   const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
-  if (!canMutate) return;
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
   const eventType = String(formData.get("event_type") || "").trim() as "in" | "out";
@@ -682,7 +684,9 @@ async function addStartingLineup(
   if (!supabase) return;
 
   const canMutate = await canMutateGoals(channelSlug, channelVersion, matchId, "edit");
-  if (!canMutate) return;
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
   if (teamSide !== "A" && teamSide !== "B") {
@@ -1131,6 +1135,10 @@ export default async function MatchDetailPage({
             ) : null}
           </div>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
+          {err === "forbidden" ? <p className="text-xs text-red-600">권한이 없어 저장할 수 없습니다.</p> : null}
+          {err === "participation_player" ? <p className="text-xs text-red-600">선수를 1명 이상 선택해 주세요.</p> : null}
+          {err === "participation_minute" ? <p className="text-xs text-red-600">분(minute)은 0~200 사이여야 합니다.</p> : null}
+          {err === "participation_invalid" ? <p className="text-xs text-red-600">출전 이벤트 입력값을 확인해 주세요.</p> : null}
           {err === "rating_same_team" ? <p className="text-xs text-red-600">같은 팀 선수는 평점 대상이 아닙니다.</p> : null}
           {err === "rating_closed" ? <p className="text-xs text-red-600">경기 종료 후에만 평점 입력이 가능합니다.</p> : null}
         </header>
@@ -1189,22 +1197,28 @@ export default async function MatchDetailPage({
                 <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
                   <input type="hidden" name="team_side" value="A" />
                   <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅(0분 IN) · 현재 {startingCountA}명</div>
-                  <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                  <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
                     {rosterA.map((p) => (
-                      <option key={`sa-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                      <label key={`sa-${p.value}`} className="flex items-center gap-2">
+                        <input type="checkbox" name="player_values" value={p.value} />
+                        <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                   <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
                 </form>
 
                 <form action={addStartingLineupAction} className="rounded border p-3 space-y-2">
                   <input type="hidden" name="team_side" value="B" />
                   <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅(0분 IN) · 현재 {startingCountB}명</div>
-                  <select name="player_values" multiple className="w-full rounded border px-2 py-1.5 text-xs min-h-24">
+                  <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
                     {rosterB.map((p) => (
-                      <option key={`sb-${p.value}`} value={p.value}>{`#${p.jerseyNo} ${p.playerName}`}</option>
+                      <label key={`sb-${p.value}`} className="flex items-center gap-2">
+                        <input type="checkbox" name="player_values" value={p.value} />
+                        <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                   <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 등록</PendingSubmitButton>
                 </form>
               </div>

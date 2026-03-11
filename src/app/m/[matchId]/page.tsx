@@ -1078,9 +1078,10 @@ export default async function MatchDetailPage({
     channel ? submitAnonymousRating.bind(null, matchId, channel.slug) : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const activeGoalId = goalParam || (goals?.[0]?.id ?? "");
-  const activeGoal =
-    (goals ?? []).find((g) => g.id === activeGoalId) ?? goals?.[0] ?? null;
+  const activeGoalId = goalParam ?? "";
+  const activeGoal = activeGoalId
+    ? (goals ?? []).find((g) => g.id === activeGoalId) ?? null
+    : null;
 
   const suggestedNames = Array.from(
     new Set([
@@ -1209,6 +1210,43 @@ export default async function MatchDetailPage({
             created_at: g.created_at,
           }))}
         />
+
+        {isEditMode ? (
+          <div className="space-y-2">
+            {canAddGoalNow ? (
+              <ScoreActions
+                addGoalA={addGoalA}
+                addGoalB={addGoalB}
+                teamAName={match.team_a_name}
+                teamBName={match.team_b_name}
+              />
+            ) : null}
+
+            {canManageMatch ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-gray-500">
+                  현재: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
+                  {elapsedMinutes !== null ? ` · ${elapsedMinutes}분` : ""}
+                </span>
+                {match.period_state === "pre" ? (
+                  <form action={startFirstAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "first_half" ? (
+                  <form action={endFirstAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">전반 종료</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "halftime" ? (
+                  <form action={startSecondAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">후반 시작</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "second_half" ? (
+                  <form action={endMatchAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
+                ) : null}
+                {(match.period_state === "halftime" || match.period_state === "second_half") ? (
+                  <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {rosterA.length === 0 && rosterB.length === 0 ? (
           <p className="text-xs text-amber-600">엔트리가 확정되지 않았습니다.</p>
@@ -1405,61 +1443,6 @@ export default async function MatchDetailPage({
             )}
             <p className="text-[11px] text-gray-500">입력자 원문 정보는 저장하지 않으며, 동일 계정은 같은 선수에게 1회만 평점(재입력 시 갱신) 가능합니다.</p>
           </section>
-        ) : null}
-
-        {isEditMode && canManageMatch ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
-            <div className="rounded border bg-gray-50 p-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-700">구간 운영</h3>
-                <span className="text-[11px] text-gray-500">기본 전/후반 각 15분</span>
-              </div>
-              <div className="rounded border bg-white p-2 space-y-2">
-                <div className="text-[11px] text-gray-500">
-                  현재 상태: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
-                  {elapsedMinutes !== null ? ` · 경과 ${elapsedMinutes}분` : ""}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {match.period_state === "pre" ? (
-                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "first_half" ? (
-                    <form action={endFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 종료(휴식)</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "halftime" ? (
-                    <form action={startSecondAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">후반전 시작</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "second_half" ? (
-                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
-                  ) : null}
-                  {(match.period_state === "halftime" || match.period_state === "second_half") ? (
-                    <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-                {isEditMode ? (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            {match.period_state === "pre"
-              ? "경기 시작 전에는 스코어 입력/수정이 불가합니다."
-              : match.period_state === "halftime"
-              ? "휴식 시간에는 기존 기록 수정/삭제만 가능합니다."
-              : match.period_state === "ended" && !isAdminSession
-              ? "경기 종료 후 기록 수정은 어드민만 가능합니다."
-              : ""}
-          </section>
-        ) : null}
-
-{canAddGoalNow ? (
-          <ScoreActions
-            addGoalA={addGoalA}
-            addGoalB={addGoalB}
-            teamAName={match.team_a_name}
-            teamBName={match.team_b_name}
-          />
         ) : null}
 
         {canEditGoalNow ? (

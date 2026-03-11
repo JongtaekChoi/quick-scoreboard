@@ -10,7 +10,7 @@ import {
 } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
-import ScoreActions from "./ScoreActions";
+import GoalAddActions from "./GoalAddActions";
 import LiveScoreboard from "./LiveScoreboard";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
@@ -247,11 +247,12 @@ async function canMutateParticipation(
   return true;
 }
 
-async function addGoal(
+async function addGoalDetailed(
   matchId: string,
   teamSide: "A" | "B",
   channelSlug: string,
   channelVersion: number,
+  formData: FormData,
 ) {
   "use server";
 
@@ -283,9 +284,20 @@ async function addGoal(
       : 0;
 
   const isSecondHalf = match.period_state === "second_half";
-  const minute = isSecondHalf
+  const defaultMinute = isSecondHalf
     ? 15 + elapsedFrom(match.second_half_started_at)
     : elapsedFrom(match.first_half_started_at ?? match.started_at);
+  const minuteInput = Number(formData.get("minute") || defaultMinute);
+  const minute = Number.isFinite(minuteInput) ? Math.max(0, Math.min(200, minuteInput)) : defaultMinute;
+
+  const scorerRaw = String(formData.get("scorer") || "").trim();
+  const assistRaw = String(formData.get("assist") || "").trim();
+  const [scorerIdRaw, scorerNameRaw] = scorerRaw.split("|");
+  const [assistIdRaw, assistNameRaw] = assistRaw.split("|");
+  const scorer_player_id = scorerIdRaw?.trim() || null;
+  const assist_player_id = assistIdRaw?.trim() || null;
+  const scorer_name = (scorerNameRaw?.trim() || scorerRaw || "").replace(/^#\d+\s*/, "") || null;
+  const assist_name = (assistNameRaw?.trim() || assistRaw || "").replace(/^#\d+\s*/, "") || null;
 
   const { data: insertedGoal, error: insertError } = await supabase
     .from("goal_events")
@@ -294,6 +306,10 @@ async function addGoal(
       team_side: teamSide,
       period: isSecondHalf ? "second_half" : "first_half",
       minute,
+      scorer_player_id,
+      scorer_name,
+      assist_player_id,
+      assist_name,
     })
     .select("id")
     .maybeSingle<{ id: string }>();
@@ -659,6 +675,15 @@ async function addSubstitutionEvent(
   const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
     redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const { data: stateRow } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{ period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended" }>();
+  if (stateRow?.period_state === "ended") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
   }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
@@ -1152,7 +1177,7 @@ export default async function MatchDetailPage({
   ).slice(0, 20);
 
   const addGoalA = channel
-    ? addGoal.bind(
+    ? addGoalDetailed.bind(
         null,
         matchId,
         "A",
@@ -1161,7 +1186,7 @@ export default async function MatchDetailPage({
       )
     : async () => {};
   const addGoalB = channel
-    ? addGoal.bind(
+    ? addGoalDetailed.bind(
         null,
         matchId,
         "B",
@@ -1248,6 +1273,7 @@ export default async function MatchDetailPage({
           {err === "participation_player" ? <p className="text-xs text-red-600">선수를 1명 이상 선택해 주세요.</p> : null}
           {err === "participation_minute" ? <p className="text-xs text-red-600">분(minute)은 0~200 사이여야 합니다.</p> : null}
           {err === "participation_invalid" ? <p className="text-xs text-red-600">출전 이벤트 입력값을 확인해 주세요.</p> : null}
+          {err === "participation_closed" ? <p className="text-xs text-red-600">경기 종료 후에는 선수 교체를 수정할 수 없습니다.</p> : null}
           {err === "rating_same_team" ? <p className="text-xs text-red-600">같은 팀 선수는 평점 대상이 아닙니다.</p> : null}
           {err === "rating_closed" ? <p className="text-xs text-red-600">경기 종료 후에만 평점 입력이 가능합니다.</p> : null}
           {err === "undo_expired" ? <p className="text-xs text-red-600">교체 취소 가능 시간이 지났습니다.</p> : null}
@@ -1285,11 +1311,14 @@ export default async function MatchDetailPage({
         {isEditMode ? (
           <div className="space-y-2">
             {canAddGoalNow ? (
-              <ScoreActions
-                addGoalA={addGoalA}
-                addGoalB={addGoalB}
+              <GoalAddActions
+                actionA={addGoalA}
+                actionB={addGoalB}
                 teamAName={match.team_a_name}
                 teamBName={match.team_b_name}
+                rosterA={rosterA}
+                rosterB={rosterB}
+                defaultMinute={elapsedMinutes ?? 0}
               />
             ) : null}
 
@@ -1406,8 +1435,11 @@ export default async function MatchDetailPage({
                     action={addSubstitutionAction}
                     teamAName={match.team_a_name}
                     teamBName={match.team_b_name}
-                    rosterA={rosterA}
-                    rosterB={rosterB}
+                    activeA={rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                    benchA={rosterA.filter((p) => !activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                    activeB={rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                    benchB={rosterB.filter((p) => !activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                    disabled={match.period_state === "ended"}
                   />
                 )}
 

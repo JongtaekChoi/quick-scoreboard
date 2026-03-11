@@ -1229,13 +1229,6 @@ export default async function MatchDetailPage({
               </summary>
 
               <div className="mt-3 space-y-3">
-                <details className="rounded border p-3">
-                  <summary className="cursor-pointer text-xs font-medium text-gray-600">선발출전: A팀 {startingCountA}명 · B팀 {startingCountB}명</summary>
-                  <div className="mt-2 text-xs text-gray-600 space-y-1">
-                    <div><span className="font-medium">A팀:</span> {starterNamesA.length ? starterNamesA.join(', ') : '없음'}</div>
-                    <div><span className="font-medium">B팀:</span> {starterNamesB.length ? starterNamesB.join(', ') : '없음'}</div>
-                  </div>
-                </details>
 
                 {isBeforeKickoff ? (
                   <details className="rounded border p-3" open={startingCountA === 0 && startingCountB === 0}>
@@ -1313,19 +1306,30 @@ export default async function MatchDetailPage({
                 )}
 
                 <div className="rounded border p-3">
-                  <div className="text-xs font-medium text-gray-600 mb-2">출전 이벤트 타임라인</div>
-                  {(participationEvents ?? []).length === 0 ? (
-                    <p className="text-xs text-gray-500">아직 기록이 없습니다.</p>
-                  ) : (
-                    <ul className="space-y-1 text-xs">
-                      {(participationEvents ?? []).map((e) => (
-                        <li key={e.id} className="flex items-center justify-between border-b last:border-0 py-1">
-                          <span>{e.minute}’ · {e.team_side} · {e.event_type.toUpperCase()} · {e.player_name ?? '선수'}</span>
-                          <span className="text-gray-400">{new Date(e.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div className="text-xs font-medium text-gray-600 mb-2">출전 이벤트 타임라인 · 선발 A팀 {startingCountA}명 · B팀 {startingCountB}명</div>
+                  <details className="mb-2">
+                    <summary className="cursor-pointer text-[11px] text-gray-500 underline">선발 상세 보기</summary>
+                    <div className="mt-1 text-xs text-gray-600 space-y-1">
+                      <div><span className="font-medium">A팀:</span> {starterNamesA.length ? starterNamesA.join(', ') : '없음'}</div>
+                      <div><span className="font-medium">B팀:</span> {starterNamesB.length ? starterNamesB.join(', ') : '없음'}</div>
+                    </div>
+                  </details>
+                  {(() => {
+                    const timelineEvents = (participationEvents ?? []).filter((e) => !(e.minute === 0 && e.event_type === 'in'))
+                    if (timelineEvents.length === 0) {
+                      return <p className="text-xs text-gray-500">아직 기록이 없습니다.</p>
+                    }
+                    return (
+                      <ul className="space-y-1 text-xs">
+                        {timelineEvents.map((e) => (
+                          <li key={e.id} className="flex items-center justify-between border-b last:border-0 py-1">
+                            <span>{e.minute}’ · {e.team_side} · {e.event_type.toUpperCase()} · {e.player_name ?? '선수'}</span>
+                            <span className="text-gray-400">{new Date(e.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  })()}
                 </div>
               </div>
             </details>

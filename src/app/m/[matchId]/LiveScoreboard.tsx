@@ -42,8 +42,6 @@ type Replacement = {
 
 type StarterLine = {
   id: string;
-  minute: number;
-  team_side: "A" | "B";
   text: string;
   created_at: string;
 };
@@ -97,6 +95,16 @@ function EventLine({
   const currentGoal = searchParams.get("goal");
   const active = !readonly && (currentGoal ? currentGoal === g?.id : idx === 0);
 
+  if (type === "starter") {
+    return (
+      <div className="w-full text-center text-[11px] text-gray-500 rounded-lg px-2 py-1 border border-dashed border-gray-200 bg-white/70">
+        ── {starter?.text} ──
+      </div>
+    );
+  }
+
+  const side = (event as Goal | Replacement).team_side;
+
   return (
     <button
       key={event.id}
@@ -112,7 +120,7 @@ function EventLine({
       className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? "bg-white ring-1 ring-gray-300" : "hover:bg-white/70"}`}
     >
       <div className="text-right truncate">
-        {event.team_side === "A" ? (
+        {side === "A" ? (
           g ? (
             <>
               <span>{who}</span>
@@ -120,8 +128,6 @@ function EventLine({
                 <span className="text-gray-400"> ({assist})</span>
               ) : null}
             </>
-          ) : type === "starter" ? (
-            <span className="font-semibold">{starter?.text}</span>
           ) : (
             <span> {replacement?.text}</span>
           )
@@ -131,11 +137,15 @@ function EventLine({
       </div>
 
       <div className="text-gray-500 tabular-nums">
-        {event.minute !== null ? `${event.minute}’` : ""}
+        {g?.minute !== null && g?.minute !== undefined
+          ? `${g.minute}’`
+          : replacement?.minute !== null && replacement?.minute !== undefined
+            ? `${replacement.minute}’`
+            : ""}
       </div>
 
       <div className="truncate">
-        {event.team_side === "B" ? (
+        {side === "B" ? (
           g ? (
             <>
               <span>{who}</span>
@@ -143,8 +153,6 @@ function EventLine({
                 <span className="text-gray-400"> ({assist})</span>
               ) : null}
             </>
-          ) : type === "starter" ? (
-            <span className="font-semibold">{starter?.text}</span>
           ) : (
             <span> {replacement?.text}</span>
           )
@@ -272,46 +280,32 @@ function LiveScoreboardInner({
     return lines;
   })();
 
-  const starterLines: StarterLine[] = (periodStarters ?? []).flatMap((p, idx) => {
-    const minute = 0;
-    const createdAt = new Date(0).toISOString();
-    return [
-      {
-        id: `starter-${p.id}-A-${idx}`,
-        minute,
-        team_side: "A" as const,
-        text: `${p.label} START · ${p.teamA || "없음"}`,
-        created_at: createdAt,
-      },
-      {
-        id: `starter-${p.id}-B-${idx}`,
-        minute,
-        team_side: "B" as const,
-        text: `${p.label} START · ${p.teamB || "없음"}`,
-        created_at: createdAt,
-      },
-    ];
-  });
+  const starterLines: StarterLine[] = (periodStarters ?? []).map((p, idx) => ({
+    id: `starter-${p.id}-${idx}`,
+    text: `${p.label} START`,
+    created_at: new Date(0).toISOString(),
+  }));
 
   const timeEvents: { type: "goal" | "replace" | "starter"; event: Goal | Replacement | StarterLine }[] =
     (() => {
-      return [
-        ...goals.map((goal) => ({ type: "goal", event: goal }) as const),
-        ...groupedParticipation.map(
-          (replacement) =>
-            ({
-              type: "replace",
-              event: replacement,
-            }) as const,
-        ),
-        ...starterLines.map((starter) => ({ type: "starter", event: starter }) as const),
-      ].sort(({ event: a }, { event: b }) => {
-        if (a.minute != null && b.minute != null && a.minute !== b.minute)
-          return b.minute - a.minute;
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
+      const typePriority: Record<"starter" | "goal" | "replace", number> = {
+        starter: 0,
+        goal: 1,
+        replace: 2,
+      };
+      const withMeta = [
+        ...goals.map((goal) => ({ type: "goal" as const, event: goal, minute: goal.minute ?? -1 })),
+        ...groupedParticipation.map((replacement) => ({ type: "replace" as const, event: replacement, minute: replacement.minute })),
+        ...starterLines.map((starter, idx) => ({ type: "starter" as const, event: starter, minute: 1000 - idx })),
+      ];
+
+      return withMeta
+        .sort((a, b) => {
+          if (a.minute !== b.minute) return b.minute - a.minute;
+          if (a.type !== b.type) return typePriority[a.type] - typePriority[b.type];
+          return new Date(b.event.created_at).getTime() - new Date(a.event.created_at).getTime();
+        })
+        .map(({ type, event }) => ({ type, event }));
     })();
 
   return (

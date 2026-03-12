@@ -887,7 +887,7 @@ async function addSubstitutionEvent(
     .maybeSingle<{
       period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
     }>();
-  if (stateRow?.period_state === "pre" || stateRow?.period_state === "ended") {
+  if (stateRow?.period_state === "ended") {
     redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
   }
 
@@ -993,6 +993,10 @@ async function addSubstitutionEvent(
 
     revalidatePath(`/m/${matchId}`);
     redirect(`/m/${matchId}?mode=edit`);
+  }
+
+  if (stateRow?.period_state === "pre") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_not_started`);
   }
 
   const { data: inserted } = await supabase
@@ -1786,6 +1790,11 @@ export default async function MatchDetailPage({
           {err === "participation_closed" ? (
             <p className="text-xs text-red-600">
               경기 종료 후에는 선수 교체를 수정할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_not_started" ? (
+            <p className="text-xs text-red-600">
+              경기 시작 전에는 즉시 교체를 저장할 수 없습니다. 예약 모드를 사용해 주세요.
             </p>
           ) : null}
           {err === "participation_same_player" ? (

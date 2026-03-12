@@ -232,7 +232,7 @@ async function saveMatchStarters(formData: FormData) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
   }
 
-  if (playerIds.length !== 5) {
+  if (playerIds.length === 0) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_count`)
   }
 
@@ -464,7 +464,7 @@ export default async function AdminGroupPage({
           {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
-          {err === 'starter_count' ? <p className="text-xs text-red-600">선발은 팀당 정확히 5명 선택해 주세요.</p> : null}
+          {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
         </header>
 
         {!managerTeamId && (
@@ -603,7 +603,7 @@ export default async function AdminGroupPage({
 
         {(managerTeamId || tab === 'entries') && (matches ?? []).length > 0 ? (
           <section className="rounded border p-4 space-y-3">
-            <h2 className="text-sm font-semibold">경기별 선발 제출 (팀당 5명)</h2>
+            <h2 className="text-sm font-semibold">경기별 선발 제출</h2>
             <p className="text-xs text-gray-500">선발은 경기 시작 전 미리 제출하고, 필요 시 다시 저장해 수정할 수 있습니다.</p>
             {(matches ?? []).map((m) => {
               const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null

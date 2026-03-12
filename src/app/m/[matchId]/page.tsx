@@ -1702,6 +1702,30 @@ export default async function MatchDetailPage({
       label: getPeriodDisplayLabel(p.sequence, p),
     }));
 
+  const periodStarters = sortedPeriods
+    .map((p) => {
+      const rowsA = (periodLineups ?? []).filter(
+        (row) => row.match_period_id === p.id && row.team_side === "A",
+      );
+      const rowsB = (periodLineups ?? []).filter(
+        (row) => row.match_period_id === p.id && row.team_side === "B",
+      );
+      if (rowsA.length === 0 && rowsB.length === 0) return null;
+
+      const toLabel = (row: { player_id: string | null; player_name: string | null }) =>
+        (row.player_id ? playerLabelById.get(row.player_id) : undefined) ??
+        row.player_name ??
+        "선수";
+
+      return {
+        id: p.id,
+        label: getPeriodDisplayLabel(p.sequence, p),
+        teamA: rowsA.map(toLabel).join(", "),
+        teamB: rowsB.map(toLabel).join(", "),
+      };
+    })
+    .filter(Boolean) as { id: string; label: string; teamA: string; teamB: string }[];
+
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
@@ -1881,6 +1905,7 @@ export default async function MatchDetailPage({
                 "선수",
               created_at: e.created_at,
             }))}
+          periodStarters={periodStarters}
         />
 
         {isEditMode ? (

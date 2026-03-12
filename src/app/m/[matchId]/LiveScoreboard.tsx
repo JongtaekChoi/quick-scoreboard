@@ -48,6 +48,13 @@ type MatchMini = {
   score_b: number;
 };
 
+type PeriodStarterSummary = {
+  id: string;
+  label: string;
+  teamA: string;
+  teamB: string;
+};
+
 type ScoreboardPayload = { match: MatchMini; goals: Goal[] };
 
 const REFRESH_SEC = 10;
@@ -143,6 +150,7 @@ function LiveScoreboardInner({
   readonly,
   matchStatus,
   participationEvents,
+  periodStarters,
 }: {
   matchId: string;
   initialMatch: MatchMini;
@@ -150,6 +158,7 @@ function LiveScoreboardInner({
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
   participationEvents?: ParticipationItem[];
+  periodStarters?: PeriodStarterSummary[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -242,24 +251,10 @@ function LiveScoreboardInner({
           created_at: base.created_at,
         });
       }
-      for (let k = pairCount; k < ins.length; k++) {
-        lines.push({
-          id: `${base.minute}-${base.team_side}-in-${k}`,
-          minute: base.minute,
-          team_side: base.team_side,
-          text: `IN ${ins[k].player_label}`,
-          created_at: base.created_at,
-        });
-      }
-      for (let k = pairCount; k < outs.length; k++) {
-        lines.push({
-          id: `${base.minute}-${base.team_side}-out-${k}`,
-          minute: base.minute,
-          team_side: base.team_side,
-          text: `OUT ${outs[k].player_label}`,
-          created_at: base.created_at,
-        });
-      }
+      // 교체 이벤트는 IN/OUT 쌍만 표시한다.
+      // (스타팅/단독 IN 이벤트가 교체처럼 보이는 문제 방지)
+      void ins;
+      void outs;
     }
     return lines;
   })();
@@ -326,6 +321,17 @@ function LiveScoreboardInner({
         </p>
       ) : null}
 
+      {(periodStarters ?? []).length > 0 ? (
+        <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
+          {(periodStarters ?? []).map((p) => (
+            <div key={p.id} className="text-xs rounded-lg px-2 py-1 bg-white">
+              <span className="font-semibold">{p.label} START</span>
+              <span className="text-gray-600"> · A: {p.teamA || "없음"} · B: {p.teamB || "없음"}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
         {timeEvents.length === 0 ? (
           <p className="text-xs text-gray-500">이벤트 없음</p>
@@ -358,6 +364,7 @@ export default function LiveScoreboard(props: {
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
   participationEvents?: ParticipationItem[];
+  periodStarters?: PeriodStarterSummary[];
 }) {
   const [queryClient] = useState(() => new QueryClient());
   return (

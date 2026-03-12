@@ -17,23 +17,26 @@ import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.share
 type Goal = {
   id: string;
   team_side: "A" | "B";
+  period_sequence?: number | null;
   minute: number | null;
   scorer_name: string | null;
   assist_name: string | null;
   created_at: string;
 };
 
-type ParticipationItem = {
+type SubstitutionEvent = {
   id: string;
+  period_sequence: number;
   minute: number;
   team_side: "A" | "B";
-  event_type: "in" | "out";
-  player_label: string;
+  player_out_label: string;
+  player_in_label: string;
   created_at: string;
 };
 
 type Replacement = {
   id: string;
+  period_sequence: number;
   minute: number;
   team_side: "A" | "B";
   text: string;
@@ -45,6 +48,7 @@ type StarterLine = {
   text: string;
   created_at: string;
   minute: number;
+  period_sequence: number;
 };
 
 type MatchMini = {
@@ -180,7 +184,7 @@ function LiveScoreboardInner({
   initialGoals,
   readonly,
   matchStatus,
-  participationEvents,
+  substitutionEvents,
   periodStarters,
 }: {
   matchId: string;
@@ -188,7 +192,7 @@ function LiveScoreboardInner({
   initialGoals: Goal[];
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
-  participationEvents?: ParticipationItem[];
+  substitutionEvents?: SubstitutionEvent[];
   periodStarters?: PeriodStarterSummary[];
 }) {
   const router = useRouter();
@@ -246,66 +250,32 @@ function LiveScoreboardInner({
     });
   }
 
-  const groupedParticipation = (() => {
-    const source = participationEvents ?? [];
-    const sorted = [...source].sort((a, b) => {
-      if (a.minute !== b.minute) return a.minute - b.minute;
-      if (a.team_side !== b.team_side)
-        return a.team_side.localeCompare(b.team_side);
-      return (
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-    });
-
-    const lines: Array<Replacement> = [];
-    for (let i = 0; i < sorted.length; ) {
-      const base = sorted[i];
-      const chunk: ParticipationItem[] = [];
-      while (
-        i < sorted.length &&
-        sorted[i].minute === base.minute &&
-        sorted[i].team_side === base.team_side
-      ) {
-        chunk.push(sorted[i]);
-        i += 1;
-      }
-
-      const ins = chunk.filter((e) => e.event_type === "in");
-      const outs = chunk.filter((e) => e.event_type === "out");
-      const pairCount = Math.min(ins.length, outs.length);
-
-      for (let k = 0; k < pairCount; k++) {
-        lines.push({
-          id: `${base.minute}-${base.team_side}-pair-${k}`,
-          minute: base.minute,
-          team_side: base.team_side,
-          text: `IN ${ins[k].player_label} OUT ${outs[k].player_label}`,
-          created_at: base.created_at,
-        });
-      }
-      // 교체 이벤트는 IN/OUT 쌍만 표시한다.
-      // (스타팅/단독 IN 이벤트가 교체처럼 보이는 문제 방지)
-      void ins;
-      void outs;
-    }
-    return lines;
-  })();
+  const groupedParticipation: Replacement[] = (substitutionEvents ?? []).map((sub) => ({
+    id: sub.id,
+    period_sequence: sub.period_sequence,
+    minute: sub.minute,
+    team_side: sub.team_side,
+    text: `IN ${sub.player_in_label} OUT ${sub.player_out_label}`,
+    created_at: sub.created_at,
+  }));
 
   const starterEntries = (periodStarters ?? []).map((p, idx) => ({
     id: `starter-${p.id}-${idx}`,
     text: `${p.label} START`,
     created_at: new Date(0).toISOString(),
     minute: p.startMinute,
+    period_sequence: idx + 1,
     label: p.label,
     teamA: p.teamA,
     teamB: p.teamB,
   }));
 
-  const starterLines: StarterLine[] = starterEntries.map(({ id, text, created_at, minute }) => ({
+  const starterLines: StarterLine[] = starterEntries.map(({ id, text, created_at, minute, period_sequence }) => ({
     id,
     text,
     created_at,
     minute,
+    period_sequence,
   }));
 
   const selectedStarter = starterEntries.find((p) => p.id === selectedStarterId) ?? null;
@@ -318,13 +288,14 @@ function LiveScoreboardInner({
         replace: 2,
       };
       const withMeta = [
-        ...goals.map((goal) => ({ type: "goal" as const, event: goal, minute: goal.minute ?? -1 })),
-        ...groupedParticipation.map((replacement) => ({ type: "replace" as const, event: replacement, minute: replacement.minute })),
-        ...starterLines.map((starter) => ({ type: "starter" as const, event: starter, minute: starter.minute })),
+        ...goals.map((goal) => ({ type: "goal" as const, event: goal, period_sequence: goal.period_sequence ?? (goal.minute != null && goal.minute >= 15 ? 2 : 1), minute: goal.minute ?? -1 })),
+        ...groupedParticipation.map((replacement) => ({ type: "replace" as const, event: replacement, period_sequence: replacement.period_sequence, minute: replacement.minute })),
+        ...starterLines.map((starter) => ({ type: "starter" as const, event: starter, period_sequence: starter.period_sequence, minute: starter.minute })),
       ];
 
       return withMeta
         .sort((a, b) => {
+          if (a.period_sequence !== b.period_sequence) return b.period_sequence - a.period_sequence;
           if (a.minute !== b.minute) return b.minute - a.minute;
           if (a.type !== b.type) return typePriority[a.type] - typePriority[b.type];
           return new Date(b.event.created_at).getTime() - new Date(a.event.created_at).getTime();
@@ -415,7 +386,7 @@ export default function LiveScoreboard(props: {
   initialGoals: Goal[];
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
-  participationEvents?: ParticipationItem[];
+  substitutionEvents?: SubstitutionEvent[];
   periodStarters?: PeriodStarterSummary[];
 }) {
   const [queryClient] = useState(() => new QueryClient());

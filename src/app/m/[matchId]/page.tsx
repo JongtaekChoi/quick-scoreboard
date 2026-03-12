@@ -55,6 +55,7 @@ type GoalEvent = {
   id: string;
   team_side: "A" | "B";
   period: "first_half" | "second_half";
+  period_sequence: number | null;
   minute: number | null;
   scorer_name: string | null;
   scorer_player_id: string | null;
@@ -90,6 +91,18 @@ type ReservedSubstitutionPlan = {
   player_in_id: string | null;
   player_in_name: string | null;
   planned_minute: number;
+};
+
+type MatchSubstitution = {
+  id: string;
+  period_sequence: number;
+  minute: number;
+  team_side: "A" | "B";
+  player_out_id: string | null;
+  player_out_name: string | null;
+  player_in_id: string | null;
+  player_in_name: string | null;
+  created_at: string;
 };
 
 type Alias = { jersey_no: string | null; player_name: string | null };
@@ -311,6 +324,14 @@ async function addGoalDetailed(
 
   if (!match) return;
 
+  const { data: livePeriod } = await supabase
+    .from("match_periods")
+    .select("sequence")
+    .eq("match_id", matchId)
+    .eq("status", "live")
+    .is("deleted_at", null)
+    .maybeSingle<{ sequence: number }>();
+
   const now = new Date();
   const elapsedFrom = (iso: string | null) =>
     iso
@@ -346,6 +367,7 @@ async function addGoalDetailed(
       match_id: matchId,
       team_side: teamSide,
       period: isSecondHalf ? "second_half" : "first_half",
+      period_sequence: livePeriod?.sequence ?? (isSecondHalf ? 2 : 1),
       minute,
       scorer_player_id,
       scorer_name,
@@ -530,6 +552,20 @@ async function applyPeriodAction(
       });
 
       await supabase.from("match_participation_events").insert(rows);
+      await supabase.from("match_substitutions").insert(
+        (reservedSubs ?? []).map((sub) => ({
+          match_id: matchId,
+          period_sequence: nextPending.sequence,
+          minute: Number.isFinite(sub.planned_minute)
+            ? Math.max(0, Math.min(200, sub.planned_minute))
+            : 0,
+          team_side: sub.team_side,
+          player_out_id: sub.player_out_id,
+          player_out_name: sub.player_out_name,
+          player_in_id: sub.player_in_id,
+          player_in_name: sub.player_in_name,
+        })),
+      );
       await supabase
         .from("match_period_substitution_plans")
         .update({ applied_at: now })
@@ -1006,6 +1042,21 @@ async function addSubstitutionEvent(
     redirect(`/m/${matchId}?mode=edit`);
   }
 
+  const { data: insertedSub } = await supabase
+    .from("match_substitutions")
+    .insert({
+      match_id: matchId,
+      period_sequence: stateRow?.period_state === "second_half" ? 2 : 1,
+      minute,
+      team_side: teamSide,
+      player_out_id: outId || null,
+      player_out_name: outName || null,
+      player_in_id: inId || null,
+      player_in_name: inName || null,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
   const { data: inserted } = await supabase
     .from("match_participation_events")
     .insert([
@@ -1040,7 +1091,13 @@ async function addSubstitutionEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  const undoIds = `${inserted?.[0]?.id ?? ""},${inserted?.[1]?.id ?? ""}`;
+  const undoIds = [
+    inserted?.[0]?.id ?? "",
+    inserted?.[1]?.id ?? "",
+    insertedSub?.id ? `sub:${insertedSub.id}` : "",
+  ]
+    .filter(Boolean)
+    .join(",");
   const undoUntil = Date.now() + 30_000;
   redirect(
     `/m/${matchId}?mode=edit&undo=${encodeURIComponent(undoIds)}&undo_until=${undoUntil}`,
@@ -1068,20 +1125,41 @@ async function undoSubstitutionEvent(
     redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
   }
 
-  const ids = undoIdsRaw
+  const rawIds = undoIdsRaw
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-  if (ids.length === 0) {
+  if (rawIds.length === 0) {
     redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
   }
 
-  await supabase
-    .from("match_participation_events")
-    .update({ deleted_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("match_id", matchId)
-    .is("deleted_at", null);
+  const ids = rawIds.filter((v) => !v.startsWith("sub:"));
+  const subIds = rawIds
+    .filter((v) => v.startsWith("sub:"))
+    .map((v) => v.slice(4))
+    .filter(Boolean);
+
+  if (ids.length === 0 && subIds.length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+  }
+
+  if (ids.length > 0) {
+    await supabase
+      .from("match_participation_events")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", ids)
+      .eq("match_id", matchId)
+      .is("deleted_at", null);
+  }
+
+  if (subIds.length > 0) {
+    await supabase
+      .from("match_substitutions")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", subIds)
+      .eq("match_id", matchId)
+      .is("deleted_at", null);
+  }
 
   await logMatchChange(
     matchId,
@@ -1368,12 +1446,22 @@ export default async function MatchDetailPage({
   const { data: goals } = await supabase
     .from("goal_events")
     .select(
-      "id,team_side,period,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
+      "id,team_side,period,period_sequence,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .returns<GoalEvent[]>();
+
+  const { data: matchSubstitutions } = await supabase
+    .from("match_substitutions")
+    .select(
+      "id,period_sequence,minute,team_side,player_out_id,player_out_name,player_in_id,player_in_name,created_at",
+    )
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .returns<MatchSubstitution[]>();
 
   const { data: participationEvents } = await supabase
     .from("match_participation_events")
@@ -1888,24 +1976,27 @@ export default async function MatchDetailPage({
           initialGoals={(goals ?? []).map((g) => ({
             id: g.id,
             team_side: g.team_side,
+            period_sequence: g.period_sequence,
             minute: g.minute,
             scorer_name: g.scorer_name,
             assist_name: g.assist_name,
             created_at: g.created_at,
           }))}
-          participationEvents={(participationEvents ?? [])
-            .filter((e) => !e.is_starter)
-            .map((e) => ({
-              id: e.id,
-              minute: e.minute,
-              team_side: e.team_side,
-              event_type: e.event_type,
-              player_label:
-                (e.player_id ? playerLabelById.get(e.player_id) : undefined) ??
-                e.player_name ??
-                "선수",
-              created_at: e.created_at,
-            }))}
+          substitutionEvents={(matchSubstitutions ?? []).map((s) => ({
+            id: s.id,
+            period_sequence: s.period_sequence,
+            minute: s.minute,
+            team_side: s.team_side,
+            player_out_label:
+              (s.player_out_id ? playerLabelById.get(s.player_out_id) : undefined) ??
+              s.player_out_name ??
+              "선수",
+            player_in_label:
+              (s.player_in_id ? playerLabelById.get(s.player_in_id) : undefined) ??
+              s.player_in_name ??
+              "선수",
+            created_at: s.created_at,
+          }))}
           periodStarters={periodStarters}
         />
 

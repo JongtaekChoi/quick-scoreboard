@@ -51,14 +51,14 @@ export default function SubstitutionActions({
   firstHalfStartedAt: string | null
   secondHalfStartedAt: string | null
   firstHalfEndedAt: string | null
-  reservablePeriods: Array<{ sequence: number; label: string }>
+  reservablePeriods: Array<{ id: string; sequence: number; label: string }>
 }) {
   const [open, setOpen] = useState(false)
   const [teamSide, setTeamSide] = useState<'A' | 'B'>('A')
   const [minute, setMinute] = useState(0)
 
   const autoReserveMode = periodState === 'pre' || periodState === 'halftime'
-  const reserveSequence = reservablePeriods[0]?.sequence ?? 1
+  const reservePeriodId = reservablePeriods[0]?.id ?? ""
 
   const outRoster = useMemo(() => (teamSide === 'A' ? activeA : activeB), [teamSide, activeA, activeB])
   const inRoster = useMemo(() => (teamSide === 'A' ? benchA : benchB), [teamSide, benchA, benchB])
@@ -87,7 +87,7 @@ export default function SubstitutionActions({
             <form action={action} className="space-y-2">
               <input type="hidden" name="team_side" value={teamSide} />
               <input type="hidden" name="reservation_mode" value={autoReserveMode ? 'reserve' : 'now'} />
-              <input type="hidden" name="reservation_period_sequence" value={reserveSequence} />
+              <input type="hidden" name="reservation_period_id" value={reservePeriodId} />
               <div className="text-xs text-gray-600 rounded border bg-gray-50 px-2 py-1.5">
                 {autoReserveMode
                   ? `현재는 시작 전 상태라 다음 period(${reservablePeriods[0]?.label ?? '다음 period'}) 교체로 자동 예약됩니다.`

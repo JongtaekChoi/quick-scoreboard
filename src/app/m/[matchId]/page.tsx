@@ -75,6 +75,7 @@ type MatchPeriodLineup = {
 type ReservedSubstitutionPlan = {
   id: string;
   team_side: "A" | "B";
+  match_period_id: string;
   period_sequence: number;
   player_out_id: string | null;
   player_out_name: string | null;
@@ -501,7 +502,7 @@ async function applyPeriodAction(
         "id,team_side,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
       )
       .eq("match_id", matchId)
-      .eq("period_sequence", nextPending.sequence)
+       .eq("match_period_id", nextPending.id)
       .is("deleted_at", null)
       .is("applied_at", null)
       .returns<
@@ -896,9 +897,7 @@ async function addSubstitutionEvent(
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
   const minute = Number(formData.get("minute") || 0);
   const reservationMode = String(formData.get("reservation_mode") || "now").trim();
-  const reservationPeriodSequence = Number(
-    formData.get("reservation_period_sequence") || 0,
-  );
+  const reservationPeriodId = String(formData.get("reservation_period_id") || "").trim();
   const playerOutValue = String(formData.get("player_out_value") || "").trim();
   const playerInValue = String(formData.get("player_in_value") || "").trim();
 
@@ -945,7 +944,7 @@ async function addSubstitutionEvent(
       >();
 
     const targetPeriod =
-      (pendingPeriods ?? []).find((p) => p.sequence === reservationPeriodSequence) ??
+      (pendingPeriods ?? []).find((p) => p.id === reservationPeriodId) ??
       (pendingPeriods ?? [])[0] ??
       null;
 
@@ -960,7 +959,7 @@ async function addSubstitutionEvent(
       .select("id,player_out_id,player_in_id")
       .eq("match_id", matchId)
       .eq("team_side", teamSide)
-      .eq("period_sequence", targetSequence)
+       .eq("match_period_id", targetPeriod.id)
       .is("deleted_at", null)
       .is("applied_at", null)
       .returns<
@@ -987,6 +986,7 @@ async function addSubstitutionEvent(
       match_id: matchId,
       team_side: teamSide,
       period_sequence: targetSequence,
+      match_period_id: targetPeriod.id,
       player_out_id: outId || null,
       player_out_name: outName || null,
       player_in_id: inId || null,
@@ -1129,12 +1129,13 @@ async function cancelReservedSubstitution(
 
   const { data: reservation } = await supabase
     .from("match_period_substitution_plans")
-    .select("id,period_sequence,applied_at")
+    .select("id,match_period_id,period_sequence,applied_at")
     .eq("id", reservationId)
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .maybeSingle<{
       id: string;
+      match_period_id: string | null;
       period_sequence: number;
       applied_at: string | null;
     }>();
@@ -1409,7 +1410,7 @@ export default async function MatchDetailPage({
   const { data: reservedSubPlans } = await supabase
     .from("match_period_substitution_plans")
     .select(
-      "id,team_side,period_sequence,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
+      "id,team_side,match_period_id,period_sequence,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)
@@ -1689,9 +1690,11 @@ export default async function MatchDetailPage({
       ? `${getPeriodDisplayLabel(livePeriod.sequence, livePeriod)} 종료`
       : "경기 종료"
     : null;
+  const periodSequenceById = new Map((sortedPeriods ?? []).map((p) => [p.id, p.sequence] as const));
   const reservablePeriods = sortedPeriods
     .filter((p) => p.status === "pending")
     .map((p) => ({
+      id: p.id,
       sequence: p.sequence,
       label: getPeriodDisplayLabel(p.sequence, p),
     }));
@@ -1882,7 +1885,7 @@ export default async function MatchDetailPage({
           initialGoals={(goals ?? []).map((g) => ({
             id: g.id,
             team_side: g.team_side,
-            period_sequence: g.period_sequence,
+            period_sequence: g.match_period_id ? periodSequenceById.get(g.match_period_id) ?? g.period_sequence : g.period_sequence,
             minute: g.minute,
             scorer_name: g.scorer_name,
             assist_name: g.assist_name,
@@ -1890,7 +1893,7 @@ export default async function MatchDetailPage({
           }))}
           substitutionEvents={(matchSubstitutions ?? []).map((s) => ({
             id: s.id,
-            period_sequence: s.period_sequence,
+            period_sequence: s.match_period_id ? periodSequenceById.get(s.match_period_id) ?? s.period_sequence : s.period_sequence,
             minute: s.minute,
             team_side: s.team_side,
             player_out_label:

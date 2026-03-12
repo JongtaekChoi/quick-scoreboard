@@ -1328,9 +1328,20 @@ export default async function MatchDetailPage({
         Math.floor((now - new Date(activePeriodStart).getTime()) / 60000),
       )
     : null;
+  const firstHalfBaseMinute =
+    match.first_half_started_at && match.first_half_ended_at
+      ? Math.max(
+          0,
+          Math.floor(
+            (new Date(match.first_half_ended_at).getTime() -
+              new Date(match.first_half_started_at).getTime()) /
+              60000,
+          ),
+        )
+      : 15;
   const goalDefaultMinute =
     match.period_state === "second_half"
-      ? 15 + (elapsedMinutes ?? 0)
+      ? firstHalfBaseMinute + (elapsedMinutes ?? 0)
       : (elapsedMinutes ?? 0);
 
   return (

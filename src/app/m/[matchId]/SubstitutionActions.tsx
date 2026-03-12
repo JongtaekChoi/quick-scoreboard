@@ -13,14 +13,14 @@ function computeDefaultMinute(
 ) {
   const now = Date.now()
   const elapsed = (iso: string | null) => (iso ? Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000)) : 0)
-  if (periodState === 'second_half') return 15 + elapsed(secondHalfStartedAt)
+  const firstHalfBaseMinute =
+    firstHalfStartedAt && firstHalfEndedAt
+      ? Math.max(0, Math.floor((new Date(firstHalfEndedAt).getTime() - new Date(firstHalfStartedAt).getTime()) / 60000))
+      : 15
+
+  if (periodState === 'second_half') return firstHalfBaseMinute + elapsed(secondHalfStartedAt)
   if (periodState === 'first_half') return elapsed(firstHalfStartedAt)
-  if (periodState === 'halftime') {
-    if (firstHalfStartedAt && firstHalfEndedAt) {
-      return Math.max(0, Math.floor((new Date(firstHalfEndedAt).getTime() - new Date(firstHalfStartedAt).getTime()) / 60000))
-    }
-    return 15
-  }
+  if (periodState === 'halftime') return firstHalfBaseMinute
   return 0
 }
 

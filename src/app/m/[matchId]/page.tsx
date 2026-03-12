@@ -15,6 +15,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
+import { summarizeLegacyPeriodControl, type MatchPeriodRow } from "@/lib/matchPeriods";
 
 type Match = {
   id: string;
@@ -34,6 +35,7 @@ type Match = {
   halftime_started_at: string | null;
   second_half_started_at: string | null;
   second_half_ended_at: string | null;
+  period_count: number;
 };
 
 type Channel = { id: string; slug: string; edit_session_version: number };
@@ -941,7 +943,7 @@ export default async function MatchDetailPage({
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
+      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at,period_count",
     )
     .eq("id", matchId)
     .maybeSingle<Match>();
@@ -958,6 +960,14 @@ export default async function MatchDetailPage({
       </main>
     );
   }
+
+  const { data: matchPeriods } = await supabase
+    .from("match_periods")
+    .select("id,sequence,period_code,label,status")
+    .eq("match_id", match.id)
+    .is("deleted_at", null)
+    .order("sequence", { ascending: true })
+    .returns<MatchPeriodRow[]>();
 
   const { data: channel } = await supabase
     .from("channels")
@@ -1344,6 +1354,12 @@ export default async function MatchDetailPage({
       ? firstHalfBaseMinute + (elapsedMinutes ?? 0)
       : (elapsedMinutes ?? 0);
 
+  const periodControlSummary = summarizeLegacyPeriodControl({
+    periodCount: match.period_count,
+    periodState: match.period_state,
+    periods: matchPeriods ?? [],
+  });
+
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
@@ -1529,15 +1545,7 @@ export default async function MatchDetailPage({
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-500">
                   현재:{" "}
-                  {match.period_state === "pre"
-                    ? "대기"
-                    : match.period_state === "first_half"
-                      ? "전반 진행"
-                      : match.period_state === "halftime"
-                        ? "휴식"
-                        : match.period_state === "second_half"
-                          ? "후반 진행"
-                          : "종료"}
+                  {periodControlSummary.statusLabel}
                   {elapsedMinutes !== null ? ` · ${elapsedMinutes}분` : ""}
                 </span>
                 {match.period_state === "pre" ? (
@@ -1547,7 +1555,7 @@ export default async function MatchDetailPage({
                       pendingText="처리중..."
                       confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다."
                     >
-                      전반전 시작
+                      {periodControlSummary.primaryActionLabel ?? "1P 시작"}
                     </PendingSubmitButton>
                   </form>
                 ) : null}
@@ -1557,7 +1565,7 @@ export default async function MatchDetailPage({
                       className="rounded border px-2 py-1"
                       pendingText="처리중..."
                     >
-                      전반 종료
+                      {periodControlSummary.primaryActionLabel ?? "1P 종료"}
                     </PendingSubmitButton>
                   </form>
                 ) : null}
@@ -1567,7 +1575,7 @@ export default async function MatchDetailPage({
                       className="rounded border px-2 py-1"
                       pendingText="처리중..."
                     >
-                      후반 시작
+                      {periodControlSummary.primaryActionLabel ?? "2P 시작"}
                     </PendingSubmitButton>
                   </form>
                 ) : null}

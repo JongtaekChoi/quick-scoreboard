@@ -14,7 +14,7 @@ type MatchGroup = {
   seq: number
   entry_confirmed_at: string | null
 }
-type Match = { id: string; seq: number; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
+type Match = { id: string; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
 type Team = { id: string; name: string }
 type TeamPlayer = { id: string; team_id: string; jersey_no: string; player_name: string; is_active: boolean }
 type GroupEntry = { id: string; team_id: string; player_id: string }
@@ -212,6 +212,55 @@ async function saveGroupEntries(formData: FormData) {
   redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
+async function saveMatchStarters(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const matchId = String(formData.get('matchId') || '')
+  const teamId = String(formData.get('teamId') || '')
+  const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
+  const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+
+  if (!channelId || !groupId || !matchId || !teamId || (teamSide !== 'A' && teamSide !== 'B')) return
+  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
+  }
+
+  if (playerIds.length === 0) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_count`)
+  }
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  await supabase
+    .from('match_participation_events')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('match_id', matchId)
+    .eq('team_side', teamSide)
+    .eq('is_starter', true)
+    .is('deleted_at', null)
+
+  await supabase.from('match_participation_events').insert(
+    playerIds.map((playerId) => ({
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: playerId,
+      event_type: 'in',
+      minute: 0,
+      is_starter: true,
+    })),
+  )
+
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
+}
+
 async function saveGroupGuest(formData: FormData) {
   'use server'
   const channelId = String(formData.get('channelId') || '')
@@ -336,7 +385,7 @@ export default async function AdminGroupPage({
   const managerTeamId = manage.managerTeamId
   const [{ data: group }, { data: matches }, { data: teams }, { data: players }, { data: entries }, { data: guests }] = await Promise.all([
     supabase.from('match_groups').select('id,play_date,venue,title,seq,entry_confirmed_at').eq('id', groupId).maybeSingle<MatchGroup>(),
-    supabase.from('matches').select('id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
+    supabase.from('matches').select('id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
     supabase.from('channel_teams_view').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
     supabase.from('team_players').select('id,team_id,jersey_no,player_name,is_active').eq('channel_id', channelId).eq('is_active', true).order('jersey_no', { ascending: true }).returns<TeamPlayer[]>(),
     supabase.from('match_group_entries').select('id,team_id,player_id').eq('match_group_id', groupId).returns<GroupEntry[]>(),
@@ -344,6 +393,14 @@ export default async function AdminGroupPage({
   ])
 
   if (!channel || !group) return <main className="p-6">리그/그룹을 찾을 수 없습니다.</main>
+
+  const { data: starterEvents } = await supabase
+    .from('match_participation_events')
+    .select('match_id,team_side,player_id,is_starter')
+    .in('match_id', (matches ?? []).map((m) => m.id))
+    .eq('is_starter', true)
+    .is('deleted_at', null)
+    .returns<{ match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[]>()
 
   const playersByTeam = new Map<string, TeamPlayer[]>()
   for (const p of players ?? []) {
@@ -365,6 +422,16 @@ export default async function AdminGroupPage({
   }
 
   const teamNameMap = new Map((teams ?? []).map((t) => [t.id, t.name]))
+  const teamIdByName = new Map((teams ?? []).map((t) => [t.name, t.id]))
+
+  const startersByMatchSide = new Map<string, Set<string>>()
+  for (const s of starterEvents ?? []) {
+    if (!s.player_id) continue
+    const key = `${s.match_id}:${s.team_side}`
+    const set = startersByMatchSide.get(key) ?? new Set<string>()
+    set.add(s.player_id)
+    startersByMatchSide.set(key, set)
+  }
 
   const matchTeamNames = new Set<string>()
   for (const m of matches ?? []) {
@@ -397,6 +464,7 @@ export default async function AdminGroupPage({
           {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
+          {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
         </header>
 
         {!managerTeamId && (
@@ -532,6 +600,60 @@ export default async function AdminGroupPage({
             )
           })()}
         </section>)}
+
+        {(managerTeamId || tab === 'entries') && (matches ?? []).length > 0 ? (
+          <section className="rounded border p-4 space-y-3">
+            <h2 className="text-sm font-semibold">경기별 선발 제출</h2>
+            <p className="text-xs text-gray-500">선발은 경기 시작 전 미리 제출하고, 필요 시 다시 저장해 수정할 수 있습니다.</p>
+            {(matches ?? []).map((m) => {
+              const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null
+              const teamBId = m.team_b_id ?? teamIdByName.get(m.team_b_name) ?? null
+
+              const sides: Array<{ teamSide: 'A' | 'B'; teamId: string | null; teamName: string }> = [
+                { teamSide: 'A', teamId: teamAId, teamName: m.team_a_name },
+                { teamSide: 'B', teamId: teamBId, teamName: m.team_b_name },
+              ]
+
+              return (
+                <div key={`starter-${m.id}`} className="rounded border p-3 space-y-2">
+                  <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {sides.map((side) => {
+                      if (!side.teamId) return null
+                      if (managerTeamId && managerTeamId !== side.teamId) return null
+
+                      const teamPlayers = playersByTeam.get(side.teamId) ?? []
+                      const teamEntries = entriesByTeam.get(side.teamId) ?? []
+                      const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
+                      const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
+                      const selected = startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
+
+                      return (
+                        <form key={`${m.id}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">
+                          <input type="hidden" name="channelId" value={channel.id} />
+                          <input type="hidden" name="groupId" value={group.id} />
+                          <input type="hidden" name="matchId" value={m.id} />
+                          <input type="hidden" name="teamId" value={side.teamId} />
+                          <input type="hidden" name="teamSide" value={side.teamSide} />
+                          <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
+                          <div className="max-h-40 overflow-auto rounded border p-2 grid grid-cols-1 gap-1 text-xs">
+                            {candidates.map((p) => (
+                              <label key={`${m.id}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
+                                <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
+                                <span>#{p.jersey_no} {p.player_name}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
+                        </form>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        ) : null}
 
         <datalist id="team-suggestions">
           {(teams ?? []).map((t) => (

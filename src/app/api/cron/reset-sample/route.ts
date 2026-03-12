@@ -357,12 +357,83 @@ export async function GET(req: Request) {
 
     if (insertedGroup && selectedTeams.length >= 3) {
       const [a, b, c] = selectedTeams
-      await supabase.from('matches').insert([
+
+      // 경기 생성 (반환값으로 match id 수령)
+      const { data: insertedMatches } = await supabase.from('matches').insert([
         { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 1, team_a_name: a.name, team_b_name: b.name, team_a_id: a.id, team_b_id: b.id, status: 'scheduled' },
         { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 2, team_a_name: a.name, team_b_name: c.name, team_a_id: a.id, team_b_id: c.id, status: 'scheduled' },
         { channel_id: channel.id, match_group_id: insertedGroup.id, seq: 3, team_a_name: b.name, team_b_name: c.name, team_a_id: b.id, team_b_id: c.id, status: 'scheduled' },
-      ])
-      log.push(`step4: created today group at ${venue} with teams [${selectedTeams.map((t) => t.name).join(', ')}]`)
+      ]).select('id, team_a_id, team_b_id').returns<{ id: string; team_a_id: string; team_b_id: string }[]>()
+
+      // 엔트리/선발 자동 등록
+      const selectedTeamIds = [a.id, b.id, c.id]
+
+      const { data: groupPlayers } = await supabase
+        .from('team_players')
+        .select('id, team_id')
+        .eq('channel_id', channel.id)
+        .in('team_id', selectedTeamIds)
+        .eq('is_active', true)
+        .returns<{ id: string; team_id: string }[]>()
+
+      // 그룹 엔트리: 3팀 전원 등록
+      if (groupPlayers && groupPlayers.length > 0) {
+        await supabase.from('match_group_entries').insert(
+          groupPlayers.map((p) => ({
+            match_group_id: insertedGroup.id,
+            channel_id: channel.id,
+            team_id: p.team_id,
+            player_id: p.id,
+          })),
+        )
+      }
+
+      // 경기별 선발 등록: 각 경기 A/B팀 6명 중 랜덤 5명
+      const playersByTeam = new Map<string, string[]>()
+      for (const p of groupPlayers ?? []) {
+        const list = playersByTeam.get(p.team_id) ?? []
+        list.push(p.id)
+        playersByTeam.set(p.team_id, list)
+      }
+
+      const STARTER_COUNT = 5
+      const starterEvents: {
+        match_id: string
+        team_side: string
+        player_id: string
+        event_type: string
+        minute: number
+        is_starter: boolean
+      }[] = []
+
+      for (const match of insertedMatches ?? []) {
+        for (const side of ['A', 'B'] as const) {
+          const teamId = side === 'A' ? match.team_a_id : match.team_b_id
+          const players = [...(playersByTeam.get(teamId) ?? [])]
+          // shuffle & pick 5
+          for (let i = players.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[players[i], players[j]] = [players[j], players[i]]
+          }
+          const starters = players.slice(0, STARTER_COUNT)
+          for (const playerId of starters) {
+            starterEvents.push({
+              match_id: match.id,
+              team_side: side,
+              player_id: playerId,
+              event_type: 'in',
+              minute: 0,
+              is_starter: true,
+            })
+          }
+        }
+      }
+
+      if (starterEvents.length > 0) {
+        await supabase.from('match_participation_events').insert(starterEvents)
+      }
+
+      log.push(`step4: created today group at ${venue} with teams [${selectedTeams.map((t) => t.name).join(', ')}], entries=${groupPlayers?.length ?? 0}, starters=${starterEvents.length}`)
     }
   } else if (hasTodayGroup) {
     log.push('step4: today group already exists, skipped')

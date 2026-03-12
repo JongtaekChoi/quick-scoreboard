@@ -100,7 +100,7 @@ export default function GroupList({
                         <h3 className="text-sm font-semibold">{g.title ?? g.venue ?? '경기'}</h3>
                         {showManagerEntryButton ? (
                           <Link className="shrink-0 rounded-full border px-2 py-1 text-xs text-gray-700" href={`/admin/channel/${channelId}/group/${g.id}?from=channel`}>
-                            내 팀 엔트리
+                            경기 엔트리 관리
                           </Link>
                         ) : null}
                       </div>

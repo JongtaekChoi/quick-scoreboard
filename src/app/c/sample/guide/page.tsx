@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LoginModal from "@/app/c/[slug]/LoginModal";
+import Breadcrumb from "@/components/Breadcrumb";
 
 export default function SampleGuidePage() {
   return (
@@ -7,11 +8,10 @@ export default function SampleGuidePage() {
       <section className="max-w-3xl mx-auto space-y-5">
         <header className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <div className="text-xs text-gray-500 flex items-center gap-1">
-              <Link className="underline" href="/c/sample">샘플 리그</Link>
-              <span>›</span>
-              <span>사용 가이드</span>
-            </div>
+            <Breadcrumb items={[
+              { label: "샘플 리그", href: "/c/sample" },
+              { label: "사용 가이드" },
+            ]} />
             <LoginModal slug="sample" />
           </div>
           <h1 className="text-2xl font-semibold">샘플 리그 사용 가이드</h1>

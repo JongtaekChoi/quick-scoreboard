@@ -6,6 +6,7 @@ import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
+import AccountBadge from "@/components/AccountBadge";
 import LoginModal from "./LoginModal";
 import { resolveTeamColor } from "@/lib/teamColor";
 
@@ -181,14 +182,21 @@ export default async function ChannelPage({
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{channel.name}</h1>
             <div className="flex items-center gap-2">
-              <ShareButton
-                url={channelUrl}
-                title={`${channel.name} 경기목록`}
-                className="rounded border px-2 py-1 text-xs"
-              />
               {!accountSession ? (
                 <LoginModal slug={channel.slug} accError={acc === "password"} />
               ) : null}
+              {accountSession ? (
+                <AccountBadge
+                  loginId={accountSession.loginId}
+                  role={accountSession.role}
+                  slug={channel.slug}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
+                />
+              ) : null}
+              <ShareButton
+                url={channelUrl}
+                title={`${channel.name} 경기목록`}
+              />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -212,27 +220,8 @@ export default async function ChannelPage({
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {accountSession ? (
-              <>
-                <span className="rounded px-2 py-1 border bg-green-50 border-green-200 text-green-700">
-                  {accountSession.loginId} ({accountSession.role})
-                </span>
-                <Link className="underline" href={`/c/${encodeURIComponent(channel.slug)}/account`}>
-                  비밀번호 변경
-                </Link>
-                {accountSession.mustChangePassword ? (
-                  <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
-                ) : null}
-                <form
-                  action={`/c/${encodeURIComponent(channel.slug)}/login`}
-                  method="post"
-                >
-                  <input type="hidden" name="action" value="logout" />
-                  <button className="underline" type="submit">
-                    로그아웃
-                  </button>
-                </form>
-              </>
+            {accountSession?.mustChangePassword ? (
+              <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
             ) : null}
             {acc === "1" ? (
               <span className="text-green-700">로그인되었습니다.</span>

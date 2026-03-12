@@ -1,5 +1,5 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import Breadcrumb from '@/components/Breadcrumb'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo, createAccountSession } from '@/lib/channelSession'
 import { hashAccountPassword } from '@/lib/passwordHash'
@@ -96,11 +96,10 @@ export default async function ChannelAccountPage({
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-xl mx-auto space-y-4">
         <header className="space-y-1">
-          <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Link className="underline" href={`/c/${channel.slug}`}>리그 경기목록</Link>
-            <span>›</span>
-            <span>내 계정</span>
-          </div>
+          <Breadcrumb items={[
+            { label: "리그 경기목록", href: `/c/${channel.slug}` },
+            { label: "내 계정" },
+          ]} />
           <h1 className="text-xl font-semibold">비밀번호 변경</h1>
           <p className="text-sm text-gray-600">{row.login_id} ({row.role})</p>
           {force === '1' || row.must_change_password ? (

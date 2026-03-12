@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import ExpandableRankingList from "./ExpandableRankingList";
+import Breadcrumb from "@/components/Breadcrumb";
 import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = { id: string; name: string; slug: string };
@@ -229,11 +229,10 @@ export default async function StatsPage({
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
         <header className="space-y-1">
-          <div className="text-xs text-gray-500 flex items-center gap-1">
-            <Link className="underline" href={`/c/${channel.slug}`}>리그 경기목록</Link>
-            <span>›</span>
-            <span>통계</span>
-          </div>
+          <Breadcrumb items={[
+            { label: "리그 경기목록", href: `/c/${channel.slug}` },
+            { label: "통계" },
+          ]} />
           <h1 className="text-2xl font-semibold">통계</h1>
           <p className="text-sm text-gray-600">{channel.name} · 팀 순위 / 득점 / 어시스트 / 평점</p>
         </header>

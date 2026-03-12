@@ -14,6 +14,8 @@ import GoalAddActions from "./GoalAddActions";
 import LiveScoreboard from "./LiveScoreboard";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
+import AccountBadge from "@/components/AccountBadge";
+import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 
@@ -1236,28 +1238,30 @@ export default async function MatchDetailPage({
       <section className="max-w-3xl mx-auto space-y-4">
         <header className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-gray-500 flex flex-wrap items-center gap-1">
-              <Link href={channel ? `/c/${channel.slug}` : "/"} className="underline">경기목록</Link>
-              {group ? (<><span>›</span><span>{group.title ?? `${group.play_date} 그룹 ${group.seq}`}</span></>) : null}
-              <span>›</span>
+            <div className="flex flex-wrap items-center gap-1">
+              <Breadcrumb
+                items={[
+                  { label: "경기목록", href: channel ? `/c/${channel.slug}` : "/" },
+                  ...(group ? [{ label: group.title ?? `${group.play_date} 그룹 ${group.seq}` }] : []),
+                ]}
+              />
+              <span className="text-xs text-gray-500">›</span>
               <span className="font-semibold text-gray-900 text-base">{match.seq}경기</span>
-              <span className="text-gray-400">({match.status})</span>
+              <span className="text-xs text-gray-400">({match.status})</span>
             </div>
-            <ShareButton url={matchUrl} title={`${match.seq}경기 ${match.team_a_name} vs ${match.team_b_name}`} className="rounded border px-2 py-1 text-xs" />
+            <div className="flex items-center gap-2">
+              {accountSession ? (
+                <AccountBadge
+                  loginId={accountSession.loginId}
+                  role={accountSession.role}
+                  slug={channel!.slug}
+                  redirectTo={currentPath}
+                />
+              ) : null}
+              <ShareButton url={matchUrl} title={`${match.seq}경기 ${match.team_a_name} vs ${match.team_b_name}`} />
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {accountSession ? (
-              <>
-                <span className="rounded px-2 py-0.5 border bg-green-50 border-green-200 text-green-700">
-                  {accountSession.loginId} ({accountSession.role})
-                </span>
-                <form action={`/c/${encodeURIComponent(channel!.slug)}/login`} method="post">
-                  <input type="hidden" name="action" value="logout" />
-                  <input type="hidden" name="redirect_to" value={currentPath} />
-                  <button className="underline" type="submit">로그아웃</button>
-                </form>
-              </>
-            ) : null}
             {canGoalEdit && !isEditMode ? (
               <Link href={`/m/${matchId}?mode=edit`} className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-700">편집모드로 전환</Link>
             ) : null}

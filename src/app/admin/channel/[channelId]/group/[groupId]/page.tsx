@@ -714,7 +714,6 @@ export default async function AdminGroupPage({
                             <input type="hidden" name="channelId" value={channel.id} />
                             <input type="hidden" name="groupId" value={group.id} />
                             <input type="hidden" name="teamId" value={t.id} />
-                      <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
                             <button className="underline" type="submit">용병 해제</button>
                           </form>
                         </div>
@@ -728,7 +727,13 @@ export default async function AdminGroupPage({
                       <input type="hidden" name="groupId" value={group.id} />
                       <input type="hidden" name="teamId" value={t.id} />
                       <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
-                      <button className="rounded border px-2 py-1.5 text-xs" type="submit">제출</button>
+                      <PendingSubmitButton
+                        className="rounded border px-2 py-1.5 text-xs"
+                        pendingText="제출중..."
+                        confirmMessage={warnTeam === t.id ? '이미 선발로 제출된 선수 중 엔트리에서 제외되는 선수가 있습니다. 해당 선수는 경기별 선발명단에서도 제거됩니다. 계속할까요?' : undefined}
+                      >
+                        제출
+                      </PendingSubmitButton>
                     </form>
                   </div>
                 )

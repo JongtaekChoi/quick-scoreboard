@@ -313,7 +313,7 @@ async function saveMatchStarters(formData: FormData) {
     })),
   )
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&starter_period=${periodSequence}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 async function copyPreviousPeriodStarters(formData: FormData) {
@@ -387,7 +387,7 @@ async function copyPreviousPeriodStarters(formData: FormData) {
     })),
   )
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&starter_period=${periodSequence}`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
 async function saveGroupGuest(formData: FormData) {
@@ -495,12 +495,11 @@ export default async function AdminGroupPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string; groupId: string }>
-  searchParams: Promise<{ from?: string; err?: string; tab?: string; starter_period?: string }>
+  searchParams: Promise<{ from?: string; err?: string; tab?: string }>
 }) {
   const { channelId, groupId } = await params
-  const { from, err, tab: tabParam, starter_period } = await searchParams
+  const { from, err, tab: tabParam } = await searchParams
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
-  const selectedStarterPeriod = Math.max(1, Number(starter_period || 1) || 1)
   const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
@@ -783,11 +782,8 @@ export default async function AdminGroupPage({
               const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null
               const teamBId = m.team_b_id ?? teamIdByName.get(m.team_b_name) ?? null
               const periods = periodsByMatch.get(m.id) ?? []
-              const selectedSequence = Math.min(
-                selectedStarterPeriod,
-                Math.max(1, periods.length > 0 ? periods[periods.length - 1].sequence : m.period_count || 1),
-              )
-              const selectedPeriod = periods.find((p) => p.sequence === selectedSequence) ?? null
+              const periodCount = Math.max(1, m.period_count || periods.length || 1)
+              const periodSequences = Array.from({ length: periodCount }, (_, i) => i + 1)
 
               const sides: Array<{ teamSide: 'A' | 'B'; teamId: string | null; teamName: string }> = [
                 { teamSide: 'A', teamId: teamAId, teamName: m.team_a_name },
@@ -797,64 +793,63 @@ export default async function AdminGroupPage({
               return (
                 <div key={`starter-${m.id}`} className="rounded border p-3 space-y-2">
                   <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-gray-600">선발 period:</span>
-                    {Array.from({ length: Math.max(1, m.period_count || periods.length || 1) }, (_, i) => i + 1).map((seq) => (
-                      <Link
-                        key={`${m.id}-period-${seq}`}
-                        className={`rounded border px-2 py-1 ${selectedSequence === seq ? 'bg-black text-white border-black' : 'text-gray-600'}`}
-                        href={`/admin/channel/${channel.id}/group/${group.id}?tab=entries&starter_period=${seq}`}
-                      >
-                        {(periods.find((p) => p.sequence === seq)?.label || periods.find((p) => p.sequence === seq)?.period_code || `${seq}P`)}
-                      </Link>
-                    ))}
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {sides.map((side) => {
-                      if (!side.teamId) return null
-                      if (managerTeamId && managerTeamId !== side.teamId) return null
-
-                      const teamPlayers = playersByTeam.get(side.teamId) ?? []
-                      const teamEntries = entriesByTeam.get(side.teamId) ?? []
-                      const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
-                      const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
-                      const lineupSelected = selectedPeriod
-                        ? lineupPlayersByPeriodSide.get(`${selectedPeriod.id}:${side.teamSide}`) ?? new Set<string>()
-                        : new Set<string>()
-                      const selected = lineupSelected.size > 0
-                        ? lineupSelected
-                        : startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
-
+                  <div className="space-y-3">
+                    {periodSequences.map((seq) => {
+                      const period = periods.find((p) => p.sequence === seq) ?? null
+                      const periodLabel = period?.label || period?.period_code || `${seq}P`
                       return (
-                        <form key={`${m.id}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">
-                          <input type="hidden" name="channelId" value={channel.id} />
-                          <input type="hidden" name="groupId" value={group.id} />
-                          <input type="hidden" name="matchId" value={m.id} />
-                          <input type="hidden" name="teamId" value={side.teamId} />
-                          <input type="hidden" name="teamSide" value={side.teamSide} />
-                          <input type="hidden" name="periodSequence" value={selectedSequence} />
-                          <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
-                          <div className="max-h-40 overflow-auto rounded border p-2 grid grid-cols-1 gap-1 text-xs">
-                            {candidates.map((p) => (
-                              <label key={`${m.id}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
-                                <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
-                                <span>#{p.jersey_no} {p.player_name}</span>
-                              </label>
-                            ))}
+                        <div key={`${m.id}-period-panel-${seq}`} className="rounded border p-2 space-y-2">
+                          <div className="text-xs font-medium text-gray-700">{periodLabel} 선발</div>
+                          <div className="grid md:grid-cols-2 gap-3">
+                            {sides.map((side) => {
+                              if (!side.teamId) return null
+                              if (managerTeamId && managerTeamId !== side.teamId) return null
+
+                              const teamPlayers = playersByTeam.get(side.teamId) ?? []
+                              const teamEntries = entriesByTeam.get(side.teamId) ?? []
+                              const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
+                              const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
+                              const lineupSelected = period
+                                ? lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
+                                : new Set<string>()
+                              const selected = lineupSelected.size > 0
+                                ? lineupSelected
+                                : startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
+
+                              return (
+                                <form key={`${m.id}-${seq}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">
+                                  <input type="hidden" name="channelId" value={channel.id} />
+                                  <input type="hidden" name="groupId" value={group.id} />
+                                  <input type="hidden" name="matchId" value={m.id} />
+                                  <input type="hidden" name="teamId" value={side.teamId} />
+                                  <input type="hidden" name="teamSide" value={side.teamSide} />
+                                  <input type="hidden" name="periodSequence" value={seq} />
+                                  <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
+                                  <div className="max-h-40 overflow-auto rounded border p-2 grid grid-cols-1 gap-1 text-xs">
+                                    {candidates.map((p) => (
+                                      <label key={`${m.id}-${seq}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
+                                        <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
+                                        <span>#{p.jersey_no} {p.player_name}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
+                                    {seq > 1 ? (
+                                      <button
+                                        className="rounded border px-2 py-1 text-xs"
+                                        type="submit"
+                                        formAction={copyPreviousPeriodStarters}
+                                      >
+                                        이전 period 복사
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </form>
+                              )
+                            })}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
-                            {selectedSequence > 1 ? (
-                              <button
-                                className="rounded border px-2 py-1 text-xs"
-                                type="submit"
-                                formAction={copyPreviousPeriodStarters}
-                              >
-                                이전 period 복사
-                              </button>
-                            ) : null}
-                          </div>
-                        </form>
+                        </div>
                       )
                     })}
                   </div>

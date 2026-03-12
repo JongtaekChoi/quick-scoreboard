@@ -17,6 +17,15 @@ type Goal = {
   created_at: string;
 };
 
+type ParticipationItem = {
+  id: string;
+  minute: number;
+  team_side: "A" | "B";
+  event_type: "in" | "out";
+  player_label: string;
+  created_at: string;
+};
+
 type MatchMini = {
   id: string;
   team_a_name: string;
@@ -35,12 +44,14 @@ function LiveScoreboardInner({
   initialGoals,
   readonly,
   matchStatus,
+  participationEvents,
 }: {
   matchId: string;
   initialMatch: MatchMini;
   initialGoals: Goal[];
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
+  participationEvents?: ParticipationItem[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -96,6 +107,60 @@ function LiveScoreboardInner({
     });
   }
 
+  const groupedParticipation = (() => {
+    const source = participationEvents ?? [];
+    const sorted = [...source].sort((a, b) => {
+      if (a.minute !== b.minute) return a.minute - b.minute;
+      if (a.team_side !== b.team_side)
+        return a.team_side.localeCompare(b.team_side);
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    const lines: Array<{ id: string; minute: number; team: "A" | "B"; text: string }> = [];
+    for (let i = 0; i < sorted.length; ) {
+      const base = sorted[i];
+      const chunk: ParticipationItem[] = [];
+      while (
+        i < sorted.length &&
+        sorted[i].minute === base.minute &&
+        sorted[i].team_side === base.team_side
+      ) {
+        chunk.push(sorted[i]);
+        i += 1;
+      }
+
+      const ins = chunk.filter((e) => e.event_type === "in");
+      const outs = chunk.filter((e) => e.event_type === "out");
+      const pairCount = Math.min(ins.length, outs.length);
+
+      for (let k = 0; k < pairCount; k++) {
+        lines.push({
+          id: `${base.minute}-${base.team_side}-pair-${k}`,
+          minute: base.minute,
+          team: base.team_side,
+          text: `IN ${ins[k].player_label} OUT ${outs[k].player_label}`,
+        });
+      }
+      for (let k = pairCount; k < ins.length; k++) {
+        lines.push({
+          id: `${base.minute}-${base.team_side}-in-${k}`,
+          minute: base.minute,
+          team: base.team_side,
+          text: `IN ${ins[k].player_label}`,
+        });
+      }
+      for (let k = pairCount; k < outs.length; k++) {
+        lines.push({
+          id: `${base.minute}-${base.team_side}-out-${k}`,
+          minute: base.minute,
+          team: base.team_side,
+          text: `OUT ${outs[k].player_label}`,
+        });
+      }
+    }
+    return lines;
+  })();
+
   return (
     <section className="sticky top-0 z-10 rounded-xl border border-gray-200 p-4 space-y-3 bg-white/95 backdrop-blur shadow-sm">
       {readonly ? (
@@ -113,8 +178,7 @@ function LiveScoreboardInner({
             type="button"
             onClick={() => void refetch()}
           >
-            {autoUpdate ? `${REFRESH_SEC}초 간격` : ""}{" "}
-            {isFetching ? "갱신 중..." : "↻ 새로고침"}
+            {autoUpdate ? `${REFRESH_SEC}초 간격` : ""} {isFetching ? "갱신 중..." : "↻ 새로고침"}
           </button>
         </div>
       ) : null}
@@ -133,8 +197,7 @@ function LiveScoreboardInner({
 
       {missingA > 0 || missingB > 0 ? (
         <p className="text-[11px] text-amber-700">
-          이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행
-          표시)
+          이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행 표시)
         </p>
       ) : null}
 
@@ -198,6 +261,20 @@ function LiveScoreboardInner({
           })
         )}
       </div>
+
+      <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
+        {groupedParticipation.length === 0 ? (
+          <p className="text-xs text-gray-500">교체 이벤트 없음</p>
+        ) : (
+          groupedParticipation.map((e) => (
+            <div key={e.id} className="grid grid-cols-[auto_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1">
+              <div className="text-gray-500 tabular-nums">{e.minute}’</div>
+              <div className="text-gray-500">{e.team}</div>
+              <div className="truncate">{e.text}</div>
+            </div>
+          ))
+        )}
+      </div>
     </section>
   );
 }
@@ -208,6 +285,7 @@ export default function LiveScoreboard(props: {
   initialGoals: Goal[];
   readonly: boolean;
   matchStatus: "scheduled" | "live" | "ended";
+  participationEvents?: ParticipationItem[];
 }) {
   const [queryClient] = useState(() => new QueryClient());
   return (

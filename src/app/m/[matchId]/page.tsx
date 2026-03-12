@@ -1070,6 +1070,11 @@ export default async function MatchDetailPage({
     rosterB = buildRoster(teamBId);
   }
 
+  const playerLabelById = new Map<string, string>([
+    ...rosterA.map((p) => [p.playerId, `#${p.jerseyNo} ${p.playerName}`] as const),
+    ...rosterB.map((p) => [p.playerId, `#${p.jerseyNo} ${p.playerName}`] as const),
+  ]);
+
   const { data: goals } = await supabase
     .from("goal_events")
     .select(
@@ -1103,12 +1108,6 @@ export default async function MatchDetailPage({
   const startingCountB = new Set(
     starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   ).size;
-  const starterNamesA = Array.from(
-    new Set(starterEventsA.map((e) => e.player_name).filter(Boolean)),
-  ) as string[];
-  const starterNamesB = Array.from(
-    new Set(starterEventsB.map((e) => e.player_name).filter(Boolean)),
-  ) as string[];
   const starterKeySetA = new Set(
     starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   );
@@ -1473,6 +1472,19 @@ export default async function MatchDetailPage({
             assist_name: g.assist_name,
             created_at: g.created_at,
           }))}
+          participationEvents={(participationEvents ?? [])
+            .filter((e) => !e.is_starter)
+            .map((e) => ({
+              id: e.id,
+              minute: e.minute,
+              team_side: e.team_side,
+              event_type: e.event_type,
+              player_label:
+                (e.player_id ? playerLabelById.get(e.player_id) : undefined) ??
+                e.player_name ??
+                "선수",
+              created_at: e.created_at,
+            }))}
         />
 
         {isEditMode ? (
@@ -1666,69 +1678,7 @@ export default async function MatchDetailPage({
                     />
                   </div>
 
-                <div className="rounded border p-3">
-                  <div className="text-xs font-medium text-gray-600 mb-2">
-                    출전 이벤트 타임라인 · 선발 A팀 {startingCountA}명 · B팀{" "}
-                    {startingCountB}명
-                  </div>
-                  <details className="mb-2">
-                    <summary className="cursor-pointer text-[11px] text-gray-500 underline">
-                      선발 상세 보기
-                    </summary>
-                    <div className="mt-1 text-xs text-gray-600 space-y-1">
-                      <div>
-                        <span className="font-medium">A팀:</span>{" "}
-                        {starterNamesA.length
-                          ? starterNamesA.join(", ")
-                          : "없음"}
-                      </div>
-                      <div>
-                        <span className="font-medium">B팀:</span>{" "}
-                        {starterNamesB.length
-                          ? starterNamesB.join(", ")
-                          : "없음"}
-                      </div>
-                    </div>
-                  </details>
-                  {(() => {
-                    const timelineEvents = (participationEvents ?? []).filter(
-                      (e) => !e.is_starter,
-                    );
-                    if (timelineEvents.length === 0) {
-                      return (
-                        <p className="text-xs text-gray-500">
-                          아직 기록이 없습니다.
-                        </p>
-                      );
-                    }
-                    return (
-                      <ul className="space-y-1 text-xs">
-                        {timelineEvents.map((e) => (
-                          <li
-                            key={e.id}
-                            className="flex items-center justify-between border-b last:border-0 py-1"
-                          >
-                            <span>
-                              {e.minute}’ · {e.team_side} ·{" "}
-                              {e.event_type.toUpperCase()} ·{" "}
-                              {e.player_name ?? "선수"}
-                            </span>
-                            <span className="text-gray-400">
-                              {new Date(e.created_at).toLocaleTimeString(
-                                "ko-KR",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: false,
-                                },
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  })()}
-                </div>
+                <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해줘.</div>
               </div>
             </details>
           </section>

@@ -37,6 +37,7 @@ export default function SubstitutionActions({
   firstHalfStartedAt,
   secondHalfStartedAt,
   firstHalfEndedAt,
+  reservablePeriods,
 }: {
   action: (formData: FormData) => void | Promise<void>
   teamAName: string
@@ -50,10 +51,14 @@ export default function SubstitutionActions({
   firstHalfStartedAt: string | null
   secondHalfStartedAt: string | null
   firstHalfEndedAt: string | null
+  reservablePeriods: Array<{ sequence: number; label: string }>
 }) {
   const [open, setOpen] = useState(false)
   const [teamSide, setTeamSide] = useState<'A' | 'B'>('A')
   const [minute, setMinute] = useState(0)
+
+  const autoReserveMode = periodState === 'pre' || periodState === 'halftime'
+  const reserveSequence = reservablePeriods[0]?.sequence ?? 1
 
   const outRoster = useMemo(() => (teamSide === 'A' ? activeA : activeB), [teamSide, activeA, activeB])
   const inRoster = useMemo(() => (teamSide === 'A' ? benchA : benchB), [teamSide, benchA, benchB])
@@ -81,6 +86,13 @@ export default function SubstitutionActions({
             </div>
             <form action={action} className="space-y-2">
               <input type="hidden" name="team_side" value={teamSide} />
+              <input type="hidden" name="reservation_mode" value={autoReserveMode ? 'reserve' : 'now'} />
+              <input type="hidden" name="reservation_period_sequence" value={reserveSequence} />
+              <div className="text-xs text-gray-600 rounded border bg-gray-50 px-2 py-1.5">
+                {autoReserveMode
+                  ? `현재는 시작 전 상태라 다음 period(${reservablePeriods[0]?.label ?? '다음 period'}) 교체로 자동 예약됩니다.`
+                  : '현재 진행중 period에 즉시 교체로 반영됩니다.'}
+              </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">팀</label>
                 <select value={teamSide} onChange={(e) => setTeamSide(e.target.value as 'A' | 'B')} className="w-full rounded border px-2 py-1.5 text-sm">
@@ -107,10 +119,10 @@ export default function SubstitutionActions({
                 </select>
               </div>
               <div className="flex justify-end">
-                {outRoster.length === 0 || inRoster.length === 0 ? (
+                {outRoster.length === 0 || inRoster.length === 0 || (autoReserveMode && reservablePeriods.length === 0) ? (
                   <button type="button" className="rounded border px-3 py-1.5 text-sm opacity-50" disabled>교체</button>
                 ) : (
-                  <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm">교체</PendingSubmitButton>
+                  <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm">{autoReserveMode ? '예약 저장' : '교체'}</PendingSubmitButton>
                 )}
               </div>
             </form>

@@ -773,14 +773,14 @@ export default async function AdminGroupPage({
               ]
 
               return (
-                <div key={`starter-${m.id}`} className="rounded border p-3 space-y-2">
+                <div key={`starter-${m.id}`} className="rounded border p-3 space-y-3 bg-white">
                   <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
                   <div className="space-y-3">
                     {periodSequences.map((seq) => {
                       const period = periods.find((p) => p.sequence === seq) ?? null
                       const periodLabel = period?.label || period?.period_code || `${seq}P`
                       return (
-                        <div key={`${m.id}-period-panel-${seq}`} className="rounded border p-2 space-y-2">
+                        <div key={`${m.id}-period-panel-${seq}`} className="rounded bg-gray-50/70 p-2 space-y-2">
                           <div className="text-xs font-medium text-gray-700">{periodLabel} 선발</div>
                           <div className="grid md:grid-cols-2 gap-3">
                             {sides.map((side) => {
@@ -797,7 +797,7 @@ export default async function AdminGroupPage({
                               const selected = lineupSelected
 
                               return (
-                                <form key={`${m.id}-${seq}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">
+                                <form key={`${m.id}-${seq}-${side.teamSide}`} action={saveMatchStarters} className="rounded bg-white p-2 space-y-2 ring-1 ring-gray-200">
                                   <input type="hidden" name="channelId" value={channel.id} />
                                   <input type="hidden" name="groupId" value={group.id} />
                                   <input type="hidden" name="matchId" value={m.id} />
@@ -805,7 +805,7 @@ export default async function AdminGroupPage({
                                   <input type="hidden" name="teamSide" value={side.teamSide} />
                                   <input type="hidden" name="periodSequence" value={seq} />
                                   <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
-                                  <div className="max-h-40 overflow-auto rounded border p-2 grid grid-cols-1 gap-1 text-xs">
+                                  <div className="max-h-40 overflow-auto rounded bg-gray-50 p-2 grid grid-cols-1 gap-1 text-xs">
                                     {candidates.map((p) => (
                                       <label key={`${m.id}-${seq}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
                                         <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
@@ -852,17 +852,23 @@ export default async function AdminGroupPage({
                 <h2 className="text-sm font-semibold">경기 추가</h2>
                 <Link className="text-xs underline" href={`/admin/channel/${channel.id}/teams`}>팀 관리는 별도 화면에서</Link>
               </div>
-              <form action={createMatch} className="grid md:grid-cols-4 gap-2">
+              <form action={createMatch} className="grid md:grid-cols-12 gap-2 items-end">
                 <input type="hidden" name="channelId" value={channel.id} />
                 <input type="hidden" name="groupId" value={group.id} />
-                <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
-                <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
-                <div className="space-y-1">
+                <div className="md:col-span-3 space-y-1">
+                  <label className="block text-xs text-gray-600">A팀명</label>
+                  <input className="rounded border px-2 py-1.5 text-sm w-full" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
+                </div>
+                <div className="md:col-span-3 space-y-1">
+                  <label className="block text-xs text-gray-600">B팀명</label>
+                  <input className="rounded border px-2 py-1.5 text-sm w-full" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
+                </div>
+                <div className="md:col-span-3 space-y-1">
                   <label className="block text-xs text-gray-600">경기구간수</label>
                   <input className="rounded border px-2 py-1.5 text-sm w-full" type="number" name="period_count" min={1} max={12} defaultValue={2} />
                   <div className="text-[11px] text-gray-500">예: 2=전/후반, 4=1~4쿼터</div>
                 </div>
-                <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
+                <button className="md:col-span-3 rounded border px-3 py-2 text-sm h-10" type="submit">경기 추가</button>
               </form>
             </section>
 
@@ -873,24 +879,36 @@ export default async function AdminGroupPage({
                 (matches ?? []).map((m) => (
               <div key={m.id} className="rounded border p-3 space-y-2">
                 <div className="text-sm font-medium">{m.seq}경기 · {m.score_a}:{m.score_b}</div>
-                <form action={updateMatch} className="grid md:grid-cols-6 gap-2 items-center">
+                <form action={updateMatch} className="grid md:grid-cols-12 gap-2 items-end">
                   <input type="hidden" name="channelId" value={channel.id} />
                   <input type="hidden" name="groupId" value={group.id} />
                   <input type="hidden" name="matchId" value={m.id} />
-                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" defaultValue={m.team_a_name} required />
-                  <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" defaultValue={m.team_b_name} required />
-                  <select className="rounded border px-2 py-1.5 text-sm" name="status" defaultValue={m.status}>
-                    <option value="scheduled">scheduled</option>
-                    <option value="live">live</option>
-                    <option value="ended">ended</option>
-                  </select>
-                  <div className="space-y-1">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="block text-[11px] text-gray-600">A팀명</label>
+                    <input className="rounded border px-2 py-1.5 text-sm w-full" list="team-suggestions" name="team_a_name" defaultValue={m.team_a_name} required />
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="block text-[11px] text-gray-600">B팀명</label>
+                    <input className="rounded border px-2 py-1.5 text-sm w-full" list="team-suggestions" name="team_b_name" defaultValue={m.team_b_name} required />
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="block text-[11px] text-gray-600">상태</label>
+                    <select className="rounded border px-2 py-1.5 text-sm w-full" name="status" defaultValue={m.status}>
+                      <option value="scheduled">scheduled</option>
+                      <option value="live">live</option>
+                      <option value="ended">ended</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
                     <label className="block text-[11px] text-gray-600">경기구간수</label>
                     <input className="rounded border px-2 py-1.5 text-sm w-full" type="number" name="period_count" min={1} max={12} defaultValue={m.period_count ?? 2} />
                   </div>
                   <input type="hidden" name="group_play_date" value={group.play_date} />
-                  <input className="rounded border px-2 py-1.5 text-sm" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
-                  <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="block text-[11px] text-gray-600">시작시간</label>
+                    <input className="rounded border px-2 py-1.5 text-sm w-full" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
+                  </div>
+                  <button className="md:col-span-2 rounded border px-2 py-1.5 text-xs h-9" type="submit">수정 저장</button>
                 </form>
 
                 <div className="flex items-center justify-between">

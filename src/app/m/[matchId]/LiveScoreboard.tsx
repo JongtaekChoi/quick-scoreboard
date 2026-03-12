@@ -283,9 +283,9 @@ function LiveScoreboardInner({
   const timeEvents: { type: "goal" | "replace" | "starter"; event: Goal | Replacement | StarterLine }[] =
     (() => {
       const typePriority: Record<"starter" | "goal" | "replace", number> = {
-        starter: 0,
-        goal: 1,
-        replace: 2,
+        goal: 0,
+        replace: 1,
+        starter: 2,
       };
       const withMeta = [
         ...goals.map((goal) => ({ type: "goal" as const, event: goal, period_sequence: goal.period_sequence ?? (goal.minute != null && goal.minute >= 15 ? 2 : 1), minute: goal.minute ?? -1 })),

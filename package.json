@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run lint && npm run typecheck",
     "db:migrate:develop": "bash ./scripts/db-migrate.sh develop",
     "db:migrate:main": "bash ./scripts/db-migrate.sh main"
   },

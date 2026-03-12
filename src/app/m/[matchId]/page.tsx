@@ -15,6 +15,11 @@ import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
+import {
+  getPeriodDisplayLabel,
+  summarizeLegacyPeriodControl,
+  type MatchPeriodRow,
+} from "@/lib/matchPeriods";
 
 type Match = {
   id: string;
@@ -34,6 +39,7 @@ type Match = {
   halftime_started_at: string | null;
   second_half_started_at: string | null;
   second_half_ended_at: string | null;
+  period_count: number;
 };
 
 type Channel = { id: string; slug: string; edit_session_version: number };
@@ -66,6 +72,24 @@ type ParticipationEvent = {
   minute: number;
   is_starter: boolean;
   created_at: string;
+};
+
+type MatchPeriodLineup = {
+  match_period_id: string;
+  team_side: "A" | "B";
+  player_id: string | null;
+  player_name: string | null;
+};
+
+type ReservedSubstitutionPlan = {
+  id: string;
+  team_side: "A" | "B";
+  period_sequence: number;
+  player_out_id: string | null;
+  player_out_name: string | null;
+  player_in_id: string | null;
+  player_in_name: string | null;
+  planned_minute: number;
 };
 
 type Alias = { jersey_no: string | null; player_name: string | null };
@@ -394,12 +418,7 @@ async function applyPeriodAction(
   matchId: string,
   channelSlug: string,
   channelVersion: number,
-  action:
-    | "start_first"
-    | "end_first"
-    | "start_second"
-    | "end_match"
-    | "resume_previous",
+  action: "start_period" | "end_period" | "resume_previous",
 ) {
   "use server";
 
@@ -412,7 +431,7 @@ async function applyPeriodAction(
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,period_state,status,started_at,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
+      "id,period_state,status,started_at,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at,period_count",
     )
     .eq("id", matchId)
     .maybeSingle<{
@@ -425,56 +444,162 @@ async function applyPeriodAction(
       halftime_started_at: string | null;
       second_half_started_at: string | null;
       second_half_ended_at: string | null;
+      period_count: number;
     }>();
 
   if (!match) return;
 
+  const { data: periods } = await supabase
+    .from("match_periods")
+    .select("id,sequence,status")
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .order("sequence", { ascending: true })
+    .returns<
+      { id: string; sequence: number; status: "pending" | "live" | "ended" }[]
+    >();
+
+  if (!periods || periods.length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=periods_not_ready`);
+  }
+
+  const livePeriod = periods.find((p) => p.status === "live") ?? null;
+  const nextPending = periods.find((p) => p.status === "pending") ?? null;
+  const endedPeriods = periods.filter((p) => p.status === "ended");
+  const lastEndedPeriod = endedPeriods[endedPeriods.length - 1] ?? null;
+
   const now = new Date().toISOString();
   const patch: Record<string, string | null> = {};
 
-  if (action === "start_first" && match.period_state === "pre") {
-    patch.period_state = "first_half";
+  if (action === "start_period") {
+    if (livePeriod || !nextPending) {
+      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+    }
+
+    await supabase
+      .from("match_periods")
+      .update({ status: "live", started_at: now })
+      .eq("id", nextPending.id);
+
+    const { data: reservedSubs } = await supabase
+      .from("match_period_substitution_plans")
+      .select(
+        "id,team_side,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
+      )
+      .eq("match_id", matchId)
+      .eq("period_sequence", nextPending.sequence)
+      .is("deleted_at", null)
+      .is("applied_at", null)
+      .returns<
+        {
+          id: string;
+          team_side: "A" | "B";
+          player_out_id: string | null;
+          player_out_name: string | null;
+          player_in_id: string | null;
+          player_in_name: string | null;
+          planned_minute: number;
+        }[]
+      >();
+
+    if ((reservedSubs ?? []).length > 0) {
+      const rows = (reservedSubs ?? []).flatMap((sub) => {
+        const minuteValue = Number.isFinite(sub.planned_minute)
+          ? Math.max(0, Math.min(200, sub.planned_minute))
+          : 0;
+        return [
+          {
+            match_id: matchId,
+            team_side: sub.team_side,
+            player_id: sub.player_out_id,
+            player_name: sub.player_out_name,
+            event_type: "out" as const,
+            minute: minuteValue,
+            is_starter: false,
+          },
+          {
+            match_id: matchId,
+            team_side: sub.team_side,
+            player_id: sub.player_in_id,
+            player_name: sub.player_in_name,
+            event_type: "in" as const,
+            minute: minuteValue,
+            is_starter: false,
+          },
+        ];
+      });
+
+      await supabase.from("match_participation_events").insert(rows);
+      await supabase
+        .from("match_period_substitution_plans")
+        .update({ applied_at: now })
+        .in(
+          "id",
+          (reservedSubs ?? []).map((s) => s.id),
+        );
+    }
+
     patch.status = "live";
     patch.started_at = match.started_at ?? now;
-    patch.first_half_started_at = match.first_half_started_at ?? now;
     patch.scheduled_start_at = null;
+
+    if (nextPending.sequence <= 1) {
+      patch.period_state = "first_half";
+      patch.first_half_started_at = match.first_half_started_at ?? now;
+    } else {
+      patch.period_state = "second_half";
+      patch.second_half_started_at = match.second_half_started_at ?? now;
+    }
   }
 
-  if (action === "end_first" && match.period_state === "first_half") {
-    patch.period_state = "halftime";
-    patch.status = "live";
-    patch.first_half_ended_at = now;
-    patch.halftime_started_at = now;
-  }
+  if (action === "end_period") {
+    if (!livePeriod) {
+      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+    }
 
-  if (action === "start_second" && match.period_state === "halftime") {
-    patch.period_state = "second_half";
-    patch.status = "live";
-    patch.second_half_started_at = now;
-  }
+    await supabase
+      .from("match_periods")
+      .update({ status: "ended", ended_at: now })
+      .eq("id", livePeriod.id);
 
-  if (
-    action === "end_match" &&
-    (match.period_state === "second_half" ||
-      match.period_state === "first_half" ||
-      match.period_state === "halftime")
-  ) {
-    patch.period_state = "ended";
-    patch.status = "ended";
-    patch.ended_at = now;
-    patch.second_half_ended_at = now;
+    const hasMorePeriods = periods.some(
+      (p) => p.sequence > livePeriod.sequence && p.status === "pending",
+    );
+
+    if (hasMorePeriods) {
+      patch.status = "live";
+      patch.period_state = "halftime";
+      if (livePeriod.sequence <= 1) {
+        patch.first_half_ended_at = now;
+      }
+      patch.halftime_started_at = now;
+    } else {
+      patch.period_state = "ended";
+      patch.status = "ended";
+      patch.ended_at = now;
+      patch.second_half_ended_at = now;
+    }
   }
 
   if (action === "resume_previous") {
-    if (match.period_state === "halftime" && !match.second_half_started_at) {
+    if (livePeriod || !lastEndedPeriod) {
+      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+    }
+
+    await supabase
+      .from("match_periods")
+      .update({ status: "live", ended_at: null })
+      .eq("id", lastEndedPeriod.id);
+
+    patch.status = "live";
+    if (lastEndedPeriod.sequence <= 1) {
       patch.period_state = "first_half";
       patch.first_half_ended_at = null;
       patch.halftime_started_at = null;
-      patch.status = "live";
-    } else if (match.period_state === "second_half") {
-      patch.period_state = "halftime";
-      patch.second_half_started_at = null;
-      patch.status = "live";
+    } else {
+      patch.period_state = "second_half";
+      patch.ended_at = null;
+      patch.second_half_ended_at = null;
     }
   }
 
@@ -762,12 +887,16 @@ async function addSubstitutionEvent(
     .maybeSingle<{
       period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
     }>();
-  if (stateRow?.period_state === "pre" || stateRow?.period_state === "ended") {
+  if (stateRow?.period_state === "ended") {
     redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
   }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
   const minute = Number(formData.get("minute") || 0);
+  const reservationMode = String(formData.get("reservation_mode") || "now").trim();
+  const reservationPeriodSequence = Number(
+    formData.get("reservation_period_sequence") || 0,
+  );
   const playerOutValue = String(formData.get("player_out_value") || "").trim();
   const playerInValue = String(formData.get("player_in_value") || "").trim();
 
@@ -787,6 +916,95 @@ async function addSubstitutionEvent(
   const inId = inIdRaw?.trim() || null;
   const outName = (outDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
   const inName = (inDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
+
+  if (outId && inId && outId === inId) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_same_player`);
+  }
+
+  const shouldReserve =
+    stateRow?.period_state === "pre" ||
+    stateRow?.period_state === "halftime" ||
+    reservationMode === "reserve";
+
+  if (shouldReserve) {
+    const { data: pendingPeriods } = await supabase
+      .from("match_periods")
+      .select("id,status,sequence")
+      .eq("match_id", matchId)
+      .is("deleted_at", null)
+      .eq("status", "pending")
+      .order("sequence", { ascending: true })
+      .returns<
+        {
+          id: string;
+          status: "pending" | "live" | "ended";
+          sequence: number;
+        }[]
+      >();
+
+    const targetPeriod =
+      (pendingPeriods ?? []).find((p) => p.sequence === reservationPeriodSequence) ??
+      (pendingPeriods ?? [])[0] ??
+      null;
+
+    if (!targetPeriod || targetPeriod.status !== "pending") {
+      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_period`);
+    }
+
+    const targetSequence = targetPeriod.sequence;
+
+    const { data: existingReserved } = await supabase
+      .from("match_period_substitution_plans")
+      .select("id,player_out_id,player_in_id")
+      .eq("match_id", matchId)
+      .eq("team_side", teamSide)
+      .eq("period_sequence", targetSequence)
+      .is("deleted_at", null)
+      .is("applied_at", null)
+      .returns<
+        {
+          id: string;
+          player_out_id: string | null;
+          player_in_id: string | null;
+        }[]
+      >();
+
+    const hasDuplicate = (existingReserved ?? []).some((row) => {
+      const reservedIds = new Set([row.player_out_id, row.player_in_id].filter(Boolean));
+      return (
+        (outId ? reservedIds.has(outId) : false) ||
+        (inId ? reservedIds.has(inId) : false)
+      );
+    });
+
+    if (hasDuplicate) {
+      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_duplicate`);
+    }
+
+    await supabase.from("match_period_substitution_plans").insert({
+      match_id: matchId,
+      team_side: teamSide,
+      period_sequence: targetSequence,
+      player_out_id: outId || null,
+      player_out_name: outName || null,
+      player_in_id: inId || null,
+      player_in_name: inName || null,
+      planned_minute: minute,
+    });
+
+    await logMatchChange(matchId, channelSlug, "participation_substitution_reserve", {
+      teamSide,
+      period_sequence: targetSequence,
+      minute,
+      outId,
+      outName,
+      inId,
+      inName,
+    });
+
+    revalidatePath(`/m/${matchId}`);
+    redirect(`/m/${matchId}?mode=edit`);
+  }
 
   const { data: inserted } = await supabase
     .from("match_participation_events")
@@ -876,6 +1094,70 @@ async function undoSubstitutionEvent(
   redirect(`/m/${matchId}?mode=edit`);
 }
 
+async function cancelReservedSubstitution(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const reservationId = String(formData.get("reservation_id") || "").trim();
+  if (!reservationId) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  const { data: reservation } = await supabase
+    .from("match_period_substitution_plans")
+    .select("id,period_sequence,applied_at")
+    .eq("id", reservationId)
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .maybeSingle<{
+      id: string;
+      period_sequence: number;
+      applied_at: string | null;
+    }>();
+
+  if (!reservation || reservation.applied_at) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  const { data: periodRow } = await supabase
+    .from("match_periods")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("sequence", reservation.period_sequence)
+    .is("deleted_at", null)
+    .maybeSingle<{ status: "pending" | "live" | "ended" }>();
+
+  if (!periodRow || periodRow.status !== "pending") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  await supabase
+    .from("match_period_substitution_plans")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", reservationId)
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .is("applied_at", null);
+
+  await logMatchChange(matchId, channelSlug, "participation_substitution_reserve_cancel", {
+    reservationId,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
@@ -941,7 +1223,7 @@ export default async function MatchDetailPage({
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at",
+      "id,seq,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,started_at,channel_id,match_group_id,period_state,first_half_started_at,first_half_ended_at,halftime_started_at,second_half_started_at,second_half_ended_at,period_count",
     )
     .eq("id", matchId)
     .maybeSingle<Match>();
@@ -958,6 +1240,14 @@ export default async function MatchDetailPage({
       </main>
     );
   }
+
+  const { data: matchPeriods } = await supabase
+    .from("match_periods")
+    .select("id,sequence,period_code,label,status")
+    .eq("match_id", match.id)
+    .is("deleted_at", null)
+    .order("sequence", { ascending: true })
+    .returns<MatchPeriodRow[]>();
 
   const { data: channel } = await supabase
     .from("channels")
@@ -1096,24 +1386,67 @@ export default async function MatchDetailPage({
     .order("created_at", { ascending: false })
     .returns<ParticipationEvent[]>();
 
+  const { data: periodLineups } = await supabase
+    .from("match_period_lineups")
+    .select("match_period_id,team_side,player_id,player_name")
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .returns<MatchPeriodLineup[]>();
+
+  const { data: reservedSubPlans } = await supabase
+    .from("match_period_substitution_plans")
+    .select(
+      "id,team_side,period_sequence,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
+    )
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .is("applied_at", null)
+    .returns<ReservedSubstitutionPlan[]>();
+
+  const sortedPeriodsForLineups = [...(matchPeriods ?? [])].sort(
+    (a, b) => a.sequence - b.sequence,
+  );
+  const livePeriodForLineups =
+    sortedPeriodsForLineups.find((p) => p.status === "live") ?? null;
+  const effectivePeriodId =
+    livePeriodForLineups?.id ??
+    sortedPeriodsForLineups.find((p) => p.status === "ended")?.id ??
+    sortedPeriodsForLineups[0]?.id ??
+    null;
+
+  const lineupRowsA = (periodLineups ?? []).filter(
+    (row) => row.match_period_id === effectivePeriodId && row.team_side === "A",
+  );
+  const lineupRowsB = (periodLineups ?? []).filter(
+    (row) => row.match_period_id === effectivePeriodId && row.team_side === "B",
+  );
+
   const starterEventsA = (participationEvents ?? []).filter(
     (e) => e.team_side === "A" && e.is_starter,
   );
   const starterEventsB = (participationEvents ?? []).filter(
     (e) => e.team_side === "B" && e.is_starter,
   );
-  const startingCountA = new Set(
-    starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
-  ).size;
-  const startingCountB = new Set(
-    starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
-  ).size;
-  const starterKeySetA = new Set(
+  const starterKeysFromLineupsA = new Set(
+    lineupRowsA.map((row) => row.player_id || `name:${row.player_name ?? ""}`),
+  );
+  const starterKeysFromLineupsB = new Set(
+    lineupRowsB.map((row) => row.player_id || `name:${row.player_name ?? ""}`),
+  );
+  const fallbackStarterKeysA = new Set(
     starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   );
-  const starterKeySetB = new Set(
+  const fallbackStarterKeysB = new Set(
     starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   );
+
+  const starterKeySetA =
+    starterKeysFromLineupsA.size > 0 ? starterKeysFromLineupsA : fallbackStarterKeysA;
+  const starterKeySetB =
+    starterKeysFromLineupsB.size > 0 ? starterKeysFromLineupsB : fallbackStarterKeysB;
+
+  const startingCountA = starterKeySetA.size;
+  const startingCountB = starterKeySetB.size;
   const isLivePeriod =
     match.period_state === "first_half" ||
     match.period_state === "halftime" ||
@@ -1121,13 +1454,18 @@ export default async function MatchDetailPage({
     match.period_state === "ended";
 
   const sideEventsA = (participationEvents ?? []).filter(
-    (e) => e.team_side === "A",
+    (e) => e.team_side === "A" && !e.is_starter,
   );
   const sideEventsB = (participationEvents ?? []).filter(
-    (e) => e.team_side === "B",
+    (e) => e.team_side === "B" && !e.is_starter,
   );
-  const calcActiveKeys = (events: ParticipationEvent[]) => {
-    const bal = new Map<string, number>();
+  const calcActiveKeys = (
+    events: ParticipationEvent[],
+    starterKeys: Set<string>,
+  ) => {
+    const bal = new Map<string, number>(
+      Array.from(starterKeys).map((k) => [k, 1]),
+    );
     for (const e of events) {
       const key = e.player_id || `name:${e.player_name ?? ""}`;
       bal.set(key, (bal.get(key) ?? 0) + (e.event_type === "in" ? 1 : -1));
@@ -1138,8 +1476,8 @@ export default async function MatchDetailPage({
         .map(([k]) => k),
     );
   };
-  const activeKeysA = calcActiveKeys(sideEventsA);
-  const activeKeysB = calcActiveKeys(sideEventsB);
+  const activeKeysA = calcActiveKeys(sideEventsA, starterKeySetA);
+  const activeKeysB = calcActiveKeys(sideEventsB, starterKeySetB);
 
   const { data: aliases } = await supabase
     .from("match_player_aliases")
@@ -1268,40 +1606,25 @@ export default async function MatchDetailPage({
   const undoSubstitutionAction = channel
     ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
     : async () => {};
-  const startFirstAction = channel
+  const cancelReservedSubstitutionAction = channel
+    ? cancelReservedSubstitution.bind(null, matchId, channel.slug)
+    : async () => {};
+  const startPeriodAction = channel
     ? applyPeriodAction.bind(
         null,
         matchId,
         channel.slug,
         channel.edit_session_version,
-        "start_first",
+        "start_period",
       )
     : async () => {};
-  const endFirstAction = channel
+  const endPeriodAction = channel
     ? applyPeriodAction.bind(
         null,
         matchId,
         channel.slug,
         channel.edit_session_version,
-        "end_first",
-      )
-    : async () => {};
-  const startSecondAction = channel
-    ? applyPeriodAction.bind(
-        null,
-        matchId,
-        channel.slug,
-        channel.edit_session_version,
-        "start_second",
-      )
-    : async () => {};
-  const endMatchAction = channel
-    ? applyPeriodAction.bind(
-        null,
-        matchId,
-        channel.slug,
-        channel.edit_session_version,
-        "end_match",
+        "end_period",
       )
     : async () => {};
   const resumePreviousAction = channel
@@ -1343,6 +1666,41 @@ export default async function MatchDetailPage({
     match.period_state === "second_half"
       ? firstHalfBaseMinute + (elapsedMinutes ?? 0)
       : (elapsedMinutes ?? 0);
+
+  const periodControlSummary = summarizeLegacyPeriodControl({
+    periodCount: match.period_count,
+    periodState: match.period_state,
+    periods: matchPeriods ?? [],
+  });
+  const sortedPeriods = [...(matchPeriods ?? [])].sort(
+    (a, b) => a.sequence - b.sequence,
+  );
+  const livePeriod = sortedPeriods.find((p) => p.status === "live") ?? null;
+  const nextPendingPeriod =
+    sortedPeriods.find((p) => p.status === "pending") ?? null;
+  const hasPendingAfterLive = livePeriod
+    ? sortedPeriods.some(
+        (p) => p.sequence > livePeriod.sequence && p.status === "pending",
+      )
+    : false;
+  const canStartPeriod = !!nextPendingPeriod && !livePeriod && match.status !== "ended";
+  const canEndPeriod = !!livePeriod;
+  const canResumePrevious =
+    !livePeriod && sortedPeriods.some((p) => p.status === "ended") && match.status !== "ended";
+  const startPeriodLabel = nextPendingPeriod
+    ? `${getPeriodDisplayLabel(nextPendingPeriod.sequence, nextPendingPeriod)} 시작`
+    : null;
+  const endPeriodLabel = livePeriod
+    ? hasPendingAfterLive
+      ? `${getPeriodDisplayLabel(livePeriod.sequence, livePeriod)} 종료`
+      : "경기 종료"
+    : null;
+  const reservablePeriods = sortedPeriods
+    .filter((p) => p.status === "pending")
+    .map((p) => ({
+      sequence: p.sequence,
+      label: getPeriodDisplayLabel(p.sequence, p),
+    }));
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
@@ -1441,6 +1799,26 @@ export default async function MatchDetailPage({
               경기 종료 후에는 선수 교체를 수정할 수 없습니다.
             </p>
           ) : null}
+          {err === "participation_same_player" ? (
+            <p className="text-xs text-red-600">
+              같은 선수를 동시에 OUT/IN으로 선택할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_reserve_period" ? (
+            <p className="text-xs text-red-600">
+              예약할 period를 다시 선택해 주세요. (시작 전 period만 예약 가능)
+            </p>
+          ) : null}
+          {err === "participation_reserve_duplicate" ? (
+            <p className="text-xs text-red-600">
+              시작 전에는 이미 교체 예약에 포함된 선수를 다시 예약할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_reserve_cancel" ? (
+            <p className="text-xs text-red-600">
+              예약 취소에 실패했습니다. 이미 적용되었거나 시작된 period일 수 있습니다.
+            </p>
+          ) : null}
           {err === "rating_same_team" ? (
             <p className="text-xs text-red-600">
               같은 팀 선수는 평점 대상이 아닙니다.
@@ -1529,61 +1907,32 @@ export default async function MatchDetailPage({
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-500">
                   현재:{" "}
-                  {match.period_state === "pre"
-                    ? "대기"
-                    : match.period_state === "first_half"
-                      ? "전반 진행"
-                      : match.period_state === "halftime"
-                        ? "휴식"
-                        : match.period_state === "second_half"
-                          ? "후반 진행"
-                          : "종료"}
+                  {periodControlSummary.statusLabel}
                   {elapsedMinutes !== null ? ` · ${elapsedMinutes}분` : ""}
                 </span>
-                {match.period_state === "pre" ? (
-                  <form action={startFirstAction}>
+                {canStartPeriod ? (
+                  <form action={startPeriodAction}>
                     <PendingSubmitButton
                       className="rounded border px-2 py-1"
                       pendingText="처리중..."
                       confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다."
                     >
-                      전반전 시작
+                      {startPeriodLabel ?? periodControlSummary.primaryActionLabel ?? "1P 시작"}
                     </PendingSubmitButton>
                   </form>
                 ) : null}
-                {match.period_state === "first_half" ? (
-                  <form action={endFirstAction}>
-                    <PendingSubmitButton
-                      className="rounded border px-2 py-1"
-                      pendingText="처리중..."
-                    >
-                      전반 종료
-                    </PendingSubmitButton>
-                  </form>
-                ) : null}
-                {match.period_state === "halftime" ? (
-                  <form action={startSecondAction}>
-                    <PendingSubmitButton
-                      className="rounded border px-2 py-1"
-                      pendingText="처리중..."
-                    >
-                      후반 시작
-                    </PendingSubmitButton>
-                  </form>
-                ) : null}
-                {match.period_state === "second_half" ? (
-                  <form action={endMatchAction}>
+                {canEndPeriod ? (
+                  <form action={endPeriodAction}>
                     <PendingSubmitButton
                       className="rounded border px-2 py-1"
                       pendingText="처리중..."
                       confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다."
                     >
-                      경기 종료
+                      {endPeriodLabel ?? "현재 period 종료"}
                     </PendingSubmitButton>
                   </form>
                 ) : null}
-                {match.period_state === "halftime" ||
-                match.period_state === "second_half" ? (
+                {canResumePrevious ? (
                   <form action={resumePreviousAction}>
                     <PendingSubmitButton
                       className="rounded border px-2 py-1"
@@ -1695,15 +2044,70 @@ export default async function MatchDetailPage({
                             p.playerId || `name:${p.playerName}`,
                           ),
                       )}
-                      disabled={match.period_state === "pre" || match.period_state === "ended"}
+                      disabled={match.period_state === "ended"}
                       periodState={match.period_state}
                       firstHalfStartedAt={match.first_half_started_at}
                       secondHalfStartedAt={match.second_half_started_at}
                       firstHalfEndedAt={match.first_half_ended_at}
+                      reservablePeriods={reservablePeriods}
                     />
                   </div>
 
                 <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해줘.</div>
+
+                {reservablePeriods.length > 0 ? (
+                  <div className="rounded border p-2 space-y-1 text-xs">
+                    <div className="font-medium text-gray-700">시작 전 교체 예약</div>
+                    {(reservedSubPlans ?? []).length === 0 ? (
+                      <div className="text-gray-500">예약된 교체가 없습니다.</div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {(reservedSubPlans ?? []).map((plan) => {
+                          const periodLabel =
+                            sortedPeriods.find(
+                              (p) => p.sequence === plan.period_sequence,
+                            )?.label ??
+                            sortedPeriods.find(
+                              (p) => p.sequence === plan.period_sequence,
+                            )?.period_code ??
+                            `${plan.period_sequence}P`;
+                          const outLabel =
+                            (plan.player_out_id
+                              ? playerLabelById.get(plan.player_out_id)
+                              : undefined) ??
+                            plan.player_out_name ??
+                            "선수";
+                          const inLabel =
+                            (plan.player_in_id
+                              ? playerLabelById.get(plan.player_in_id)
+                              : undefined) ??
+                            plan.player_in_name ??
+                            "선수";
+                          return (
+                            <li
+                              key={`reserved-sub-${plan.id}`}
+                              className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                            >
+                              <span>
+                                [{periodLabel}] {plan.team_side} · {plan.planned_minute}분 · OUT {outLabel} / IN {inLabel}
+                              </span>
+                              <form action={cancelReservedSubstitutionAction}>
+                                <input
+                                  type="hidden"
+                                  name="reservation_id"
+                                  value={plan.id}
+                                />
+                                <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
+                                  예약 취소
+                                </PendingSubmitButton>
+                              </form>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </details>
           </section>

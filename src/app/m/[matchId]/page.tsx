@@ -9,12 +9,12 @@ import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GoalAddActions from "./GoalAddActions";
 import LiveScoreboard from "./LiveScoreboard";
-import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
 import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
+import PendingSubmitButton from "@/components/PendingSubmitButton";
 
 type Match = {
   id: string;
@@ -762,7 +762,7 @@ async function addSubstitutionEvent(
     .maybeSingle<{
       period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
     }>();
-  if (stateRow?.period_state === "ended") {
+  if (stateRow?.period_state === "pre" || stateRow?.period_state === "ended") {
     redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
   }
 
@@ -871,73 +871,6 @@ async function undoSubstitutionEvent(
     "participation_substitution_undo",
     { ids },
   );
-
-  revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
-}
-
-async function addStartingLineup(
-  matchId: string,
-  channelSlug: string,
-  formData: FormData,
-) {
-  "use server";
-
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return;
-
-  const canMutate = await canMutateParticipation(channelSlug, matchId);
-  if (!canMutate) {
-    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
-  }
-
-  const playerValuesA = formData
-    .getAll("player_values_a")
-    .map((v) => String(v).trim())
-    .filter(Boolean);
-  const playerValuesB = formData
-    .getAll("player_values_b")
-    .map((v) => String(v).trim())
-    .filter(Boolean);
-
-  if (playerValuesA.length === 0 && playerValuesB.length === 0) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
-  }
-
-  const buildRows = (teamSide: "A" | "B", values: string[]) =>
-    values.map((value) => {
-      const [playerIdRaw, displayNameRaw] = value.split("|");
-      return {
-        match_id: matchId,
-        team_side: teamSide,
-        player_id: playerIdRaw?.trim() || null,
-        player_name:
-          (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "") || null,
-        event_type: "in" as const,
-        minute: 0,
-        is_starter: true,
-      };
-    });
-
-  const rows = [
-    ...buildRows("A", playerValuesA),
-    ...buildRows("B", playerValuesB),
-  ];
-
-  await supabase
-    .from("match_participation_events")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("match_id", matchId)
-    .is("deleted_at", null)
-    .eq("is_starter", true);
-
-  await supabase.from("match_participation_events").insert(rows);
-
-  await logMatchChange(matchId, channelSlug, "participation_starting_add", {
-    countA: playerValuesA.length,
-    countB: playerValuesB.length,
-    total: rows.length,
-  });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -1182,7 +1115,6 @@ export default async function MatchDetailPage({
   const starterKeySetB = new Set(
     starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   );
-  const isBeforeKickoff = match.period_state === "pre";
   const isLivePeriod =
     match.period_state === "first_half" || match.period_state === "second_half";
 
@@ -1330,9 +1262,6 @@ export default async function MatchDetailPage({
     : async () => {};
   const addSubstitutionAction = channel
     ? addSubstitutionEvent.bind(null, matchId, channel.slug)
-    : async () => {};
-  const addStartingLineupAction = channel
-    ? addStartingLineup.bind(null, matchId, channel.slug)
     : async () => {};
   const undoSubstitutionAction = channel
     ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
@@ -1707,80 +1636,7 @@ export default async function MatchDetailPage({
               </summary>
 
               <div className="mt-3 space-y-3">
-                {isBeforeKickoff ? (
-                  <details
-                    className="rounded border p-3"
-                    open={startingCountA === 0 && startingCountB === 0}
-                  >
-                    <summary className="cursor-pointer text-xs font-medium text-gray-600">
-                      스타팅 편집
-                    </summary>
-                    <form
-                      action={addStartingLineupAction}
-                      className="mt-3 space-y-3"
-                    >
-                      <div className="grid md:grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium text-gray-600">
-                            {match.team_a_name} 스타팅 후보
-                          </div>
-                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
-                            {rosterA.map((p) => {
-                              const key = p.playerId || `name:${p.playerName}`;
-                              return (
-                                <label
-                                  key={`sa-${p.value}`}
-                                  className="flex items-center gap-2"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    name="player_values_a"
-                                    value={p.value}
-                                    defaultChecked={starterKeySetA.has(key)}
-                                  />
-                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium text-gray-600">
-                            {match.team_b_name} 스타팅 후보
-                          </div>
-                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
-                            {rosterB.map((p) => {
-                              const key = p.playerId || `name:${p.playerName}`;
-                              return (
-                                <label
-                                  key={`sb-${p.value}`}
-                                  className="flex items-center gap-2"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    name="player_values_b"
-                                    value={p.value}
-                                    defaultChecked={starterKeySetB.has(key)}
-                                  />
-                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <PendingSubmitButton className="rounded border px-2 py-1 text-xs">
-                          스타팅 저장
-                        </PendingSubmitButton>
-                        <span className="text-[11px] text-gray-500">
-                          기존 선발은 체크된 상태로 표시돼.
-                        </span>
-                      </div>
-                    </form>
-                  </details>
-                ) : (
-                  <div className="rounded border p-3">
+                <div className="rounded border p-3">
                     <SubstitutionActions
                       action={addSubstitutionAction}
                       teamAName={match.team_a_name}
@@ -1803,13 +1659,12 @@ export default async function MatchDetailPage({
                             p.playerId || `name:${p.playerName}`,
                           ),
                       )}
-                      disabled={match.period_state === "ended"}
+                      disabled={match.period_state === "pre" || match.period_state === "ended"}
                       periodState={match.period_state}
                       firstHalfStartedAt={match.first_half_started_at}
                       secondHalfStartedAt={match.second_half_started_at}
                     />
                   </div>
-                )}
 
                 <div className="rounded border p-3">
                   <div className="text-xs font-medium text-gray-600 mb-2">

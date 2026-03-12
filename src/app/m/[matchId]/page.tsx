@@ -65,6 +65,7 @@ type ParticipationEvent = {
   player_name: string | null;
   event_type: "in" | "out";
   minute: number;
+  is_starter: boolean;
   created_at: string;
 };
 
@@ -716,6 +717,7 @@ async function addSubstitutionEvent(
       player_name: outName || null,
       event_type: "out",
       minute,
+      is_starter: false,
     },
     {
       match_id: matchId,
@@ -724,6 +726,7 @@ async function addSubstitutionEvent(
       player_name: inName || null,
       event_type: "in",
       minute,
+      is_starter: false,
     },
   ]).select("id");
 
@@ -819,10 +822,18 @@ async function addStartingLineup(
         player_name: (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "") || null,
         event_type: "in" as const,
         minute: 0,
+        is_starter: true,
       };
     });
 
   const rows = [...buildRows("A", playerValuesA), ...buildRows("B", playerValuesB)];
+
+  await supabase
+    .from("match_participation_events")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .eq("is_starter", true);
 
   await supabase.from("match_participation_events").insert(rows);
 
@@ -1042,7 +1053,7 @@ export default async function MatchDetailPage({
 
   const { data: participationEvents } = await supabase
     .from("match_participation_events")
-    .select("id,team_side,player_id,player_name,event_type,minute,created_at")
+    .select("id,team_side,player_id,player_name,event_type,minute,is_starter,created_at")
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .order("minute", { ascending: false })
@@ -1050,10 +1061,10 @@ export default async function MatchDetailPage({
     .returns<ParticipationEvent[]>();
 
   const starterEventsA = (participationEvents ?? []).filter(
-    (e) => e.team_side === "A" && e.event_type === "in" && e.minute === 0,
+    (e) => e.team_side === "A" && e.is_starter,
   );
   const starterEventsB = (participationEvents ?? []).filter(
-    (e) => e.team_side === "B" && e.event_type === "in" && e.minute === 0,
+    (e) => e.team_side === "B" && e.is_starter,
   );
   const startingCountA = new Set(starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`)).size;
   const startingCountB = new Set(starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`)).size;
@@ -1458,7 +1469,7 @@ export default async function MatchDetailPage({
                     </div>
                   </details>
                   {(() => {
-                    const timelineEvents = (participationEvents ?? []).filter((e) => !(e.minute === 0 && e.event_type === 'in'))
+                    const timelineEvents = (participationEvents ?? []).filter((e) => !e.is_starter)
                     if (timelineEvents.length === 0) {
                       return <p className="text-xs text-gray-500">아직 기록이 없습니다.</p>
                     }

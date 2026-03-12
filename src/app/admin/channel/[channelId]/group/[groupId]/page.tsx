@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 import { ensureTeamInChannel } from '@/lib/teamHelpers'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
@@ -358,80 +359,6 @@ async function saveMatchStarters(formData: FormData) {
     playerIds.map((playerId) => ({
       match_id: matchId,
       match_period_id: period.id,
-      team_side: teamSide,
-      player_id: playerId,
-      is_starter: true,
-    })),
-  )
-
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
-}
-
-async function copyPreviousPeriodStarters(formData: FormData) {
-  'use server'
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const matchId = String(formData.get('matchId') || '')
-  const teamId = String(formData.get('teamId') || '')
-  const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
-  const periodSequence = Number(formData.get('periodSequence') || 1)
-
-  const manage = await canManageChannel(channelId)
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
-    redirect('/admin/login')
-  }
-  if (!channelId || !groupId || !matchId || !teamId || (teamSide !== 'A' && teamSide !== 'B')) return
-  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
-  }
-  if (periodSequence <= 1) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
-  }
-
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
-
-  const { data: periods } = await supabase
-    .from('match_periods')
-    .select('id,sequence')
-    .eq('match_id', matchId)
-    .in('sequence', [periodSequence - 1, periodSequence])
-    .is('deleted_at', null)
-    .returns<{ id: string; sequence: number }[]>()
-
-  const prev = (periods ?? []).find((p) => p.sequence === periodSequence - 1)
-  const current = (periods ?? []).find((p) => p.sequence === periodSequence)
-  if (!prev || !current) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
-  }
-
-  const { data: prevRows } = await supabase
-    .from('match_period_lineups')
-    .select('player_id')
-    .eq('match_id', matchId)
-    .eq('match_period_id', prev.id)
-    .eq('team_side', teamSide)
-    .is('deleted_at', null)
-    .returns<{ player_id: string | null }[]>()
-
-  const playerIds = (prevRows ?? []).map((row) => row.player_id).filter((v): v is string => Boolean(v))
-  if (playerIds.length === 0) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
-  }
-
-  await supabase
-    .from('match_period_lineups')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('match_id', matchId)
-    .eq('match_period_id', current.id)
-    .eq('team_side', teamSide)
-    .is('deleted_at', null)
-
-  await supabase.from('match_period_lineups').insert(
-    playerIds.map((playerId) => ({
-      match_id: matchId,
-      match_period_id: current.id,
       team_side: teamSide,
       player_id: playerId,
       is_starter: true,
@@ -869,16 +796,7 @@ export default async function AdminGroupPage({
                                     ))}
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
-                                    {seq > 1 ? (
-                                      <button
-                                        className="rounded border px-2 py-1 text-xs"
-                                        type="submit"
-                                        formAction={copyPreviousPeriodStarters}
-                                      >
-                                        이전 period 복사
-                                      </button>
-                                    ) : null}
+                                    <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="저장중...">선발 제출</PendingSubmitButton>
                                   </div>
                                 </form>
                               )

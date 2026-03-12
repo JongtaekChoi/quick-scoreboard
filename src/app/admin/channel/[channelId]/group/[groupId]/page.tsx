@@ -218,6 +218,7 @@ async function saveGroupEntries(formData: FormData) {
   const groupId = String(formData.get('groupId') || '')
   const teamId = String(formData.get('teamId') || '')
   const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
+  const sourcePlayer = String(formData.get('sourcePlayer') || '')
   const confirmCleanup = String(formData.get('confirm_cleanup') || '0') === '1'
 
   const manage = await canManageChannel(channelId)
@@ -301,6 +302,31 @@ async function saveGroupEntries(formData: FormData) {
     }
   }
 
+  if (sourcePlayer === '__NONE__') {
+    await supabase
+      .from('match_group_guests')
+      .delete()
+      .eq('match_group_id', groupId)
+      .eq('team_id', teamId)
+  } else if (sourcePlayer) {
+    const [sourceTeamId, sourcePlayerId, guestName] = sourcePlayer.split('|')
+    if (sourceTeamId && sourcePlayerId && guestName && sourceTeamId !== teamId) {
+      await supabase
+        .from('match_group_guests')
+        .upsert(
+          {
+            channel_id: channelId,
+            match_group_id: groupId,
+            team_id: teamId,
+            source_team_id: sourceTeamId,
+            source_player_id: sourcePlayerId,
+            guest_name: guestName,
+          },
+          { onConflict: 'match_group_id,team_id' },
+        )
+    }
+  }
+
   redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
 
@@ -364,78 +390,6 @@ async function saveMatchStarters(formData: FormData) {
       is_starter: true,
     })),
   )
-
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
-}
-
-async function saveGroupGuest(formData: FormData) {
-  'use server'
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const teamId = String(formData.get('teamId') || '')
-  const source = String(formData.get('sourcePlayer') || '')
-
-  const manage = await canManageChannel(channelId)
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
-    redirect('/admin/login')
-  }
-
-  if (!channelId || !groupId || !teamId || !source) return
-  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
-  }
-  const [sourceTeamId, sourcePlayerId, guestName] = source.split('|')
-  if (!sourceTeamId || !sourcePlayerId || !guestName) return
-  if (teamId === sourceTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=guest_source`)
-  }
-
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
-
-  await supabase
-    .from('match_group_guests')
-    .upsert(
-      {
-        channel_id: channelId,
-        match_group_id: groupId,
-        team_id: teamId,
-        source_team_id: sourceTeamId,
-        source_player_id: sourcePlayerId,
-        guest_name: guestName,
-      },
-      { onConflict: 'match_group_id,team_id' },
-    )
-
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
-}
-
-async function removeGroupGuest(formData: FormData) {
-  'use server'
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const teamId = String(formData.get('teamId') || '')
-
-  const manage = await canManageChannel(channelId)
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
-    redirect('/admin/login')
-  }
-
-  if (!channelId || !groupId || !teamId) return
-  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
-  }
-
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
-
-  await supabase
-    .from('match_group_guests')
-    .delete()
-    .eq('match_group_id', groupId)
-    .eq('team_id', teamId)
 
   redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
 }
@@ -646,7 +600,7 @@ export default async function AdminGroupPage({
                 const teamPlayers = playersByTeam.get(t.id) ?? []
                 const teamEntries = entriesByTeam.get(t.id) ?? []
                 return (
-                  <div key={t.id} className="rounded border p-2 space-y-2">
+                  <div key={t.id} className="rounded bg-white p-2 space-y-2 ring-1 ring-gray-200">
                     <div className="font-medium text-sm">{t.name}</div>
                     {(() => {
                       const guest = guestByTeam.get(t.id)
@@ -670,7 +624,7 @@ export default async function AdminGroupPage({
                         {teamPlayers.map((p) => {
                           const checked = teamEntries.some((e) => e.player_id === p.id)
                           return (
-                            <label key={p.id} className="rounded border px-2 py-1 text-xs flex items-center gap-1">
+                            <label key={p.id} className="rounded px-2 py-1 text-xs flex items-center gap-1 ring-1 ring-gray-200 bg-white">
                               <input type="checkbox" name="playerIds" value={p.id} defaultChecked={checked} form={`entry-form-${t.id}`} />
                               <span>#{p.jersey_no} {p.player_name}</span>
                             </label>
@@ -679,43 +633,29 @@ export default async function AdminGroupPage({
                       </div>
                     </div>
 
-                    <section className="rounded border p-2 space-y-2">
+                    <section className="rounded bg-gray-50 p-2 space-y-2">
                       <div className="text-xs font-semibold text-gray-700">용병 (팀당 1명)</div>
-                      <form action={saveGroupGuest} className="flex flex-wrap gap-2 items-center">
-                        <input type="hidden" name="channelId" value={channel.id} />
-                        <input type="hidden" name="groupId" value={group.id} />
-                        <input type="hidden" name="teamId" value={t.id} />
-                      <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
-                        <select className="rounded border px-2 py-1.5 text-xs min-w-64" name="sourcePlayer" required defaultValue="">
-                          <option value="" disabled>타팀 선수 선택</option>
-                          {(teams ?? []).filter((x) => !matchTeamNames.has(x.name)).map((teamOption) => {
-                            const sourcePlayers = playersByTeam.get(teamOption.id) ?? []
-                            if (sourcePlayers.length === 0) return null
-                            return (
-                              <optgroup key={teamOption.id} label={teamOption.name}>
-                                {sourcePlayers.map((p) => (
-                                  <option key={`${teamOption.id}-${p.id}`} value={`${teamOption.id}|${p.id}|${p.player_name}`}>
-                                    #{p.jersey_no} {p.player_name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )
-                          })}
-                        </select>
-                        <button className="rounded border px-2 py-1.5 text-xs" type="submit">용병 저장</button>
-                      </form>
+                      <select className="rounded border px-2 py-1.5 text-xs w-full" name="sourcePlayer" form={`entry-form-${t.id}`} defaultValue="">
+                        <option value="">변경 없음</option>
+                        <option value="__NONE__">용병 없음(해제)</option>
+                        {(teams ?? []).filter((x) => !matchTeamNames.has(x.name)).map((teamOption) => {
+                          const sourcePlayers = playersByTeam.get(teamOption.id) ?? []
+                          if (sourcePlayers.length === 0) return null
+                          return (
+                            <optgroup key={teamOption.id} label={teamOption.name}>
+                              {sourcePlayers.map((p) => (
+                                <option key={`${teamOption.id}-${p.id}`} value={`${teamOption.id}|${p.id}|${p.player_name}`}>
+                                  #{p.jersey_no} {p.player_name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )
+                        })}
+                      </select>
 
                       {guestByTeam.get(t.id) ? (
-                        <div className="text-xs text-gray-700 flex items-center justify-between">
-                          <span>
-                            현재 용병: {guestByTeam.get(t.id)?.guest_name} (소속: {teamNameMap.get(guestByTeam.get(t.id)!.source_team_id) ?? '알 수 없음'})
-                          </span>
-                          <form action={removeGroupGuest}>
-                            <input type="hidden" name="channelId" value={channel.id} />
-                            <input type="hidden" name="groupId" value={group.id} />
-                            <input type="hidden" name="teamId" value={t.id} />
-                            <button className="underline" type="submit">용병 해제</button>
-                          </form>
+                        <div className="text-xs text-gray-700">
+                          현재 용병: {guestByTeam.get(t.id)?.guest_name} (소속: {teamNameMap.get(guestByTeam.get(t.id)!.source_team_id) ?? '알 수 없음'})
                         </div>
                       ) : (
                         <p className="text-xs text-gray-500">등록된 용병이 없습니다.</p>

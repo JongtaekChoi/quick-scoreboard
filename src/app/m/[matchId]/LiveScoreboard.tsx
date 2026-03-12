@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  ReadonlyURLSearchParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import {
   QueryClient,
   QueryClientProvider,
   useQuery,
 } from "@tanstack/react-query";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 type Goal = {
   id: string;
@@ -26,6 +32,14 @@ type ParticipationItem = {
   created_at: string;
 };
 
+type Replacement = {
+  id: string;
+  minute: number;
+  team_side: "A" | "B";
+  text: string;
+  created_at: string;
+};
+
 type MatchMini = {
   id: string;
   team_a_name: string;
@@ -37,6 +51,90 @@ type MatchMini = {
 type ScoreboardPayload = { match: MatchMini; goals: Goal[] };
 
 const REFRESH_SEC = 10;
+
+function EventLine({
+  event,
+  type,
+  match,
+  readonly,
+  idx,
+  router,
+  searchParams,
+  pathname,
+}: {
+  event: Goal | Replacement;
+  type: "goal" | "replace";
+  match: MatchMini;
+  readonly: boolean;
+  idx: Number;
+  router: AppRouterInstance;
+  searchParams: ReadonlyURLSearchParams;
+  pathname: string;
+}) {
+  const g = type == "goal" ? (event as Goal) : null;
+  const replacement = type == "replace" ? (event as Replacement) : null;
+  const who = g
+    ? (g.scorer_name ??
+      (g.team_side === "A" ? match.team_a_name : match.team_b_name))
+    : "";
+  const assist = g?.assist_name ?? "";
+  const currentGoal = searchParams.get("goal");
+  const active = !readonly && (currentGoal ? currentGoal === g?.id : idx === 0);
+
+  return (
+    <button
+      key={event.id}
+      type="button"
+      onClick={() => {
+        if (readonly || g == null) return;
+        const qs = new URLSearchParams(searchParams.toString());
+        qs.set("goal", g.id);
+        router.replace(`${pathname}?${qs.toString()}`, {
+          scroll: false,
+        });
+      }}
+      className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? "bg-white ring-1 ring-gray-300" : "hover:bg-white/70"}`}
+    >
+      <div className="text-right truncate">
+        {event.team_side === "A" ? (
+          g ? (
+            <>
+              <span>{who}</span>
+              {assist ? (
+                <span className="text-gray-400"> ({assist})</span>
+              ) : null}
+            </>
+          ) : (
+            <span> {replacement?.text}</span>
+          )
+        ) : (
+          ""
+        )}
+      </div>
+
+      <div className="text-gray-500 tabular-nums">
+        {event.minute !== null ? `${event.minute}’` : ""}
+      </div>
+
+      <div className="truncate">
+        {event.team_side === "B" ? (
+          g ? (
+            <>
+              <span>{who}</span>
+              {assist ? (
+                <span className="text-gray-400"> ({assist})</span>
+              ) : null}
+            </>
+          ) : (
+            <span> {replacement?.text}</span>
+          )
+        ) : (
+          ""
+        )}
+      </div>
+    </button>
+  );
+}
 
 function LiveScoreboardInner({
   matchId,
@@ -113,10 +211,12 @@ function LiveScoreboardInner({
       if (a.minute !== b.minute) return a.minute - b.minute;
       if (a.team_side !== b.team_side)
         return a.team_side.localeCompare(b.team_side);
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return (
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
     });
 
-    const lines: Array<{ id: string; minute: number; team: "A" | "B"; text: string }> = [];
+    const lines: Array<Replacement> = [];
     for (let i = 0; i < sorted.length; ) {
       const base = sorted[i];
       const chunk: ParticipationItem[] = [];
@@ -137,29 +237,52 @@ function LiveScoreboardInner({
         lines.push({
           id: `${base.minute}-${base.team_side}-pair-${k}`,
           minute: base.minute,
-          team: base.team_side,
+          team_side: base.team_side,
           text: `IN ${ins[k].player_label} OUT ${outs[k].player_label}`,
+          created_at: base.created_at,
         });
       }
       for (let k = pairCount; k < ins.length; k++) {
         lines.push({
           id: `${base.minute}-${base.team_side}-in-${k}`,
           minute: base.minute,
-          team: base.team_side,
+          team_side: base.team_side,
           text: `IN ${ins[k].player_label}`,
+          created_at: base.created_at,
         });
       }
       for (let k = pairCount; k < outs.length; k++) {
         lines.push({
           id: `${base.minute}-${base.team_side}-out-${k}`,
           minute: base.minute,
-          team: base.team_side,
+          team_side: base.team_side,
           text: `OUT ${outs[k].player_label}`,
+          created_at: base.created_at,
         });
       }
     }
     return lines;
   })();
+
+  const timeEvents: { type: "goal" | "replace"; event: Goal | Replacement }[] =
+    (() => {
+      return [
+        ...goals.map((goal) => ({ type: "goal", event: goal }) as const),
+        ...groupedParticipation.map(
+          (replacement) =>
+            ({
+              type: "replace",
+              event: replacement,
+            }) as const,
+        ),
+      ].sort(({ event: a }, { event: b }) => {
+        if (a.minute != null && b.minute != null && a.minute !== b.minute)
+          return b.minute - a.minute;
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+    })();
 
   return (
     <section className="sticky top-0 z-10 rounded-xl border border-gray-200 p-4 space-y-3 bg-white/95 backdrop-blur shadow-sm">
@@ -178,7 +301,8 @@ function LiveScoreboardInner({
             type="button"
             onClick={() => void refetch()}
           >
-            {autoUpdate ? `${REFRESH_SEC}초 간격` : ""} {isFetching ? "갱신 중..." : "↻ 새로고침"}
+            {autoUpdate ? `${REFRESH_SEC}초 간격` : ""}{" "}
+            {isFetching ? "갱신 중..." : "↻ 새로고침"}
           </button>
         </div>
       ) : null}
@@ -197,82 +321,29 @@ function LiveScoreboardInner({
 
       {missingA > 0 || missingB > 0 ? (
         <p className="text-[11px] text-amber-700">
-          이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행 표시)
+          이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행
+          표시)
         </p>
       ) : null}
 
       <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
-        {displayGoals.length === 0 ? (
-          <p className="text-xs text-gray-500">득점 이벤트 없음</p>
+        {timeEvents.length === 0 ? (
+          <p className="text-xs text-gray-500">이벤트 없음</p>
         ) : (
-          displayGoals.map((g, idx) => {
-            const who =
-              g.scorer_name ??
-              (g.team_side === "A" ? match.team_a_name : match.team_b_name);
-            const assist = g.assist_name ?? "";
-            const currentGoal = searchParams.get("goal");
-            const active =
-              !readonly && (currentGoal ? currentGoal === g.id : idx === 0);
+          timeEvents.map((event, idx) => {
             return (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => {
-                  if (readonly) return;
-                  const qs = new URLSearchParams(searchParams.toString());
-                  qs.set("goal", g.id);
-                  router.replace(`${pathname}?${qs.toString()}`, {
-                    scroll: false,
-                  });
-                }}
-                className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? "bg-white ring-1 ring-gray-300" : "hover:bg-white/70"}`}
-              >
-                <div className="text-right truncate">
-                  {g.team_side === "A" ? (
-                    <>
-                      <span>{who}</span>
-                      {assist ? (
-                        <span className="text-gray-400"> ({assist})</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    ""
-                  )}
-                </div>
-
-                <div className="text-gray-500 tabular-nums">
-                  {g.minute !== null ? `${g.minute}’` : ""}
-                </div>
-
-                <div className="truncate">
-                  {g.team_side === "B" ? (
-                    <>
-                      <span>{who}</span>
-                      {assist ? (
-                        <span className="text-gray-400"> ({assist})</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    ""
-                  )}
-                </div>
-              </button>
+              <EventLine
+                event={event.event}
+                type={event.type}
+                router={router}
+                idx={idx}
+                match={match}
+                pathname={pathname}
+                readonly={readonly}
+                searchParams={searchParams}
+              />
             );
           })
-        )}
-      </div>
-
-      <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
-        {groupedParticipation.length === 0 ? (
-          <p className="text-xs text-gray-500">교체 이벤트 없음</p>
-        ) : (
-          groupedParticipation.map((e) => (
-            <div key={e.id} className="grid grid-cols-[auto_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1">
-              <div className="text-gray-500 tabular-nums">{e.minute}’</div>
-              <div className="text-gray-500">{e.team}</div>
-              <div className="truncate">{e.text}</div>
-            </div>
-          ))
         )}
       </div>
     </section>

@@ -217,6 +217,7 @@ async function saveGroupEntries(formData: FormData) {
   const groupId = String(formData.get('groupId') || '')
   const teamId = String(formData.get('teamId') || '')
   const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
+  const confirmCleanup = String(formData.get('confirm_cleanup') || '0') === '1'
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -231,6 +232,43 @@ async function saveGroupEntries(formData: FormData) {
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
+
+  const { data: team } = await supabase
+    .from('teams')
+    .select('id,name')
+    .eq('id', teamId)
+    .maybeSingle<{ id: string; name: string }>()
+
+  const { data: matches } = await supabase
+    .from('matches')
+    .select('id,team_a_id,team_b_id,team_a_name,team_b_name')
+    .eq('match_group_id', groupId)
+    .returns<{ id: string; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string }[]>()
+
+  const affectedMatchSides = (matches ?? [])
+    .map((m) => {
+      const asA = m.team_a_id === teamId || (team?.name ? m.team_a_name === team.name : false)
+      const asB = m.team_b_id === teamId || (team?.name ? m.team_b_name === team.name : false)
+      if (asA) return { matchId: m.id, side: 'A' as const }
+      if (asB) return { matchId: m.id, side: 'B' as const }
+      return null
+    })
+    .filter((v): v is { matchId: string; side: 'A' | 'B' } => Boolean(v))
+
+  if (!confirmCleanup && affectedMatchSides.length > 0) {
+    const { data: existingLineups } = await supabase
+      .from('match_period_lineups')
+      .select('id,match_id,team_side')
+      .in('match_id', affectedMatchSides.map((x) => x.matchId))
+      .is('deleted_at', null)
+      .returns<{ id: string; match_id: string; team_side: 'A' | 'B' }[]>()
+
+    const sideKey = new Set(affectedMatchSides.map((x) => `${x.matchId}:${x.side}`))
+    const hasStarterChanges = (existingLineups ?? []).some((r) => sideKey.has(`${r.match_id}:${r.team_side}`))
+    if (hasStarterChanges) {
+      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=entry_affects_starters&warn_team=${teamId}`)
+    }
+  }
 
   await supabase
     .from('match_group_entries')
@@ -247,6 +285,19 @@ async function saveGroupEntries(formData: FormData) {
         player_id: playerId,
       })),
     )
+  }
+
+  if (affectedMatchSides.length > 0) {
+    for (const target of affectedMatchSides) {
+      let q = supabase
+        .from('match_period_lineups')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('match_id', target.matchId)
+        .eq('team_side', target.side)
+        .is('deleted_at', null)
+      if (playerIds.length > 0) q = q.not('player_id', 'in', `(${playerIds.map((id) => `"${id}"`).join(',')})`)
+      await q
+    }
   }
 
   redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
@@ -495,10 +546,10 @@ export default async function AdminGroupPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string; groupId: string }>
-  searchParams: Promise<{ from?: string; err?: string; tab?: string }>
+  searchParams: Promise<{ from?: string; err?: string; tab?: string; warn_team?: string }>
 }) {
   const { channelId, groupId } = await params
-  const { from, err, tab: tabParam } = await searchParams
+  const { from, err, tab: tabParam, warn_team: warnTeam } = await searchParams
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
   const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
@@ -617,6 +668,7 @@ export default async function AdminGroupPage({
           {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
+          {err === 'entry_affects_starters' ? <p className="text-xs text-amber-700">이 팀은 이미 경기별 선발 제출 이력이 있어요. 엔트리 변경 시 해당 선발명단에서 제외 선수가 정리됩니다. 같은 팀에서 다시 제출하면 진행됩니다.</p> : null}
           {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
           {err === 'starter_period' ? <p className="text-xs text-red-600">선발 period를 확인해 주세요.</p> : null}
           {err === 'starter_copy' ? <p className="text-xs text-red-600">이전 period 선발 복사에 실패했습니다.</p> : null}
@@ -706,6 +758,7 @@ export default async function AdminGroupPage({
                         <input type="hidden" name="channelId" value={channel.id} />
                         <input type="hidden" name="groupId" value={group.id} />
                         <input type="hidden" name="teamId" value={t.id} />
+                      <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
                         <select className="rounded border px-2 py-1.5 text-xs min-w-64" name="sourcePlayer" required defaultValue="">
                           <option value="" disabled>타팀 선수 선택</option>
                           {(teams ?? []).filter((x) => !matchTeamNames.has(x.name)).map((teamOption) => {
@@ -734,6 +787,7 @@ export default async function AdminGroupPage({
                             <input type="hidden" name="channelId" value={channel.id} />
                             <input type="hidden" name="groupId" value={group.id} />
                             <input type="hidden" name="teamId" value={t.id} />
+                      <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
                             <button className="underline" type="submit">용병 해제</button>
                           </form>
                         </div>
@@ -746,6 +800,7 @@ export default async function AdminGroupPage({
                       <input type="hidden" name="channelId" value={channel.id} />
                       <input type="hidden" name="groupId" value={group.id} />
                       <input type="hidden" name="teamId" value={t.id} />
+                      <input type="hidden" name="confirm_cleanup" value={warnTeam === t.id ? '1' : '0'} />
                       <button className="rounded border px-2 py-1.5 text-xs" type="submit">제출</button>
                     </form>
                   </div>

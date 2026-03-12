@@ -1774,12 +1774,28 @@ export default async function MatchDetailPage({
               (() => {
                 const roster = activeGoal.team_side === "A" ? rosterA : rosterB;
                 const hasRoster = roster.length > 0;
-                const scorerDefault = activeGoal.scorer_player_id
-                  ? `${activeGoal.scorer_player_id}|${activeGoal.scorer_name ?? ""}`
-                  : (activeGoal.scorer_name ?? "");
-                const assistDefault = activeGoal.assist_player_id
-                  ? `${activeGoal.assist_player_id}|${activeGoal.assist_name ?? ""}`
-                  : (activeGoal.assist_name ?? "");
+                const findRosterValue = (
+                  playerId: string | null,
+                  playerName: string | null,
+                ) => {
+                  if (playerId) {
+                    const byId = roster.find((p) => p.playerId === playerId);
+                    if (byId) return byId.value;
+                  }
+                  if (playerName) {
+                    const byName = roster.find((p) => p.playerName === playerName);
+                    if (byName) return byName.value;
+                  }
+                  return playerName ?? "";
+                };
+                const scorerDefault = findRosterValue(
+                  activeGoal.scorer_player_id,
+                  activeGoal.scorer_name,
+                );
+                const assistDefault = findRosterValue(
+                  activeGoal.assist_player_id,
+                  activeGoal.assist_name,
+                );
                 return (
                   <>
                     <div className="flex items-center justify-between gap-2 text-sm text-gray-700">

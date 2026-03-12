@@ -66,7 +66,7 @@ function EventLine({
   type: "goal" | "replace";
   match: MatchMini;
   readonly: boolean;
-  idx: Number;
+  idx: number;
   router: AppRouterInstance;
   searchParams: ReadonlyURLSearchParams;
   pathname: string;
@@ -333,6 +333,7 @@ function LiveScoreboardInner({
           timeEvents.map((event, idx) => {
             return (
               <EventLine
+                key={`${event.type}-${event.event.id}`}
                 event={event.event}
                 type={event.type}
                 router={router}

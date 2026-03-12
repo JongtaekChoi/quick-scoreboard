@@ -5,11 +5,22 @@ import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type RosterPlayer = { playerId: string; jerseyNo: string; playerName: string; value: string }
 
-function computeDefaultMinute(periodState: string, firstHalfStartedAt: string | null, secondHalfStartedAt: string | null) {
+function computeDefaultMinute(
+  periodState: string,
+  firstHalfStartedAt: string | null,
+  secondHalfStartedAt: string | null,
+  firstHalfEndedAt: string | null,
+) {
   const now = Date.now()
   const elapsed = (iso: string | null) => (iso ? Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000)) : 0)
   if (periodState === 'second_half') return 15 + elapsed(secondHalfStartedAt)
   if (periodState === 'first_half') return elapsed(firstHalfStartedAt)
+  if (periodState === 'halftime') {
+    if (firstHalfStartedAt && firstHalfEndedAt) {
+      return Math.max(0, Math.floor((new Date(firstHalfEndedAt).getTime() - new Date(firstHalfStartedAt).getTime()) / 60000))
+    }
+    return 15
+  }
   return 0
 }
 
@@ -25,6 +36,7 @@ export default function SubstitutionActions({
   periodState,
   firstHalfStartedAt,
   secondHalfStartedAt,
+  firstHalfEndedAt,
 }: {
   action: (formData: FormData) => void | Promise<void>
   teamAName: string
@@ -37,6 +49,7 @@ export default function SubstitutionActions({
   periodState: 'pre' | 'first_half' | 'halftime' | 'second_half' | 'ended'
   firstHalfStartedAt: string | null
   secondHalfStartedAt: string | null
+  firstHalfEndedAt: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [teamSide, setTeamSide] = useState<'A' | 'B'>('A')
@@ -52,7 +65,7 @@ export default function SubstitutionActions({
         className="rounded border px-2 py-1 text-xs disabled:opacity-50"
         disabled={disabled}
         onClick={() => {
-          setMinute(computeDefaultMinute(periodState, firstHalfStartedAt, secondHalfStartedAt))
+          setMinute(computeDefaultMinute(periodState, firstHalfStartedAt, secondHalfStartedAt, firstHalfEndedAt))
           setOpen(true)
         }}
       >

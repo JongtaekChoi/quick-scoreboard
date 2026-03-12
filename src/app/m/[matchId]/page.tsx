@@ -1115,7 +1115,10 @@ export default async function MatchDetailPage({
     starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
   );
   const isLivePeriod =
-    match.period_state === "first_half" || match.period_state === "second_half";
+    match.period_state === "first_half" ||
+    match.period_state === "halftime" ||
+    match.period_state === "second_half" ||
+    match.period_state === "ended";
 
   const sideEventsA = (participationEvents ?? []).filter(
     (e) => e.team_side === "A",
@@ -1681,6 +1684,7 @@ export default async function MatchDetailPage({
                       periodState={match.period_state}
                       firstHalfStartedAt={match.first_half_started_at}
                       secondHalfStartedAt={match.second_half_started_at}
+                      firstHalfEndedAt={match.first_half_ended_at}
                     />
                   </div>
 

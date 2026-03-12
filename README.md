@@ -47,3 +47,8 @@ npm run dev
 - `.github/workflows/ci.yml`
   - PR / main push 시 `npm ci`, `npm run lint`, `npm run build`
   - main push + secret 설정 시 `supabase db push`로 migration 적용
+
+## 캐시 정책
+
+- 라우트별 캐시 전략(정확성 vs 속도)은 [`docs/cache-policy.md`](docs/cache-policy.md)에서 관리합니다.
+

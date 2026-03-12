@@ -1,3 +1,5 @@
+export const revalidate = 120;
+
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 

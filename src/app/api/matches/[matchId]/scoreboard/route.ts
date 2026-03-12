@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase'
 
@@ -20,7 +21,9 @@ type GoalRow = {
   created_at: string
 }
 
-export async function GET(_: Request, { params }: { params: Promise<{ matchId: string }> }) {
+const SCOREBOARD_TTL_SECONDS = 5
+
+export async function GET(req: Request, { params }: { params: Promise<{ matchId: string }> }) {
   const { matchId } = await params
   const supabase = getSupabaseServerClient()
   if (!supabase) return NextResponse.json({ error: 'env_missing' }, { status: 500 })
@@ -54,5 +57,23 @@ export async function GET(_: Request, { params }: { params: Promise<{ matchId: s
     team_b_name: match.team_b_id ? (teamNameById.get(match.team_b_id) ?? match.team_b_name) : match.team_b_name,
   }
 
-  return NextResponse.json({ match: normalizedMatch, goals: goals ?? [] })
+  const body = { match: normalizedMatch, goals: goals ?? [] }
+  const etag = `W/"${createHash('sha1').update(JSON.stringify(body)).digest('hex')}"`
+
+  if (req.headers.get('if-none-match') === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: {
+        ETag: etag,
+        'Cache-Control': `public, max-age=0, s-maxage=${SCOREBOARD_TTL_SECONDS}, stale-while-revalidate=5`,
+      },
+    })
+  }
+
+  return NextResponse.json(body, {
+    headers: {
+      ETag: etag,
+      'Cache-Control': `public, max-age=0, s-maxage=${SCOREBOARD_TTL_SECONDS}, stale-while-revalidate=5`,
+    },
+  })
 }

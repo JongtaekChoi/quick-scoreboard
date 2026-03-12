@@ -1,3 +1,5 @@
+export const revalidate = 180;
+
 import { getSupabaseServerClient } from "@/lib/supabase";
 import ExpandableRankingList from "./ExpandableRankingList";
 import Breadcrumb from "@/components/Breadcrumb";

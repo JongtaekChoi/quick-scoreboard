@@ -81,6 +81,17 @@ type MatchPeriodLineup = {
   player_name: string | null;
 };
 
+type ReservedSubstitutionPlan = {
+  id: string;
+  team_side: "A" | "B";
+  period_sequence: number;
+  player_out_id: string | null;
+  player_out_name: string | null;
+  player_in_id: string | null;
+  player_in_name: string | null;
+  planned_minute: number;
+};
+
 type Alias = { jersey_no: string | null; player_name: string | null };
 
 type PlayerRatingAgg = {
@@ -931,6 +942,34 @@ async function addSubstitutionEvent(
       redirect(`/m/${matchId}?mode=edit&err=participation_reserve_period`);
     }
 
+    const { data: existingReserved } = await supabase
+      .from("match_period_substitution_plans")
+      .select("id,player_out_id,player_in_id")
+      .eq("match_id", matchId)
+      .eq("team_side", teamSide)
+      .eq("period_sequence", reservationPeriodSequence)
+      .is("deleted_at", null)
+      .is("applied_at", null)
+      .returns<
+        {
+          id: string;
+          player_out_id: string | null;
+          player_in_id: string | null;
+        }[]
+      >();
+
+    const hasDuplicate = (existingReserved ?? []).some((row) => {
+      const reservedIds = new Set([row.player_out_id, row.player_in_id].filter(Boolean));
+      return (
+        (outId ? reservedIds.has(outId) : false) ||
+        (inId ? reservedIds.has(inId) : false)
+      );
+    });
+
+    if (hasDuplicate) {
+      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_duplicate`);
+    }
+
     await supabase.from("match_period_substitution_plans").insert({
       match_id: matchId,
       team_side: teamSide,
@@ -1039,6 +1078,70 @@ async function undoSubstitutionEvent(
     "participation_substitution_undo",
     { ids },
   );
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
+async function cancelReservedSubstitution(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const reservationId = String(formData.get("reservation_id") || "").trim();
+  if (!reservationId) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  const { data: reservation } = await supabase
+    .from("match_period_substitution_plans")
+    .select("id,period_sequence,applied_at")
+    .eq("id", reservationId)
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .maybeSingle<{
+      id: string;
+      period_sequence: number;
+      applied_at: string | null;
+    }>();
+
+  if (!reservation || reservation.applied_at) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  const { data: periodRow } = await supabase
+    .from("match_periods")
+    .select("status")
+    .eq("match_id", matchId)
+    .eq("sequence", reservation.period_sequence)
+    .is("deleted_at", null)
+    .maybeSingle<{ status: "pending" | "live" | "ended" }>();
+
+  if (!periodRow || periodRow.status !== "pending") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+  }
+
+  await supabase
+    .from("match_period_substitution_plans")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", reservationId)
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .is("applied_at", null);
+
+  await logMatchChange(matchId, channelSlug, "participation_substitution_reserve_cancel", {
+    reservationId,
+  });
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit`);
@@ -1279,6 +1382,16 @@ export default async function MatchDetailPage({
     .is("deleted_at", null)
     .returns<MatchPeriodLineup[]>();
 
+  const { data: reservedSubPlans } = await supabase
+    .from("match_period_substitution_plans")
+    .select(
+      "id,team_side,period_sequence,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
+    )
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .is("applied_at", null)
+    .returns<ReservedSubstitutionPlan[]>();
+
   const sortedPeriodsForLineups = [...(matchPeriods ?? [])].sort(
     (a, b) => a.sequence - b.sequence,
   );
@@ -1330,13 +1443,18 @@ export default async function MatchDetailPage({
     match.period_state === "ended";
 
   const sideEventsA = (participationEvents ?? []).filter(
-    (e) => e.team_side === "A",
+    (e) => e.team_side === "A" && !e.is_starter,
   );
   const sideEventsB = (participationEvents ?? []).filter(
-    (e) => e.team_side === "B",
+    (e) => e.team_side === "B" && !e.is_starter,
   );
-  const calcActiveKeys = (events: ParticipationEvent[]) => {
-    const bal = new Map<string, number>();
+  const calcActiveKeys = (
+    events: ParticipationEvent[],
+    starterKeys: Set<string>,
+  ) => {
+    const bal = new Map<string, number>(
+      Array.from(starterKeys).map((k) => [k, 1]),
+    );
     for (const e of events) {
       const key = e.player_id || `name:${e.player_name ?? ""}`;
       bal.set(key, (bal.get(key) ?? 0) + (e.event_type === "in" ? 1 : -1));
@@ -1347,8 +1465,8 @@ export default async function MatchDetailPage({
         .map(([k]) => k),
     );
   };
-  const activeKeysA = calcActiveKeys(sideEventsA);
-  const activeKeysB = calcActiveKeys(sideEventsB);
+  const activeKeysA = calcActiveKeys(sideEventsA, starterKeySetA);
+  const activeKeysB = calcActiveKeys(sideEventsB, starterKeySetB);
 
   const { data: aliases } = await supabase
     .from("match_player_aliases")
@@ -1476,6 +1594,9 @@ export default async function MatchDetailPage({
     : async () => {};
   const undoSubstitutionAction = channel
     ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
+    : async () => {};
+  const cancelReservedSubstitutionAction = channel
+    ? cancelReservedSubstitution.bind(null, matchId, channel.slug)
     : async () => {};
   const startPeriodAction = channel
     ? applyPeriodAction.bind(
@@ -1675,6 +1796,16 @@ export default async function MatchDetailPage({
           {err === "participation_reserve_period" ? (
             <p className="text-xs text-red-600">
               예약할 period를 다시 선택해 주세요. (시작 전 period만 예약 가능)
+            </p>
+          ) : null}
+          {err === "participation_reserve_duplicate" ? (
+            <p className="text-xs text-red-600">
+              시작 전에는 이미 교체 예약에 포함된 선수를 다시 예약할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_reserve_cancel" ? (
+            <p className="text-xs text-red-600">
+              예약 취소에 실패했습니다. 이미 적용되었거나 시작된 period일 수 있습니다.
             </p>
           ) : null}
           {err === "rating_same_team" ? (
@@ -1912,6 +2043,60 @@ export default async function MatchDetailPage({
                   </div>
 
                 <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해줘.</div>
+
+                {reservablePeriods.length > 0 ? (
+                  <div className="rounded border p-2 space-y-1 text-xs">
+                    <div className="font-medium text-gray-700">시작 전 교체 예약</div>
+                    {(reservedSubPlans ?? []).length === 0 ? (
+                      <div className="text-gray-500">예약된 교체가 없습니다.</div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {(reservedSubPlans ?? []).map((plan) => {
+                          const periodLabel =
+                            sortedPeriods.find(
+                              (p) => p.sequence === plan.period_sequence,
+                            )?.label ??
+                            sortedPeriods.find(
+                              (p) => p.sequence === plan.period_sequence,
+                            )?.period_code ??
+                            `${plan.period_sequence}P`;
+                          const outLabel =
+                            (plan.player_out_id
+                              ? playerLabelById.get(plan.player_out_id)
+                              : undefined) ??
+                            plan.player_out_name ??
+                            "선수";
+                          const inLabel =
+                            (plan.player_in_id
+                              ? playerLabelById.get(plan.player_in_id)
+                              : undefined) ??
+                            plan.player_in_name ??
+                            "선수";
+                          return (
+                            <li
+                              key={`reserved-sub-${plan.id}`}
+                              className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                            >
+                              <span>
+                                [{periodLabel}] {plan.team_side} · {plan.planned_minute}분 · OUT {outLabel} / IN {inLabel}
+                              </span>
+                              <form action={cancelReservedSubstitutionAction}>
+                                <input
+                                  type="hidden"
+                                  name="reservation_id"
+                                  value={plan.id}
+                                />
+                                <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
+                                  예약 취소
+                                </PendingSubmitButton>
+                              </form>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </details>
           </section>

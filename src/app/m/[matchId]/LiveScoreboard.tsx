@@ -40,6 +40,14 @@ type Replacement = {
   created_at: string;
 };
 
+type StarterLine = {
+  id: string;
+  minute: number;
+  team_side: "A" | "B";
+  text: string;
+  created_at: string;
+};
+
 type MatchMini = {
   id: string;
   team_a_name: string;
@@ -69,8 +77,8 @@ function EventLine({
   searchParams,
   pathname,
 }: {
-  event: Goal | Replacement;
-  type: "goal" | "replace";
+  event: Goal | Replacement | StarterLine;
+  type: "goal" | "replace" | "starter";
   match: MatchMini;
   readonly: boolean;
   idx: number;
@@ -80,6 +88,7 @@ function EventLine({
 }) {
   const g = type == "goal" ? (event as Goal) : null;
   const replacement = type == "replace" ? (event as Replacement) : null;
+  const starter = type == "starter" ? (event as StarterLine) : null;
   const who = g
     ? (g.scorer_name ??
       (g.team_side === "A" ? match.team_a_name : match.team_b_name))
@@ -111,6 +120,8 @@ function EventLine({
                 <span className="text-gray-400"> ({assist})</span>
               ) : null}
             </>
+          ) : type === "starter" ? (
+            <span className="font-semibold">{starter?.text}</span>
           ) : (
             <span> {replacement?.text}</span>
           )
@@ -132,6 +143,8 @@ function EventLine({
                 <span className="text-gray-400"> ({assist})</span>
               ) : null}
             </>
+          ) : type === "starter" ? (
+            <span className="font-semibold">{starter?.text}</span>
           ) : (
             <span> {replacement?.text}</span>
           )
@@ -259,7 +272,28 @@ function LiveScoreboardInner({
     return lines;
   })();
 
-  const timeEvents: { type: "goal" | "replace"; event: Goal | Replacement }[] =
+  const starterLines: StarterLine[] = (periodStarters ?? []).flatMap((p, idx) => {
+    const minute = 0;
+    const createdAt = new Date(0).toISOString();
+    return [
+      {
+        id: `starter-${p.id}-A-${idx}`,
+        minute,
+        team_side: "A" as const,
+        text: `${p.label} START · ${p.teamA || "없음"}`,
+        created_at: createdAt,
+      },
+      {
+        id: `starter-${p.id}-B-${idx}`,
+        minute,
+        team_side: "B" as const,
+        text: `${p.label} START · ${p.teamB || "없음"}`,
+        created_at: createdAt,
+      },
+    ];
+  });
+
+  const timeEvents: { type: "goal" | "replace" | "starter"; event: Goal | Replacement | StarterLine }[] =
     (() => {
       return [
         ...goals.map((goal) => ({ type: "goal", event: goal }) as const),
@@ -270,6 +304,7 @@ function LiveScoreboardInner({
               event: replacement,
             }) as const,
         ),
+        ...starterLines.map((starter) => ({ type: "starter", event: starter }) as const),
       ].sort(({ event: a }, { event: b }) => {
         if (a.minute != null && b.minute != null && a.minute !== b.minute)
           return b.minute - a.minute;
@@ -319,17 +354,6 @@ function LiveScoreboardInner({
           이벤트 기록 누락 감지: A {missingA} / B {missingB} (점수 기준 임시행
           표시)
         </p>
-      ) : null}
-
-      {(periodStarters ?? []).length > 0 ? (
-        <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">
-          {(periodStarters ?? []).map((p) => (
-            <div key={p.id} className="text-xs rounded-lg px-2 py-1 bg-white">
-              <span className="font-semibold">{p.label} START</span>
-              <span className="text-gray-600"> · A: {p.teamA || "없음"} · B: {p.teamB || "없음"}</span>
-            </div>
-          ))}
-        </div>
       ) : null}
 
       <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40">

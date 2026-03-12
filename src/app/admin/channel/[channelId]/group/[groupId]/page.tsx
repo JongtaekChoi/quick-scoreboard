@@ -857,7 +857,11 @@ export default async function AdminGroupPage({
                 <input type="hidden" name="groupId" value={group.id} />
                 <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
                 <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
-                <input className="rounded border px-2 py-1.5 text-sm" type="number" name="period_count" min={1} max={12} defaultValue={2} />
+                <div className="space-y-1">
+                  <label className="block text-xs text-gray-600">경기구간수</label>
+                  <input className="rounded border px-2 py-1.5 text-sm w-full" type="number" name="period_count" min={1} max={12} defaultValue={2} />
+                  <div className="text-[11px] text-gray-500">예: 2=전/후반, 4=1~4쿼터</div>
+                </div>
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
               </form>
             </section>
@@ -880,7 +884,10 @@ export default async function AdminGroupPage({
                     <option value="live">live</option>
                     <option value="ended">ended</option>
                   </select>
-                  <input className="rounded border px-2 py-1.5 text-sm" type="number" name="period_count" min={1} max={12} defaultValue={m.period_count ?? 2} />
+                  <div className="space-y-1">
+                    <label className="block text-[11px] text-gray-600">경기구간수</label>
+                    <input className="rounded border px-2 py-1.5 text-sm w-full" type="number" name="period_count" min={1} max={12} defaultValue={m.period_count ?? 2} />
+                  </div>
                   <input type="hidden" name="group_play_date" value={group.play_date} />
                   <input className="rounded border px-2 py-1.5 text-sm" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>

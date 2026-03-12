@@ -388,7 +388,7 @@ export async function GET(req: Request) {
         )
       }
 
-      // 경기별 선발 등록: 각 경기 A/B팀 6명 중 랜덤 5명
+      // 경기별 선발 등록: period 1 라인업에 각 경기 A/B팀 랜덤 5명
       const playersByTeam = new Map<string, string[]>()
       for (const p of groupPlayers ?? []) {
         const list = playersByTeam.get(p.team_id) ?? []
@@ -397,43 +397,55 @@ export async function GET(req: Request) {
       }
 
       const STARTER_COUNT = 5
-      const starterEvents: {
+      const starterLineups: {
         match_id: string
-        team_side: string
+        match_period_id: string
+        team_side: 'A' | 'B'
         player_id: string
-        event_type: string
-        minute: number
         is_starter: boolean
       }[] = []
 
+      const matchIds = (insertedMatches ?? []).map((m) => m.id)
+      const { data: periods } = matchIds.length
+        ? await supabase
+            .from('match_periods')
+            .select('id,match_id,sequence')
+            .in('match_id', matchIds)
+            .eq('sequence', 1)
+            .is('deleted_at', null)
+            .returns<{ id: string; match_id: string; sequence: number }[]>()
+        : { data: [] as { id: string; match_id: string; sequence: number }[] }
+
+      const periodByMatch = new Map((periods ?? []).map((p) => [p.match_id, p.id]))
+
       for (const match of insertedMatches ?? []) {
+        const periodId = periodByMatch.get(match.id)
+        if (!periodId) continue
         for (const side of ['A', 'B'] as const) {
           const teamId = side === 'A' ? match.team_a_id : match.team_b_id
           const players = [...(playersByTeam.get(teamId) ?? [])]
-          // shuffle & pick 5
           for (let i = players.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[players[i], players[j]] = [players[j], players[i]]
           }
           const starters = players.slice(0, STARTER_COUNT)
           for (const playerId of starters) {
-            starterEvents.push({
+            starterLineups.push({
               match_id: match.id,
+              match_period_id: periodId,
               team_side: side,
               player_id: playerId,
-              event_type: 'in',
-              minute: 0,
               is_starter: true,
             })
           }
         }
       }
 
-      if (starterEvents.length > 0) {
-        await supabase.from('match_participation_events').insert(starterEvents)
+      if (starterLineups.length > 0) {
+        await supabase.from('match_period_lineups').insert(starterLineups)
       }
 
-      log.push(`step4: created today group at ${venue} with teams [${selectedTeams.map((t) => t.name).join(', ')}], entries=${groupPlayers?.length ?? 0}, starters=${starterEvents.length}`)
+      log.push(`step4: created today group at ${venue} with teams [${selectedTeams.map((t) => t.name).join(', ')}], entries=${groupPlayers?.length ?? 0}, starters=${starterLineups.length}`)
     }
   } else if (hasTodayGroup) {
     log.push('step4: today group already exists, skipped')

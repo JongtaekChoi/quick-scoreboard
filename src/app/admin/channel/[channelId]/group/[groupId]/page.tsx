@@ -525,7 +525,7 @@ export default async function AdminGroupPage({
 
   const matchIds = (matches ?? []).map((m) => m.id)
 
-  const [{ data: matchPeriods }, { data: periodLineups }, { data: starterEvents }] = await Promise.all([
+  const [{ data: matchPeriods }, { data: periodLineups }] = await Promise.all([
     matchIds.length
       ? supabase
           .from('match_periods')
@@ -542,16 +542,7 @@ export default async function AdminGroupPage({
           .in('match_id', matchIds)
           .is('deleted_at', null)
           .returns<MatchPeriodLineup[]>()
-      : Promise.resolve({ data: [] as MatchPeriodLineup[] }),
-    matchIds.length
-      ? supabase
-          .from('match_participation_events')
-          .select('match_id,team_side,player_id,is_starter')
-          .in('match_id', matchIds)
-          .eq('is_starter', true)
-          .is('deleted_at', null)
-          .returns<{ match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[]>()
-      : Promise.resolve({ data: [] as { match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[] }),
+      : Promise.resolve({ data: [] as MatchPeriodLineup[] })
   ])
 
   const playersByTeam = new Map<string, TeamPlayer[]>()
@@ -593,15 +584,6 @@ export default async function AdminGroupPage({
     const set = lineupPlayersByPeriodSide.get(key) ?? new Set<string>()
     set.add(row.player_id)
     lineupPlayersByPeriodSide.set(key, set)
-  }
-
-  const startersByMatchSide = new Map<string, Set<string>>()
-  for (const s of starterEvents ?? []) {
-    if (!s.player_id) continue
-    const key = `${s.match_id}:${s.team_side}`
-    const set = startersByMatchSide.get(key) ?? new Set<string>()
-    set.add(s.player_id)
-    startersByMatchSide.set(key, set)
   }
 
   const matchTeamNames = new Set<string>()
@@ -812,9 +794,7 @@ export default async function AdminGroupPage({
                               const lineupSelected = period
                                 ? lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
                                 : new Set<string>()
-                              const selected = lineupSelected.size > 0
-                                ? lineupSelected
-                                : startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
+                              const selected = lineupSelected
 
                               return (
                                 <form key={`${m.id}-${seq}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">

@@ -47,13 +47,48 @@ export default async function ManagerEntriesPage({ params }: { params: Promise<{
   const channel = manage.channel
   if (!channel) return <main className="p-6">리그를 찾을 수 없습니다.</main>
 
-  const { data: groups } = await supabase
-    .from('match_groups')
-    .select('id,play_date,venue,title,seq')
+  const { data: myTeam } = await supabase
+    .from('teams')
+    .select('id,name')
+    .eq('id', manage.managerTeamId)
+    .maybeSingle<{ id: string; name: string }>()
+
+  const { data: myMatches } = await supabase
+    .from('matches')
+    .select('match_group_id,team_a_id,team_b_id,team_a_name,team_b_name')
     .eq('channel_id', channel.id)
-    .order('play_date', { ascending: false })
-    .order('seq', { ascending: true })
-    .returns<MatchGroup[]>()
+    .not('match_group_id', 'is', null)
+    .returns<{
+      match_group_id: string | null
+      team_a_id: string | null
+      team_b_id: string | null
+      team_a_name: string
+      team_b_name: string
+    }[]>()
+
+  const myGroupIds = Array.from(
+    new Set(
+      (myMatches ?? [])
+        .filter((m) => {
+          const byId = m.team_a_id === manage.managerTeamId || m.team_b_id === manage.managerTeamId
+          const byName = myTeam ? m.team_a_name === myTeam.name || m.team_b_name === myTeam.name : false
+          return byId || byName
+        })
+        .map((m) => m.match_group_id)
+        .filter((v): v is string => Boolean(v)),
+    ),
+  )
+
+  const { data: groups } = myGroupIds.length
+    ? await supabase
+        .from('match_groups')
+        .select('id,play_date,venue,title,seq')
+        .eq('channel_id', channel.id)
+        .in('id', myGroupIds)
+        .order('play_date', { ascending: false })
+        .order('seq', { ascending: true })
+        .returns<MatchGroup[]>()
+    : { data: [] as MatchGroup[] }
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">

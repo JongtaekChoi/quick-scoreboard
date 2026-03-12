@@ -1328,6 +1328,10 @@ export default async function MatchDetailPage({
         Math.floor((now - new Date(activePeriodStart).getTime()) / 60000),
       )
     : null;
+  const goalDefaultMinute =
+    match.period_state === "second_half"
+      ? 15 + (elapsedMinutes ?? 0)
+      : (elapsedMinutes ?? 0);
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
@@ -1506,7 +1510,7 @@ export default async function MatchDetailPage({
                   const active = rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`));
                   return active.length > 0 ? active : rosterB;
                 })()}
-                defaultMinute={elapsedMinutes ?? 0}
+                defaultMinute={goalDefaultMinute}
               />
             ) : null}
 

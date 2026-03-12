@@ -56,22 +56,12 @@ type GoalEvent = {
   team_side: "A" | "B";
   period: "first_half" | "second_half";
   period_sequence: number | null;
+  match_period_id: string | null;
   minute: number | null;
   scorer_name: string | null;
   scorer_player_id: string | null;
   assist_name: string | null;
   assist_player_id: string | null;
-  created_at: string;
-};
-
-type ParticipationEvent = {
-  id: string;
-  team_side: "A" | "B";
-  player_id: string | null;
-  player_name: string | null;
-  event_type: "in" | "out";
-  minute: number;
-  is_starter: boolean;
   created_at: string;
 };
 
@@ -96,6 +86,7 @@ type ReservedSubstitutionPlan = {
 type MatchSubstitution = {
   id: string;
   period_sequence: number;
+  match_period_id: string | null;
   minute: number;
   team_side: "A" | "B";
   player_out_id: string | null;
@@ -326,11 +317,11 @@ async function addGoalDetailed(
 
   const { data: livePeriod } = await supabase
     .from("match_periods")
-    .select("sequence")
+    .select("id,sequence")
     .eq("match_id", matchId)
     .eq("status", "live")
     .is("deleted_at", null)
-    .maybeSingle<{ sequence: number }>();
+    .maybeSingle<{ id: string; sequence: number }>();
 
   const now = new Date();
   const elapsedFrom = (iso: string | null) =>
@@ -368,6 +359,7 @@ async function addGoalDetailed(
       team_side: teamSide,
       period: isSecondHalf ? "second_half" : "first_half",
       period_sequence: livePeriod?.sequence ?? (isSecondHalf ? 2 : 1),
+      match_period_id: livePeriod?.id ?? null,
       minute,
       scorer_player_id,
       scorer_name,
@@ -556,6 +548,7 @@ async function applyPeriodAction(
         (reservedSubs ?? []).map((sub) => ({
           match_id: matchId,
           period_sequence: nextPending.sequence,
+          match_period_id: nextPending.id,
           minute: Number.isFinite(sub.planned_minute)
             ? Math.max(0, Math.min(200, sub.planned_minute))
             : 0,
@@ -1042,11 +1035,20 @@ async function addSubstitutionEvent(
     redirect(`/m/${matchId}?mode=edit`);
   }
 
+  const { data: livePeriodForSub } = await supabase
+    .from("match_periods")
+    .select("id,sequence")
+    .eq("match_id", matchId)
+    .eq("status", "live")
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string; sequence: number }>();
+
   const { data: insertedSub } = await supabase
     .from("match_substitutions")
     .insert({
       match_id: matchId,
-      period_sequence: stateRow?.period_state === "second_half" ? 2 : 1,
+      period_sequence: livePeriodForSub?.sequence ?? (stateRow?.period_state === "second_half" ? 2 : 1),
+      match_period_id: livePeriodForSub?.id ?? null,
       minute,
       team_side: teamSide,
       player_out_id: outId || null,
@@ -1446,7 +1448,7 @@ export default async function MatchDetailPage({
   const { data: goals } = await supabase
     .from("goal_events")
     .select(
-      "id,team_side,period,period_sequence,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
+      "id,team_side,period,period_sequence,match_period_id,minute,scorer_name,scorer_player_id,assist_name,assist_player_id,created_at",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)
@@ -1456,23 +1458,13 @@ export default async function MatchDetailPage({
   const { data: matchSubstitutions } = await supabase
     .from("match_substitutions")
     .select(
-      "id,period_sequence,minute,team_side,player_out_id,player_out_name,player_in_id,player_in_name,created_at",
+      "id,period_sequence,match_period_id,minute,team_side,player_out_id,player_out_name,player_in_id,player_in_name,created_at",
     )
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .returns<MatchSubstitution[]>();
 
-  const { data: participationEvents } = await supabase
-    .from("match_participation_events")
-    .select(
-      "id,team_side,player_id,player_name,event_type,minute,is_starter,created_at",
-    )
-    .eq("match_id", matchId)
-    .is("deleted_at", null)
-    .order("minute", { ascending: false })
-    .order("created_at", { ascending: false })
-    .returns<ParticipationEvent[]>();
 
   const { data: periodLineups } = await supabase
     .from("match_period_lineups")
@@ -1509,29 +1501,12 @@ export default async function MatchDetailPage({
     (row) => row.match_period_id === effectivePeriodId && row.team_side === "B",
   );
 
-  const starterEventsA = (participationEvents ?? []).filter(
-    (e) => e.team_side === "A" && e.is_starter,
-  );
-  const starterEventsB = (participationEvents ?? []).filter(
-    (e) => e.team_side === "B" && e.is_starter,
-  );
-  const starterKeysFromLineupsA = new Set(
+  const starterKeySetA = new Set(
     lineupRowsA.map((row) => row.player_id || `name:${row.player_name ?? ""}`),
   );
-  const starterKeysFromLineupsB = new Set(
+  const starterKeySetB = new Set(
     lineupRowsB.map((row) => row.player_id || `name:${row.player_name ?? ""}`),
   );
-  const fallbackStarterKeysA = new Set(
-    starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
-  );
-  const fallbackStarterKeysB = new Set(
-    starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`),
-  );
-
-  const starterKeySetA =
-    starterKeysFromLineupsA.size > 0 ? starterKeysFromLineupsA : fallbackStarterKeysA;
-  const starterKeySetB =
-    starterKeysFromLineupsB.size > 0 ? starterKeysFromLineupsB : fallbackStarterKeysB;
 
   const startingCountA = starterKeySetA.size;
   const startingCountB = starterKeySetB.size;
@@ -1541,22 +1516,20 @@ export default async function MatchDetailPage({
     match.period_state === "second_half" ||
     match.period_state === "ended";
 
-  const sideEventsA = (participationEvents ?? []).filter(
-    (e) => e.team_side === "A" && !e.is_starter,
-  );
-  const sideEventsB = (participationEvents ?? []).filter(
-    (e) => e.team_side === "B" && !e.is_starter,
-  );
+  const subsA = (matchSubstitutions ?? []).filter((e) => e.team_side === "A");
+  const subsB = (matchSubstitutions ?? []).filter((e) => e.team_side === "B");
   const calcActiveKeys = (
-    events: ParticipationEvent[],
+    subs: MatchSubstitution[],
     starterKeys: Set<string>,
   ) => {
     const bal = new Map<string, number>(
       Array.from(starterKeys).map((k) => [k, 1]),
     );
-    for (const e of events) {
-      const key = e.player_id || `name:${e.player_name ?? ""}`;
-      bal.set(key, (bal.get(key) ?? 0) + (e.event_type === "in" ? 1 : -1));
+    for (const e of subs) {
+      const outKey = e.player_out_id || `name:${e.player_out_name ?? ""}`;
+      const inKey = e.player_in_id || `name:${e.player_in_name ?? ""}`;
+      bal.set(outKey, (bal.get(outKey) ?? 0) - 1);
+      bal.set(inKey, (bal.get(inKey) ?? 0) + 1);
     }
     return new Set(
       Array.from(bal.entries())
@@ -1564,8 +1537,8 @@ export default async function MatchDetailPage({
         .map(([k]) => k),
     );
   };
-  const activeKeysA = calcActiveKeys(sideEventsA, starterKeySetA);
-  const activeKeysB = calcActiveKeys(sideEventsB, starterKeySetB);
+  const activeKeysA = calcActiveKeys(subsA, starterKeySetA);
+  const activeKeysB = calcActiveKeys(subsB, starterKeySetB);
 
   const { data: aliases } = await supabase
     .from("match_player_aliases")
@@ -2129,7 +2102,7 @@ export default async function MatchDetailPage({
                 <span>선수 운용</span>
                 <span className="text-xs text-gray-500">
                   선발 A {startingCountA}명 · B {startingCountB}명 · 이벤트{" "}
-                  {(participationEvents ?? []).length}건
+                  {(matchSubstitutions ?? []).length}건
                 </span>
               </summary>
 

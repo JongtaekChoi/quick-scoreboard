@@ -44,6 +44,7 @@ type StarterLine = {
   id: string;
   text: string;
   created_at: string;
+  minute: number;
 };
 
 type MatchMini = {
@@ -59,6 +60,7 @@ type PeriodStarterSummary = {
   label: string;
   teamA: string;
   teamB: string;
+  startMinute: number;
 };
 
 type ScoreboardPayload = { match: MatchMini; goals: Goal[] };
@@ -74,6 +76,8 @@ function EventLine({
   router,
   searchParams,
   pathname,
+  onStarterClick,
+  activeStarterId,
 }: {
   event: Goal | Replacement | StarterLine;
   type: "goal" | "replace" | "starter";
@@ -83,6 +87,8 @@ function EventLine({
   router: AppRouterInstance;
   searchParams: ReadonlyURLSearchParams;
   pathname: string;
+  onStarterClick?: (id: string) => void;
+  activeStarterId?: string | null;
 }) {
   const g = type == "goal" ? (event as Goal) : null;
   const replacement = type == "replace" ? (event as Replacement) : null;
@@ -97,9 +103,13 @@ function EventLine({
 
   if (type === "starter") {
     return (
-      <div className="w-full text-center text-[11px] text-gray-500 rounded-lg px-2 py-1 border border-dashed border-gray-200 bg-white/70">
+      <button
+        type="button"
+        onClick={() => starter && onStarterClick?.(starter.id)}
+        className={`w-full text-center text-[11px] text-gray-500 rounded-lg px-2 py-1 ${activeStarterId === starter?.id ? "bg-white ring-1 ring-gray-300" : "bg-transparent"}`}
+      >
         ── {starter?.text} ──
-      </div>
+      </button>
     );
   }
 
@@ -185,6 +195,7 @@ function LiveScoreboardInner({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [autoUpdate, setAutoUpdate] = useState(false);
+  const [selectedStarterId, setSelectedStarterId] = useState<string | null>(null);
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["scoreboard", matchId],
@@ -280,11 +291,24 @@ function LiveScoreboardInner({
     return lines;
   })();
 
-  const starterLines: StarterLine[] = (periodStarters ?? []).map((p, idx) => ({
+  const starterEntries = (periodStarters ?? []).map((p, idx) => ({
     id: `starter-${p.id}-${idx}`,
     text: `${p.label} START`,
     created_at: new Date(0).toISOString(),
+    minute: p.startMinute,
+    label: p.label,
+    teamA: p.teamA,
+    teamB: p.teamB,
   }));
+
+  const starterLines: StarterLine[] = starterEntries.map(({ id, text, created_at, minute }) => ({
+    id,
+    text,
+    created_at,
+    minute,
+  }));
+
+  const selectedStarter = starterEntries.find((p) => p.id === selectedStarterId) ?? null;
 
   const timeEvents: { type: "goal" | "replace" | "starter"; event: Goal | Replacement | StarterLine }[] =
     (() => {
@@ -296,7 +320,7 @@ function LiveScoreboardInner({
       const withMeta = [
         ...goals.map((goal) => ({ type: "goal" as const, event: goal, minute: goal.minute ?? -1 })),
         ...groupedParticipation.map((replacement) => ({ type: "replace" as const, event: replacement, minute: replacement.minute })),
-        ...starterLines.map((starter, idx) => ({ type: "starter" as const, event: starter, minute: 1000 - idx })),
+        ...starterLines.map((starter) => ({ type: "starter" as const, event: starter, minute: starter.minute })),
       ];
 
       return withMeta
@@ -366,11 +390,21 @@ function LiveScoreboardInner({
                 pathname={pathname}
                 readonly={readonly}
                 searchParams={searchParams}
+                onStarterClick={setSelectedStarterId}
+                activeStarterId={selectedStarterId}
               />
             );
           })
         )}
       </div>
+
+      {selectedStarter ? (
+        <div className="rounded-lg border border-gray-200 p-2 space-y-1 bg-gray-50/40 text-xs">
+          <div className="font-semibold text-gray-700">{selectedStarter.label} 선발 명단</div>
+          <div className="text-gray-600">A: {selectedStarter.teamA || "없음"}</div>
+          <div className="text-gray-600">B: {selectedStarter.teamB || "없음"}</div>
+        </div>
+      ) : null}
     </section>
   );
 }

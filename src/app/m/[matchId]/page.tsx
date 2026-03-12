@@ -1720,11 +1720,12 @@ export default async function MatchDetailPage({
       return {
         id: p.id,
         label: getPeriodDisplayLabel(p.sequence, p),
+        startMinute: Math.max(0, (p.sequence - 1) * firstHalfBaseMinute),
         teamA: rowsA.map(toLabel).join(", "),
         teamB: rowsB.map(toLabel).join(", "),
       };
     })
-    .filter(Boolean) as { id: string; label: string; teamA: string; teamB: string }[];
+    .filter(Boolean) as { id: string; label: string; startMinute: number; teamA: string; teamB: string }[];
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
@@ -1990,7 +1991,6 @@ export default async function MatchDetailPage({
                   {rosterA.map((p) => {
                     const key = p.playerId || `name:${p.playerName}`;
                     const onPitch = isLivePeriod && activeKeysA.has(key);
-                    const isStarting = starterKeySetA.has(p.playerId);
                     return (
                       <div
                         key={p.value}
@@ -2000,8 +2000,7 @@ export default async function MatchDetailPage({
                             : "text-gray-700"
                         }
                       >
-                        #{p.jerseyNo} {p.playerName}{" "}
-                        {isStarting ? "(선발)" : ""}
+                        #{p.jerseyNo} {p.playerName}
                       </div>
                     );
                   })}
@@ -2013,7 +2012,6 @@ export default async function MatchDetailPage({
                   {rosterB.map((p) => {
                     const key = p.playerId || `name:${p.playerName}`;
                     const onPitch = isLivePeriod && activeKeysB.has(key);
-                    const isStarting = starterKeySetB.has(p.playerId);
                     return (
                       <div
                         key={p.value}
@@ -2023,8 +2021,7 @@ export default async function MatchDetailPage({
                             : "text-gray-700"
                         }
                       >
-                        #{p.jerseyNo} {p.playerName}{" "}
-                        {isStarting ? "(선발)" : ""}
+                        #{p.jerseyNo} {p.playerName}
                       </div>
                     );
                   })}

@@ -10,11 +10,12 @@ import {
 } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
-import ScoreActions from "./ScoreActions";
+import GoalAddActions from "./GoalAddActions";
 import LiveScoreboard from "./LiveScoreboard";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import ShareButton from "@/components/ShareButton";
 import StarRatingInput from "@/components/StarRatingInput";
+import SubstitutionActions from "./SubstitutionActions";
 
 type Match = {
   id: string;
@@ -54,6 +55,16 @@ type GoalEvent = {
   scorer_player_id: string | null;
   assist_name: string | null;
   assist_player_id: string | null;
+  created_at: string;
+};
+
+type ParticipationEvent = {
+  id: string;
+  team_side: "A" | "B";
+  player_id: string | null;
+  player_name: string | null;
+  event_type: "in" | "out";
+  minute: number;
   created_at: string;
 };
 
@@ -207,11 +218,41 @@ async function canMutateGoals(
   return true;
 }
 
-async function addGoal(
+async function canMutateParticipation(
+  channelSlug: string,
+  matchId: string,
+): Promise<boolean> {
+  const permission = await getChannelPermission(channelSlug);
+  if (!permission.canGoalEdit) return false;
+
+  const canEditThisMatch = await canAccountEditThisMatch(channelSlug, matchId);
+  if (!canEditThisMatch) return false;
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return false;
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{
+      period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
+    }>();
+
+  if (!match) return false;
+
+  const isAdmin = await isAdminAuthorized();
+
+  if (match.period_state === "ended") return isAdmin;
+  return true;
+}
+
+async function addGoalDetailed(
   matchId: string,
   teamSide: "A" | "B",
   channelSlug: string,
   channelVersion: number,
+  formData: FormData,
 ) {
   "use server";
 
@@ -243,9 +284,20 @@ async function addGoal(
       : 0;
 
   const isSecondHalf = match.period_state === "second_half";
-  const minute = isSecondHalf
+  const defaultMinute = isSecondHalf
     ? 15 + elapsedFrom(match.second_half_started_at)
     : elapsedFrom(match.first_half_started_at ?? match.started_at);
+  const minuteInput = Number(formData.get("minute") || defaultMinute);
+  const minute = Number.isFinite(minuteInput) ? Math.max(0, Math.min(200, minuteInput)) : defaultMinute;
+
+  const scorerRaw = String(formData.get("scorer") || "").trim();
+  const assistRaw = String(formData.get("assist") || "").trim();
+  const [scorerIdRaw, scorerNameRaw] = scorerRaw.split("|");
+  const [assistIdRaw, assistNameRaw] = assistRaw.split("|");
+  const scorer_player_id = scorerIdRaw?.trim() || null;
+  const assist_player_id = assistIdRaw?.trim() || null;
+  const scorer_name = (scorerNameRaw?.trim() || scorerRaw || "").replace(/^#\d+\s*/, "") || null;
+  const assist_name = (assistNameRaw?.trim() || assistRaw || "").replace(/^#\d+\s*/, "") || null;
 
   const { data: insertedGoal, error: insertError } = await supabase
     .from("goal_events")
@@ -254,6 +306,10 @@ async function addGoal(
       team_side: teamSide,
       period: isSecondHalf ? "second_half" : "first_half",
       minute,
+      scorer_player_id,
+      scorer_name,
+      assist_player_id,
+      assist_name,
     })
     .select("id")
     .maybeSingle<{ id: string }>();
@@ -606,6 +662,180 @@ async function submitAnonymousRating(
   redirect(`/m/${matchId}`);
 }
 
+async function addSubstitutionEvent(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const { data: stateRow } = await supabase
+    .from("matches")
+    .select("period_state")
+    .eq("id", matchId)
+    .maybeSingle<{ period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended" }>();
+  if (stateRow?.period_state === "ended") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
+  }
+
+  const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
+  const minute = Number(formData.get("minute") || 0);
+  const playerOutValue = String(formData.get("player_out_value") || "").trim();
+  const playerInValue = String(formData.get("player_in_value") || "").trim();
+
+  if (teamSide !== "A" && teamSide !== "B") {
+    redirect(`/m/${matchId}?mode=edit&err=participation_invalid`);
+  }
+  if (!Number.isFinite(minute) || minute < 0 || minute > 200) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_minute`);
+  }
+  if (!playerOutValue || !playerInValue) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
+  }
+
+  const [outIdRaw, outDisplayRaw] = playerOutValue.split("|");
+  const [inIdRaw, inDisplayRaw] = playerInValue.split("|");
+  const outId = outIdRaw?.trim() || null;
+  const inId = inIdRaw?.trim() || null;
+  const outName = (outDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
+  const inName = (inDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
+
+  const { data: inserted } = await supabase.from("match_participation_events").insert([
+    {
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: outId || null,
+      player_name: outName || null,
+      event_type: "out",
+      minute,
+    },
+    {
+      match_id: matchId,
+      team_side: teamSide,
+      player_id: inId || null,
+      player_name: inName || null,
+      event_type: "in",
+      minute,
+    },
+  ]).select("id");
+
+  await logMatchChange(matchId, channelSlug, "participation_substitution_add", {
+    teamSide,
+    minute,
+    outId,
+    outName,
+    inId,
+    inName,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  const undoIds = `${inserted?.[0]?.id ?? ""},${inserted?.[1]?.id ?? ""}`;
+  const undoUntil = Date.now() + 30_000;
+  redirect(`/m/${matchId}?mode=edit&undo=${encodeURIComponent(undoIds)}&undo_until=${undoUntil}`);
+}
+
+async function undoSubstitutionEvent(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const undoIdsRaw = String(formData.get("undo_ids") || "").trim();
+  const undoUntil = Number(formData.get("undo_until") || 0);
+  if (!undoIdsRaw || !Number.isFinite(undoUntil) || Date.now() > undoUntil) {
+    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+  }
+
+  const ids = undoIdsRaw.split(",").map((v) => v.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+  }
+
+  await supabase
+    .from("match_participation_events")
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("match_id", matchId)
+    .is("deleted_at", null);
+
+  await logMatchChange(matchId, channelSlug, "participation_substitution_undo", { ids });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
+async function addStartingLineup(
+  matchId: string,
+  channelSlug: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return;
+
+  const canMutate = await canMutateParticipation(channelSlug, matchId);
+  if (!canMutate) {
+    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+  }
+
+  const playerValuesA = formData
+    .getAll("player_values_a")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const playerValuesB = formData
+    .getAll("player_values_b")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
+  if (playerValuesA.length === 0 && playerValuesB.length === 0) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
+  }
+
+  const buildRows = (teamSide: "A" | "B", values: string[]) =>
+    values.map((value) => {
+      const [playerIdRaw, displayNameRaw] = value.split("|");
+      return {
+        match_id: matchId,
+        team_side: teamSide,
+        player_id: playerIdRaw?.trim() || null,
+        player_name: (displayNameRaw?.trim() || "").replace(/^#\d+\s*/, "") || null,
+        event_type: "in" as const,
+        minute: 0,
+      };
+    });
+
+  const rows = [...buildRows("A", playerValuesA), ...buildRows("B", playerValuesB)];
+
+  await supabase.from("match_participation_events").insert(rows);
+
+  await logMatchChange(matchId, channelSlug, "participation_starting_add", {
+    countA: playerValuesA.length,
+    countB: playerValuesB.length,
+    total: rows.length,
+  });
+
+  revalidatePath(`/m/${matchId}`);
+  redirect(`/m/${matchId}?mode=edit`);
+}
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
@@ -645,10 +875,12 @@ export default async function MatchDetailPage({
     goal?: string;
     err?: string;
     mode?: string;
+    undo?: string;
+    undo_until?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { goal: goalParam, err, mode } = await searchParams;
+  const { goal: goalParam, err, mode, undo, undo_until } = await searchParams;
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -808,6 +1040,43 @@ export default async function MatchDetailPage({
     .order("created_at", { ascending: false })
     .returns<GoalEvent[]>();
 
+  const { data: participationEvents } = await supabase
+    .from("match_participation_events")
+    .select("id,team_side,player_id,player_name,event_type,minute,created_at")
+    .eq("match_id", matchId)
+    .is("deleted_at", null)
+    .order("minute", { ascending: false })
+    .order("created_at", { ascending: false })
+    .returns<ParticipationEvent[]>();
+
+  const starterEventsA = (participationEvents ?? []).filter(
+    (e) => e.team_side === "A" && e.event_type === "in" && e.minute === 0,
+  );
+  const starterEventsB = (participationEvents ?? []).filter(
+    (e) => e.team_side === "B" && e.event_type === "in" && e.minute === 0,
+  );
+  const startingCountA = new Set(starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`)).size;
+  const startingCountB = new Set(starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`)).size;
+  const starterNamesA = Array.from(new Set(starterEventsA.map((e) => e.player_name).filter(Boolean))) as string[];
+  const starterNamesB = Array.from(new Set(starterEventsB.map((e) => e.player_name).filter(Boolean))) as string[];
+  const starterKeySetA = new Set(starterEventsA.map((e) => e.player_id || `name:${e.player_name ?? ""}`));
+  const starterKeySetB = new Set(starterEventsB.map((e) => e.player_id || `name:${e.player_name ?? ""}`));
+  const isBeforeKickoff = match.period_state === "pre";
+  const isLivePeriod = match.period_state === "first_half" || match.period_state === "second_half";
+
+  const sideEventsA = (participationEvents ?? []).filter((e) => e.team_side === "A");
+  const sideEventsB = (participationEvents ?? []).filter((e) => e.team_side === "B");
+  const calcActiveKeys = (events: ParticipationEvent[]) => {
+    const bal = new Map<string, number>();
+    for (const e of events) {
+      const key = e.player_id || `name:${e.player_name ?? ""}`;
+      bal.set(key, (bal.get(key) ?? 0) + (e.event_type === "in" ? 1 : -1));
+    }
+    return new Set(Array.from(bal.entries()).filter(([, v]) => v > 0).map(([k]) => k));
+  };
+  const activeKeysA = calcActiveKeys(sideEventsA);
+  const activeKeysB = calcActiveKeys(sideEventsB);
+
   const { data: aliases } = await supabase
     .from("match_player_aliases")
     .select("jersey_no,player_name")
@@ -892,9 +1161,11 @@ export default async function MatchDetailPage({
     channel ? submitAnonymousRating.bind(null, matchId, channel.slug) : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const activeGoalId = goalParam || (goals?.[0]?.id ?? "");
-  const activeGoal =
-    (goals ?? []).find((g) => g.id === activeGoalId) ?? goals?.[0] ?? null;
+  const activeGoalId = goalParam ?? "";
+  const activeGoal = activeGoalId
+    ? (goals ?? []).find((g) => g.id === activeGoalId) ?? null
+    : null;
+  const undoAvailable = !!undo && !!undo_until;
 
   const suggestedNames = Array.from(
     new Set([
@@ -906,7 +1177,7 @@ export default async function MatchDetailPage({
   ).slice(0, 20);
 
   const addGoalA = channel
-    ? addGoal.bind(
+    ? addGoalDetailed.bind(
         null,
         matchId,
         "A",
@@ -915,13 +1186,22 @@ export default async function MatchDetailPage({
       )
     : async () => {};
   const addGoalB = channel
-    ? addGoal.bind(
+    ? addGoalDetailed.bind(
         null,
         matchId,
         "B",
         channel.slug,
         channel.edit_session_version,
       )
+    : async () => {};
+  const addSubstitutionAction = channel
+    ? addSubstitutionEvent.bind(null, matchId, channel.slug)
+    : async () => {};
+  const addStartingLineupAction = channel
+    ? addStartingLineup.bind(null, matchId, channel.slug)
+    : async () => {};
+  const undoSubstitutionAction = channel
+    ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
     : async () => {};
   const startFirstAction = channel
     ? applyPeriodAction.bind(null, matchId, channel.slug, channel.edit_session_version, "start_first")
@@ -989,8 +1269,22 @@ export default async function MatchDetailPage({
             ) : null}
           </div>
           {err ? <p className="text-xs text-red-600">저장 중 오류가 발생했습니다: {err}</p> : null}
+          {err === "forbidden" ? <p className="text-xs text-red-600">권한이 없어 저장할 수 없습니다.</p> : null}
+          {err === "participation_player" ? <p className="text-xs text-red-600">선수를 1명 이상 선택해 주세요.</p> : null}
+          {err === "participation_minute" ? <p className="text-xs text-red-600">분(minute)은 0~200 사이여야 합니다.</p> : null}
+          {err === "participation_invalid" ? <p className="text-xs text-red-600">출전 이벤트 입력값을 확인해 주세요.</p> : null}
+          {err === "participation_closed" ? <p className="text-xs text-red-600">경기 종료 후에는 선수 교체를 수정할 수 없습니다.</p> : null}
           {err === "rating_same_team" ? <p className="text-xs text-red-600">같은 팀 선수는 평점 대상이 아닙니다.</p> : null}
           {err === "rating_closed" ? <p className="text-xs text-red-600">경기 종료 후에만 평점 입력이 가능합니다.</p> : null}
+          {err === "undo_expired" ? <p className="text-xs text-red-600">교체 취소 가능 시간이 지났습니다.</p> : null}
+          {undoAvailable ? (
+            <form action={undoSubstitutionAction} className="inline-flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+              <input type="hidden" name="undo_ids" value={undo ?? ""} />
+              <input type="hidden" name="undo_until" value={undo_until ?? ""} />
+              <span>최근 교체를 취소할 수 있어.</span>
+              <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">교체 취소</PendingSubmitButton>
+            </form>
+          ) : null}
         </header>
 
         <LiveScoreboard
@@ -1014,30 +1308,176 @@ export default async function MatchDetailPage({
           }))}
         />
 
+        {isEditMode ? (
+          <div className="space-y-2">
+            {canAddGoalNow ? (
+              <GoalAddActions
+                actionA={addGoalA}
+                actionB={addGoalB}
+                teamAName={match.team_a_name}
+                teamBName={match.team_b_name}
+                rosterA={rosterA}
+                rosterB={rosterB}
+                defaultMinute={elapsedMinutes ?? 0}
+              />
+            ) : null}
+
+            {canManageMatch ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-gray-500">
+                  현재: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
+                  {elapsedMinutes !== null ? ` · ${elapsedMinutes}분` : ""}
+                </span>
+                {match.period_state === "pre" ? (
+                  <form action={startFirstAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "first_half" ? (
+                  <form action={endFirstAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">전반 종료</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "halftime" ? (
+                  <form action={startSecondAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">후반 시작</PendingSubmitButton></form>
+                ) : null}
+                {match.period_state === "second_half" ? (
+                  <form action={endMatchAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
+                ) : null}
+                {(match.period_state === "halftime" || match.period_state === "second_half") ? (
+                  <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-2 py-1" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {rosterA.length === 0 && rosterB.length === 0 ? (
           <p className="text-xs text-amber-600">엔트리가 확정되지 않았습니다.</p>
         ) : (
           <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
             <details>
-              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">엔트리 ({rosterA.length + rosterB.length}명)</summary>
+              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">전체 엔트리 ({rosterA.length + rosterB.length}명)</summary>
               <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div className="font-semibold text-gray-600 mb-1">{match.team_a_name}</div>
-                  {rosterA.map((p) => (
-                    <div key={p.value} className="text-gray-700">#{p.jerseyNo} {p.playerName}</div>
-                  ))}
+                  {rosterA.map((p) => {
+                    const key = p.playerId || `name:${p.playerName}`
+                    const onPitch = isLivePeriod && activeKeysA.has(key)
+                    return (
+                      <div key={p.value} className={onPitch ? "text-green-700 font-medium" : "text-gray-700"}>#{p.jerseyNo} {p.playerName}</div>
+                    )
+                  })}
                 </div>
                 <div>
                   <div className="font-semibold text-gray-600 mb-1">{match.team_b_name}</div>
-                  {rosterB.map((p) => (
-                    <div key={p.value} className="text-gray-700">#{p.jerseyNo} {p.playerName}</div>
-                  ))}
+                  {rosterB.map((p) => {
+                    const key = p.playerId || `name:${p.playerName}`
+                    const onPitch = isLivePeriod && activeKeysB.has(key)
+                    return (
+                      <div key={p.value} className={onPitch ? "text-green-700 font-medium" : "text-gray-700"}>#{p.jerseyNo} {p.playerName}</div>
+                    )
+                  })}
                 </div>
               </div>
             </details>
           </section>
         )}
 
+        {isEditMode ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+            <details>
+              <summary className="cursor-pointer list-none text-sm font-semibold text-gray-700 flex items-center justify-between">
+                <span>선수 운용</span>
+                <span className="text-xs text-gray-500">선발 A {startingCountA}명 · B {startingCountB}명 · 이벤트 {(participationEvents ?? []).length}건</span>
+              </summary>
+
+              <div className="mt-3 space-y-3">
+
+                {isBeforeKickoff ? (
+                  <details className="rounded border p-3" open={startingCountA === 0 && startingCountB === 0}>
+                    <summary className="cursor-pointer text-xs font-medium text-gray-600">스타팅 편집</summary>
+                    <form action={addStartingLineupAction} className="mt-3 space-y-3">
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">{match.team_a_name} 스타팅 후보</div>
+                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
+                            {rosterA.map((p) => {
+                              const key = p.playerId || `name:${p.playerName}`
+                              return (
+                                <label key={`sa-${p.value}`} className="flex items-center gap-2">
+                                  <input type="checkbox" name="player_values_a" value={p.value} defaultChecked={starterKeySetA.has(key)} />
+                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">{match.team_b_name} 스타팅 후보</div>
+                          <div className="max-h-36 overflow-auto rounded border p-2 space-y-1 text-xs">
+                            {rosterB.map((p) => {
+                              const key = p.playerId || `name:${p.playerName}`
+                              return (
+                                <label key={`sb-${p.value}`} className="flex items-center gap-2">
+                                  <input type="checkbox" name="player_values_b" value={p.value} defaultChecked={starterKeySetB.has(key)} />
+                                  <span>{`#${p.jerseyNo} ${p.playerName}`}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <PendingSubmitButton className="rounded border px-2 py-1 text-xs">스타팅 저장</PendingSubmitButton>
+                        <span className="text-[11px] text-gray-500">기존 선발은 체크된 상태로 표시돼.</span>
+                      </div>
+                    </form>
+                  </details>
+                ) : (
+                  <div className="rounded border p-3">
+                    <SubstitutionActions
+                      action={addSubstitutionAction}
+                      teamAName={match.team_a_name}
+                      teamBName={match.team_b_name}
+                      activeA={rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                      benchA={rosterA.filter((p) => !activeKeysA.has(p.playerId || `name:${p.playerName}`))}
+                      activeB={rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                      benchB={rosterB.filter((p) => !activeKeysB.has(p.playerId || `name:${p.playerName}`))}
+                      disabled={match.period_state === "ended"}
+                      periodState={match.period_state}
+                      firstHalfStartedAt={match.first_half_started_at}
+                      secondHalfStartedAt={match.second_half_started_at}
+                    />
+                  </div>
+                )}
+
+                <div className="rounded border p-3">
+                  <div className="text-xs font-medium text-gray-600 mb-2">출전 이벤트 타임라인 · 선발 A팀 {startingCountA}명 · B팀 {startingCountB}명</div>
+                  <details className="mb-2">
+                    <summary className="cursor-pointer text-[11px] text-gray-500 underline">선발 상세 보기</summary>
+                    <div className="mt-1 text-xs text-gray-600 space-y-1">
+                      <div><span className="font-medium">A팀:</span> {starterNamesA.length ? starterNamesA.join(', ') : '없음'}</div>
+                      <div><span className="font-medium">B팀:</span> {starterNamesB.length ? starterNamesB.join(', ') : '없음'}</div>
+                    </div>
+                  </details>
+                  {(() => {
+                    const timelineEvents = (participationEvents ?? []).filter((e) => !(e.minute === 0 && e.event_type === 'in'))
+                    if (timelineEvents.length === 0) {
+                      return <p className="text-xs text-gray-500">아직 기록이 없습니다.</p>
+                    }
+                    return (
+                      <ul className="space-y-1 text-xs">
+                        {timelineEvents.map((e) => (
+                          <li key={e.id} className="flex items-center justify-between border-b last:border-0 py-1">
+                            <span>{e.minute}’ · {e.team_side} · {e.event_type.toUpperCase()} · {e.player_name ?? '선수'}</span>
+                            <span className="text-gray-400">{new Date(e.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  })()}
+                </div>
+              </div>
+            </details>
+          </section>
+        ) : null}
 
         {canRate ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
@@ -1067,61 +1507,6 @@ export default async function MatchDetailPage({
           </section>
         ) : null}
 
-        {isEditMode && canManageMatch ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
-            <div className="rounded border bg-gray-50 p-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-700">구간 운영</h3>
-                <span className="text-[11px] text-gray-500">기본 전/후반 각 15분</span>
-              </div>
-              <div className="rounded border bg-white p-2 space-y-2">
-                <div className="text-[11px] text-gray-500">
-                  현재 상태: {match.period_state === "pre" ? "대기" : match.period_state === "first_half" ? "전반 진행" : match.period_state === "halftime" ? "휴식" : match.period_state === "second_half" ? "후반 진행" : "종료"}
-                  {elapsedMinutes !== null ? ` · 경과 ${elapsedMinutes}분` : ""}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {match.period_state === "pre" ? (
-                    <form action={startFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다.">전반전 시작</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "first_half" ? (
-                    <form action={endFirstAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">전반전 종료(휴식)</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "halftime" ? (
-                    <form action={startSecondAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">후반전 시작</PendingSubmitButton></form>
-                  ) : null}
-                  {match.period_state === "second_half" ? (
-                    <form action={endMatchAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중..." confirmMessage="경기를 종료하시겠습니까? 종료 후에는 되돌릴 수 없습니다.">경기 종료</PendingSubmitButton></form>
-                  ) : null}
-                  {(match.period_state === "halftime" || match.period_state === "second_half") ? (
-                    <form action={resumePreviousAction}><PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="처리중...">이전 구간 재개</PendingSubmitButton></form>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-                {isEditMode ? (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            {match.period_state === "pre"
-              ? "경기 시작 전에는 스코어 입력/수정이 불가합니다."
-              : match.period_state === "halftime"
-              ? "휴식 시간에는 기존 기록 수정/삭제만 가능합니다."
-              : match.period_state === "ended" && !isAdminSession
-              ? "경기 종료 후 기록 수정은 어드민만 가능합니다."
-              : ""}
-          </section>
-        ) : null}
-
-{canAddGoalNow ? (
-          <ScoreActions
-            addGoalA={addGoalA}
-            addGoalB={addGoalB}
-            teamAName={match.team_a_name}
-            teamBName={match.team_b_name}
-          />
-        ) : null}
-
         {canEditGoalNow ? (
           <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
             <h2 className="text-sm font-semibold text-gray-700">
@@ -1141,11 +1526,11 @@ export default async function MatchDetailPage({
                   : (activeGoal.assist_name ?? "");
                 return (
                   <>
-                    <div className="text-sm text-gray-700">
-                      {activeGoal.team_side}팀 ·{" "}
-                      {activeGoal.minute !== null
-                        ? `${activeGoal.minute}분`
-                        : "시간 미설정"}
+                    <div className="flex items-center justify-between gap-2 text-sm text-gray-700">
+                      <span>
+                        {activeGoal.team_side}팀 · {activeGoal.minute !== null ? `${activeGoal.minute}분` : "시간 미설정"}
+                      </span>
+                      <Link href={`/m/${matchId}?mode=edit`} className="text-xs underline text-gray-500">선택 해제</Link>
                     </div>
                     <form
                       key={activeGoal.id}

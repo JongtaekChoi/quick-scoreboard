@@ -1495,8 +1495,14 @@ export default async function MatchDetailPage({
                 actionB={addGoalB}
                 teamAName={match.team_a_name}
                 teamBName={match.team_b_name}
-                rosterA={rosterA}
-                rosterB={rosterB}
+                rosterA={(() => {
+                  const active = rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`));
+                  return active.length > 0 ? active : rosterA;
+                })()}
+                rosterB={(() => {
+                  const active = rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`));
+                  return active.length > 0 ? active : rosterB;
+                })()}
                 defaultMinute={elapsedMinutes ?? 0}
               />
             ) : null}

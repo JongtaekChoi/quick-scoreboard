@@ -14,11 +14,13 @@ type MatchGroup = {
   seq: number
   entry_confirmed_at: string | null
 }
-type Match = { id: string; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null }
+type Match = { id: string; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled' | 'live' | 'ended'; scheduled_start_at: string | null; period_count: number }
 type Team = { id: string; name: string }
 type TeamPlayer = { id: string; team_id: string; jersey_no: string; player_name: string; is_active: boolean }
 type GroupEntry = { id: string; team_id: string; player_id: string }
 type GroupGuest = { id: string; team_id: string; source_team_id: string; guest_name: string }
+type MatchPeriod = { id: string; match_id: string; sequence: number; label: string | null; period_code: string | null }
+type MatchPeriodLineup = { match_period_id: string; team_side: 'A' | 'B'; player_id: string | null }
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -64,6 +66,7 @@ async function createMatch(formData: FormData) {
   }
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
+  const periodCount = Math.max(1, Math.min(12, Number(formData.get('period_count') || 2) || 2))
   if (!channelId || !groupId || !teamA || !teamB) return
 
   const supabase = getSupabaseServerClient()
@@ -84,7 +87,7 @@ async function createMatch(formData: FormData) {
     ensureTeamInChannel(supabase, channelId, teamB),
   ])
 
-  await supabase.from('matches').insert({
+  const { data: insertedMatch } = await supabase.from('matches').insert({
     channel_id: channelId,
     match_group_id: groupId,
     seq: nextSeq,
@@ -95,7 +98,19 @@ async function createMatch(formData: FormData) {
     score_a: 0,
     score_b: 0,
     status: 'scheduled',
-  })
+    period_count: periodCount,
+  }).select('id').maybeSingle<{ id: string }>()
+
+  if (insertedMatch?.id) {
+    await supabase.from('match_periods').insert(
+      Array.from({ length: periodCount }, (_, idx) => ({
+        match_id: insertedMatch.id,
+        sequence: idx + 1,
+        period_code: idx + 1 <= 4 ? `Q${idx + 1}` : `P${idx + 1}`,
+        label: `${idx + 1}P`,
+      })),
+    )
+  }
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
@@ -116,6 +131,7 @@ async function updateMatch(formData: FormData) {
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
   const status = String(formData.get('status') || 'scheduled') as 'scheduled' | 'live' | 'ended'
+  const periodCount = Math.max(1, Math.min(12, Number(formData.get('period_count') || 2) || 2))
   const groupPlayDate = String(formData.get('group_play_date') || '').trim()
   const scheduledStartRaw = String(formData.get('scheduled_start_time') || '').trim()
   const scheduledStartAt =
@@ -140,9 +156,33 @@ async function updateMatch(formData: FormData) {
       team_a_id: teamAId,
       team_b_id: teamBId,
       status,
+      period_count: periodCount,
       scheduled_start_at: status === 'ended' ? null : scheduledStartAt,
     })
     .eq('id', matchId)
+
+  const { data: periodRows } = await supabase
+    .from('match_periods')
+    .select('id,sequence,status')
+    .eq('match_id', matchId)
+    .is('deleted_at', null)
+    .returns<{ id: string; sequence: number; status: 'pending' | 'live' | 'ended' }[]>()
+
+  const existing = periodRows ?? []
+  const maxSeq = existing.reduce((max, row) => Math.max(max, row.sequence), 0)
+  if (maxSeq < periodCount) {
+    await supabase.from('match_periods').insert(
+      Array.from({ length: periodCount - maxSeq }, (_, i) => {
+        const seq = maxSeq + i + 1
+        return {
+          match_id: matchId,
+          sequence: seq,
+          period_code: seq <= 4 ? `Q${seq}` : `P${seq}`,
+          label: `${seq}P`,
+        }
+      }),
+    )
+  }
 
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
@@ -219,6 +259,7 @@ async function saveMatchStarters(formData: FormData) {
   const matchId = String(formData.get('matchId') || '')
   const teamId = String(formData.get('teamId') || '')
   const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
+  const periodSequence = Number(formData.get('periodSequence') || 1)
   const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
 
   const manage = await canManageChannel(channelId)
@@ -231,6 +272,9 @@ async function saveMatchStarters(formData: FormData) {
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
   }
+  if (!Number.isFinite(periodSequence) || periodSequence < 1) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_period`)
+  }
 
   if (playerIds.length === 0) {
     redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_count`)
@@ -239,26 +283,111 @@ async function saveMatchStarters(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
+  const { data: period } = await supabase
+    .from('match_periods')
+    .select('id')
+    .eq('match_id', matchId)
+    .eq('sequence', periodSequence)
+    .is('deleted_at', null)
+    .maybeSingle<{ id: string }>()
+
+  if (!period) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_period`)
+  }
+
   await supabase
-    .from('match_participation_events')
+    .from('match_period_lineups')
     .update({ deleted_at: new Date().toISOString() })
     .eq('match_id', matchId)
+    .eq('match_period_id', period.id)
     .eq('team_side', teamSide)
-    .eq('is_starter', true)
     .is('deleted_at', null)
 
-  await supabase.from('match_participation_events').insert(
+  await supabase.from('match_period_lineups').insert(
     playerIds.map((playerId) => ({
       match_id: matchId,
+      match_period_id: period.id,
       team_side: teamSide,
       player_id: playerId,
-      event_type: 'in',
-      minute: 0,
       is_starter: true,
     })),
   )
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&starter_period=${periodSequence}`)
+}
+
+async function copyPreviousPeriodStarters(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const matchId = String(formData.get('matchId') || '')
+  const teamId = String(formData.get('teamId') || '')
+  const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
+  const periodSequence = Number(formData.get('periodSequence') || 1)
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+  if (!channelId || !groupId || !matchId || !teamId || (teamSide !== 'A' && teamSide !== 'B')) return
+  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
+  }
+  if (periodSequence <= 1) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
+  }
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const { data: periods } = await supabase
+    .from('match_periods')
+    .select('id,sequence')
+    .eq('match_id', matchId)
+    .in('sequence', [periodSequence - 1, periodSequence])
+    .is('deleted_at', null)
+    .returns<{ id: string; sequence: number }[]>()
+
+  const prev = (periods ?? []).find((p) => p.sequence === periodSequence - 1)
+  const current = (periods ?? []).find((p) => p.sequence === periodSequence)
+  if (!prev || !current) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
+  }
+
+  const { data: prevRows } = await supabase
+    .from('match_period_lineups')
+    .select('player_id')
+    .eq('match_id', matchId)
+    .eq('match_period_id', prev.id)
+    .eq('team_side', teamSide)
+    .is('deleted_at', null)
+    .returns<{ player_id: string | null }[]>()
+
+  const playerIds = (prevRows ?? []).map((row) => row.player_id).filter((v): v is string => Boolean(v))
+  if (playerIds.length === 0) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_copy`)
+  }
+
+  await supabase
+    .from('match_period_lineups')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('match_id', matchId)
+    .eq('match_period_id', current.id)
+    .eq('team_side', teamSide)
+    .is('deleted_at', null)
+
+  await supabase.from('match_period_lineups').insert(
+    playerIds.map((playerId) => ({
+      match_id: matchId,
+      match_period_id: current.id,
+      team_side: teamSide,
+      player_id: playerId,
+      is_starter: true,
+    })),
+  )
+
+  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&starter_period=${periodSequence}`)
 }
 
 async function saveGroupGuest(formData: FormData) {
@@ -366,11 +495,12 @@ export default async function AdminGroupPage({
   searchParams,
 }: {
   params: Promise<{ channelId: string; groupId: string }>
-  searchParams: Promise<{ from?: string; err?: string; tab?: string }>
+  searchParams: Promise<{ from?: string; err?: string; tab?: string; starter_period?: string }>
 }) {
   const { channelId, groupId } = await params
-  const { from, err, tab: tabParam } = await searchParams
+  const { from, err, tab: tabParam, starter_period } = await searchParams
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
+  const selectedStarterPeriod = Math.max(1, Number(starter_period || 1) || 1)
   const fromChannel = from === 'channel'
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
@@ -385,7 +515,7 @@ export default async function AdminGroupPage({
   const managerTeamId = manage.managerTeamId
   const [{ data: group }, { data: matches }, { data: teams }, { data: players }, { data: entries }, { data: guests }] = await Promise.all([
     supabase.from('match_groups').select('id,play_date,venue,title,seq,entry_confirmed_at').eq('id', groupId).maybeSingle<MatchGroup>(),
-    supabase.from('matches').select('id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
+    supabase.from('matches').select('id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at,period_count').eq('match_group_id', groupId).order('seq', { ascending: true }).returns<Match[]>(),
     supabase.from('channel_teams_view').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
     supabase.from('team_players').select('id,team_id,jersey_no,player_name,is_active').eq('channel_id', channelId).eq('is_active', true).order('jersey_no', { ascending: true }).returns<TeamPlayer[]>(),
     supabase.from('match_group_entries').select('id,team_id,player_id').eq('match_group_id', groupId).returns<GroupEntry[]>(),
@@ -394,13 +524,36 @@ export default async function AdminGroupPage({
 
   if (!channel || !group) return <main className="p-6">리그/그룹을 찾을 수 없습니다.</main>
 
-  const { data: starterEvents } = await supabase
-    .from('match_participation_events')
-    .select('match_id,team_side,player_id,is_starter')
-    .in('match_id', (matches ?? []).map((m) => m.id))
-    .eq('is_starter', true)
-    .is('deleted_at', null)
-    .returns<{ match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[]>()
+  const matchIds = (matches ?? []).map((m) => m.id)
+
+  const [{ data: matchPeriods }, { data: periodLineups }, { data: starterEvents }] = await Promise.all([
+    matchIds.length
+      ? supabase
+          .from('match_periods')
+          .select('id,match_id,sequence,label,period_code')
+          .in('match_id', matchIds)
+          .is('deleted_at', null)
+          .order('sequence', { ascending: true })
+          .returns<MatchPeriod[]>()
+      : Promise.resolve({ data: [] as MatchPeriod[] }),
+    matchIds.length
+      ? supabase
+          .from('match_period_lineups')
+          .select('match_period_id,team_side,player_id')
+          .in('match_id', matchIds)
+          .is('deleted_at', null)
+          .returns<MatchPeriodLineup[]>()
+      : Promise.resolve({ data: [] as MatchPeriodLineup[] }),
+    matchIds.length
+      ? supabase
+          .from('match_participation_events')
+          .select('match_id,team_side,player_id,is_starter')
+          .in('match_id', matchIds)
+          .eq('is_starter', true)
+          .is('deleted_at', null)
+          .returns<{ match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[]>()
+      : Promise.resolve({ data: [] as { match_id: string; team_side: 'A' | 'B'; player_id: string | null; is_starter: boolean }[] }),
+  ])
 
   const playersByTeam = new Map<string, TeamPlayer[]>()
   for (const p of players ?? []) {
@@ -423,6 +576,25 @@ export default async function AdminGroupPage({
 
   const teamNameMap = new Map((teams ?? []).map((t) => [t.id, t.name]))
   const teamIdByName = new Map((teams ?? []).map((t) => [t.name, t.id]))
+
+  const periodsByMatch = new Map<string, MatchPeriod[]>()
+  for (const p of matchPeriods ?? []) {
+    const arr = periodsByMatch.get(p.match_id) ?? []
+    arr.push(p)
+    periodsByMatch.set(p.match_id, arr)
+  }
+  for (const [, arr] of periodsByMatch) {
+    arr.sort((a, b) => a.sequence - b.sequence)
+  }
+
+  const lineupPlayersByPeriodSide = new Map<string, Set<string>>()
+  for (const row of periodLineups ?? []) {
+    if (!row.player_id) continue
+    const key = `${row.match_period_id}:${row.team_side}`
+    const set = lineupPlayersByPeriodSide.get(key) ?? new Set<string>()
+    set.add(row.player_id)
+    lineupPlayersByPeriodSide.set(key, set)
+  }
 
   const startersByMatchSide = new Map<string, Set<string>>()
   for (const s of starterEvents ?? []) {
@@ -465,6 +637,8 @@ export default async function AdminGroupPage({
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
           {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
+          {err === 'starter_period' ? <p className="text-xs text-red-600">선발 period를 확인해 주세요.</p> : null}
+          {err === 'starter_copy' ? <p className="text-xs text-red-600">이전 period 선발 복사에 실패했습니다.</p> : null}
         </header>
 
         {!managerTeamId && (
@@ -608,6 +782,12 @@ export default async function AdminGroupPage({
             {(matches ?? []).map((m) => {
               const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null
               const teamBId = m.team_b_id ?? teamIdByName.get(m.team_b_name) ?? null
+              const periods = periodsByMatch.get(m.id) ?? []
+              const selectedSequence = Math.min(
+                selectedStarterPeriod,
+                Math.max(1, periods.length > 0 ? periods[periods.length - 1].sequence : m.period_count || 1),
+              )
+              const selectedPeriod = periods.find((p) => p.sequence === selectedSequence) ?? null
 
               const sides: Array<{ teamSide: 'A' | 'B'; teamId: string | null; teamName: string }> = [
                 { teamSide: 'A', teamId: teamAId, teamName: m.team_a_name },
@@ -617,6 +797,18 @@ export default async function AdminGroupPage({
               return (
                 <div key={`starter-${m.id}`} className="rounded border p-3 space-y-2">
                   <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-gray-600">선발 period:</span>
+                    {Array.from({ length: Math.max(1, m.period_count || periods.length || 1) }, (_, i) => i + 1).map((seq) => (
+                      <Link
+                        key={`${m.id}-period-${seq}`}
+                        className={`rounded border px-2 py-1 ${selectedSequence === seq ? 'bg-black text-white border-black' : 'text-gray-600'}`}
+                        href={`/admin/channel/${channel.id}/group/${group.id}?tab=entries&starter_period=${seq}`}
+                      >
+                        {(periods.find((p) => p.sequence === seq)?.label || periods.find((p) => p.sequence === seq)?.period_code || `${seq}P`)}
+                      </Link>
+                    ))}
+                  </div>
                   <div className="grid md:grid-cols-2 gap-3">
                     {sides.map((side) => {
                       if (!side.teamId) return null
@@ -626,7 +818,12 @@ export default async function AdminGroupPage({
                       const teamEntries = entriesByTeam.get(side.teamId) ?? []
                       const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
                       const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
-                      const selected = startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
+                      const lineupSelected = selectedPeriod
+                        ? lineupPlayersByPeriodSide.get(`${selectedPeriod.id}:${side.teamSide}`) ?? new Set<string>()
+                        : new Set<string>()
+                      const selected = lineupSelected.size > 0
+                        ? lineupSelected
+                        : startersByMatchSide.get(`${m.id}:${side.teamSide}`) ?? new Set<string>()
 
                       return (
                         <form key={`${m.id}-${side.teamSide}`} action={saveMatchStarters} className="rounded border p-2 space-y-2">
@@ -635,6 +832,7 @@ export default async function AdminGroupPage({
                           <input type="hidden" name="matchId" value={m.id} />
                           <input type="hidden" name="teamId" value={side.teamId} />
                           <input type="hidden" name="teamSide" value={side.teamSide} />
+                          <input type="hidden" name="periodSequence" value={selectedSequence} />
                           <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
                           <div className="max-h-40 overflow-auto rounded border p-2 grid grid-cols-1 gap-1 text-xs">
                             {candidates.map((p) => (
@@ -644,7 +842,18 @@ export default async function AdminGroupPage({
                               </label>
                             ))}
                           </div>
-                          <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
+                          <div className="flex items-center gap-2">
+                            <button className="rounded border px-2 py-1 text-xs" type="submit">선발 제출</button>
+                            {selectedSequence > 1 ? (
+                              <button
+                                className="rounded border px-2 py-1 text-xs"
+                                type="submit"
+                                formAction={copyPreviousPeriodStarters}
+                              >
+                                이전 period 복사
+                              </button>
+                            ) : null}
+                          </div>
                         </form>
                       )
                     })}
@@ -673,6 +882,7 @@ export default async function AdminGroupPage({
                 <input type="hidden" name="groupId" value={group.id} />
                 <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_a_name" placeholder="A팀명" required />
                 <input className="rounded border px-2 py-1.5 text-sm" list="team-suggestions" name="team_b_name" placeholder="B팀명" required />
+                <input className="rounded border px-2 py-1.5 text-sm" type="number" name="period_count" min={1} max={12} defaultValue={2} />
                 <button className="rounded border px-3 py-2 text-sm" type="submit">경기 추가</button>
               </form>
             </section>
@@ -695,6 +905,7 @@ export default async function AdminGroupPage({
                     <option value="live">live</option>
                     <option value="ended">ended</option>
                   </select>
+                  <input className="rounded border px-2 py-1.5 text-sm" type="number" name="period_count" min={1} max={12} defaultValue={m.period_count ?? 2} />
                   <input type="hidden" name="group_play_date" value={group.play_date} />
                   <input className="rounded border px-2 py-1.5 text-sm" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
                   <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>

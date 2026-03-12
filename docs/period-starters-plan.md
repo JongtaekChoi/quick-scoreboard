@@ -296,3 +296,18 @@ UI 동작 원칙:
 - period row 기반 시작/종료 API(`start|end`)로 `applyPeriodAction` 치환
 - 라인업 CRUD(`match_period_id` 기준) 및 "이전 period 복사"
 - `match_participation_events.is_starter` 의존 제거(읽기 fallback만 유지)
+
+## 14) 구현 진행 업데이트 (2차)
+
+이번 반영에서 추가로 처리한 항목:
+- **빌드 안정화**: `next/font/google` 의존을 제거해 오프라인/네트워크 제한 환경에서도 `next build`가 실패하지 않도록 조정.
+- **period row 기반 진행 제어 시작**: 경기 상세의 period 제어 액션을 `match_periods.status`(`pending/live/ended`) 중심으로 동작하도록 전환하고, 기존 `matches.period_state`는 호환용으로 동기화.
+- **라인업 저장 전환**: 관리자 경기그룹 화면의 선발 제출 저장소를 `match_participation_events(is_starter)`에서 `match_period_lineups`로 전환.
+- **이전 period 복사**: 동일 화면에서 `N period` 선발에 대해 `N-1 period` 선발 복사 액션 추가.
+- **읽기 fallback 유지**: 라이브 화면은 `match_period_lineups`를 우선 사용하고, 데이터가 없으면 기존 starter 이벤트를 fallback으로 사용.
+- **period_count 운영 반영**: 경기 생성/수정에서 `period_count`를 설정하고 부족한 `match_periods` row를 자동 보충.
+
+남은 작업(후속):
+- `match_period_lineups`에 `player_name` 입력 지원(비등록 선수 완전 대응)
+- period 상태머신을 `matches.period_state` 의존 없이 완전 분리
+- scoreboard API에서 현재 period/라인업 비교 응답 정식화

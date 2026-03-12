@@ -311,3 +311,11 @@ UI 동작 원칙:
 - `match_period_lineups`에 `player_name` 입력 지원(비등록 선수 완전 대응)
 - period 상태머신을 `matches.period_state` 의존 없이 완전 분리
 - scoreboard API에서 현재 period/라인업 비교 응답 정식화
+
+## 15) 구현 진행 업데이트 (3차)
+
+요청 반영: **특정 period 시작 전 교체 예약**
+- `match_period_substitution_plans` 테이블을 추가해, 즉시 교체와 분리된 예약 교체를 저장.
+- 경기 화면의 교체 모달에서 `즉시 교체` / `Period 시작 전 예약` 모드를 선택 가능하게 변경.
+- 예약은 `pending` 상태 period만 선택 가능하며, period 시작 액션 시 자동으로 교체 이벤트(`out/in`)로 반영.
+- 잘못된 예약(이미 시작/종료된 period, 동일 선수 OUT/IN)은 서버에서 차단.

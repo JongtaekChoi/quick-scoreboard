@@ -470,6 +470,64 @@ async function applyPeriodAction(
       .update({ status: "live", started_at: now })
       .eq("id", nextPending.id);
 
+    const { data: reservedSubs } = await supabase
+      .from("match_period_substitution_plans")
+      .select(
+        "id,team_side,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
+      )
+      .eq("match_id", matchId)
+      .eq("period_sequence", nextPending.sequence)
+      .is("deleted_at", null)
+      .is("applied_at", null)
+      .returns<
+        {
+          id: string;
+          team_side: "A" | "B";
+          player_out_id: string | null;
+          player_out_name: string | null;
+          player_in_id: string | null;
+          player_in_name: string | null;
+          planned_minute: number;
+        }[]
+      >();
+
+    if ((reservedSubs ?? []).length > 0) {
+      const rows = (reservedSubs ?? []).flatMap((sub) => {
+        const minuteValue = Number.isFinite(sub.planned_minute)
+          ? Math.max(0, Math.min(200, sub.planned_minute))
+          : 0;
+        return [
+          {
+            match_id: matchId,
+            team_side: sub.team_side,
+            player_id: sub.player_out_id,
+            player_name: sub.player_out_name,
+            event_type: "out" as const,
+            minute: minuteValue,
+            is_starter: false,
+          },
+          {
+            match_id: matchId,
+            team_side: sub.team_side,
+            player_id: sub.player_in_id,
+            player_name: sub.player_in_name,
+            event_type: "in" as const,
+            minute: minuteValue,
+            is_starter: false,
+          },
+        ];
+      });
+
+      await supabase.from("match_participation_events").insert(rows);
+      await supabase
+        .from("match_period_substitution_plans")
+        .update({ applied_at: now })
+        .in(
+          "id",
+          (reservedSubs ?? []).map((s) => s.id),
+        );
+    }
+
     patch.status = "live";
     patch.started_at = match.started_at ?? now;
     patch.scheduled_start_at = null;
@@ -824,6 +882,10 @@ async function addSubstitutionEvent(
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
   const minute = Number(formData.get("minute") || 0);
+  const reservationMode = String(formData.get("reservation_mode") || "now").trim();
+  const reservationPeriodSequence = Number(
+    formData.get("reservation_period_sequence") || 0,
+  );
   const playerOutValue = String(formData.get("player_out_value") || "").trim();
   const playerInValue = String(formData.get("player_in_value") || "").trim();
 
@@ -843,6 +905,56 @@ async function addSubstitutionEvent(
   const inId = inIdRaw?.trim() || null;
   const outName = (outDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
   const inName = (inDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
+
+  if (outId && inId && outId === inId) {
+    redirect(`/m/${matchId}?mode=edit&err=participation_same_player`);
+  }
+
+  if (reservationMode === "reserve") {
+    if (!Number.isFinite(reservationPeriodSequence) || reservationPeriodSequence < 1) {
+      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_period`);
+    }
+
+    const { data: targetPeriod } = await supabase
+      .from("match_periods")
+      .select("id,status,sequence")
+      .eq("match_id", matchId)
+      .eq("sequence", reservationPeriodSequence)
+      .is("deleted_at", null)
+      .maybeSingle<{
+        id: string;
+        status: "pending" | "live" | "ended";
+        sequence: number;
+      }>();
+
+    if (!targetPeriod || targetPeriod.status !== "pending") {
+      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_period`);
+    }
+
+    await supabase.from("match_period_substitution_plans").insert({
+      match_id: matchId,
+      team_side: teamSide,
+      period_sequence: reservationPeriodSequence,
+      player_out_id: outId || null,
+      player_out_name: outName || null,
+      player_in_id: inId || null,
+      player_in_name: inName || null,
+      planned_minute: minute,
+    });
+
+    await logMatchChange(matchId, channelSlug, "participation_substitution_reserve", {
+      teamSide,
+      period_sequence: reservationPeriodSequence,
+      minute,
+      outId,
+      outName,
+      inId,
+      inName,
+    });
+
+    revalidatePath(`/m/${matchId}`);
+    redirect(`/m/${matchId}?mode=edit`);
+  }
 
   const { data: inserted } = await supabase
     .from("match_participation_events")
@@ -1451,6 +1563,12 @@ export default async function MatchDetailPage({
       ? `${getPeriodDisplayLabel(livePeriod.sequence, livePeriod)} 종료`
       : "경기 종료"
     : null;
+  const reservablePeriods = sortedPeriods
+    .filter((p) => p.status === "pending")
+    .map((p) => ({
+      sequence: p.sequence,
+      label: getPeriodDisplayLabel(p.sequence, p),
+    }));
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
@@ -1547,6 +1665,16 @@ export default async function MatchDetailPage({
           {err === "participation_closed" ? (
             <p className="text-xs text-red-600">
               경기 종료 후에는 선수 교체를 수정할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_same_player" ? (
+            <p className="text-xs text-red-600">
+              같은 선수를 동시에 OUT/IN으로 선택할 수 없습니다.
+            </p>
+          ) : null}
+          {err === "participation_reserve_period" ? (
+            <p className="text-xs text-red-600">
+              예약할 period를 다시 선택해 주세요. (시작 전 period만 예약 가능)
             </p>
           ) : null}
           {err === "rating_same_team" ? (
@@ -1774,11 +1902,12 @@ export default async function MatchDetailPage({
                             p.playerId || `name:${p.playerName}`,
                           ),
                       )}
-                      disabled={match.period_state === "pre" || match.period_state === "ended"}
+                      disabled={match.period_state === "ended"}
                       periodState={match.period_state}
                       firstHalfStartedAt={match.first_half_started_at}
                       secondHalfStartedAt={match.second_half_started_at}
                       firstHalfEndedAt={match.first_half_ended_at}
+                      reservablePeriods={reservablePeriods}
                     />
                   </div>
 

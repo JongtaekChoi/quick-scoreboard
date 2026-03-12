@@ -37,6 +37,7 @@ export default function SubstitutionActions({
   firstHalfStartedAt,
   secondHalfStartedAt,
   firstHalfEndedAt,
+  reservablePeriods,
 }: {
   action: (formData: FormData) => void | Promise<void>
   teamAName: string
@@ -50,10 +51,13 @@ export default function SubstitutionActions({
   firstHalfStartedAt: string | null
   secondHalfStartedAt: string | null
   firstHalfEndedAt: string | null
+  reservablePeriods: Array<{ sequence: number; label: string }>
 }) {
   const [open, setOpen] = useState(false)
   const [teamSide, setTeamSide] = useState<'A' | 'B'>('A')
   const [minute, setMinute] = useState(0)
+  const [mode, setMode] = useState<'now' | 'reserve'>('now')
+  const [reserveSequence, setReserveSequence] = useState<number>(reservablePeriods[0]?.sequence ?? 1)
 
   const outRoster = useMemo(() => (teamSide === 'A' ? activeA : activeB), [teamSide, activeA, activeB])
   const inRoster = useMemo(() => (teamSide === 'A' ? benchA : benchB), [teamSide, benchA, benchB])
@@ -81,6 +85,33 @@ export default function SubstitutionActions({
             </div>
             <form action={action} className="space-y-2">
               <input type="hidden" name="team_side" value={teamSide} />
+              <input type="hidden" name="reservation_mode" value={mode} />
+              <input type="hidden" name="reservation_period_sequence" value={reserveSequence} />
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">처리 방식</label>
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as 'now' | 'reserve')}
+                  className="w-full rounded border px-2 py-1.5 text-sm"
+                >
+                  <option value="now">즉시 교체</option>
+                  <option value="reserve">Period 시작 전 예약</option>
+                </select>
+              </div>
+              {mode === 'reserve' ? (
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">예약 period</label>
+                  <select
+                    value={reserveSequence}
+                    onChange={(e) => setReserveSequence(Number(e.target.value))}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    {reservablePeriods.map((period) => (
+                      <option key={`reserve-period-${period.sequence}`} value={period.sequence}>{period.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label className="block text-xs text-gray-600 mb-1">팀</label>
                 <select value={teamSide} onChange={(e) => setTeamSide(e.target.value as 'A' | 'B')} className="w-full rounded border px-2 py-1.5 text-sm">
@@ -107,10 +138,10 @@ export default function SubstitutionActions({
                 </select>
               </div>
               <div className="flex justify-end">
-                {outRoster.length === 0 || inRoster.length === 0 ? (
+                {outRoster.length === 0 || inRoster.length === 0 || (mode === 'reserve' && reservablePeriods.length === 0) ? (
                   <button type="button" className="rounded border px-3 py-1.5 text-sm opacity-50" disabled>교체</button>
                 ) : (
-                  <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm">교체</PendingSubmitButton>
+                  <PendingSubmitButton className="rounded border px-3 py-1.5 text-sm">{mode === 'reserve' ? '예약 저장' : '교체'}</PendingSubmitButton>
                 )}
               </div>
             </form>

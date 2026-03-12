@@ -517,33 +517,6 @@ async function applyPeriodAction(
       >();
 
     if ((reservedSubs ?? []).length > 0) {
-      const rows = (reservedSubs ?? []).flatMap((sub) => {
-        const minuteValue = Number.isFinite(sub.planned_minute)
-          ? Math.max(0, Math.min(200, sub.planned_minute))
-          : 0;
-        return [
-          {
-            match_id: matchId,
-            team_side: sub.team_side,
-            player_id: sub.player_out_id,
-            player_name: sub.player_out_name,
-            event_type: "out" as const,
-            minute: minuteValue,
-            is_starter: false,
-          },
-          {
-            match_id: matchId,
-            team_side: sub.team_side,
-            player_id: sub.player_in_id,
-            player_name: sub.player_in_name,
-            event_type: "in" as const,
-            minute: minuteValue,
-            is_starter: false,
-          },
-        ];
-      });
-
-      await supabase.from("match_participation_events").insert(rows);
       await supabase.from("match_substitutions").insert(
         (reservedSubs ?? []).map((sub) => ({
           match_id: matchId,
@@ -1059,30 +1032,6 @@ async function addSubstitutionEvent(
     .select("id")
     .maybeSingle<{ id: string }>();
 
-  const { data: inserted } = await supabase
-    .from("match_participation_events")
-    .insert([
-      {
-        match_id: matchId,
-        team_side: teamSide,
-        player_id: outId || null,
-        player_name: outName || null,
-        event_type: "out",
-        minute,
-        is_starter: false,
-      },
-      {
-        match_id: matchId,
-        team_side: teamSide,
-        player_id: inId || null,
-        player_name: inName || null,
-        event_type: "in",
-        minute,
-        is_starter: false,
-      },
-    ])
-    .select("id");
-
   await logMatchChange(matchId, channelSlug, "participation_substitution_add", {
     teamSide,
     minute,
@@ -1093,13 +1042,7 @@ async function addSubstitutionEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  const undoIds = [
-    inserted?.[0]?.id ?? "",
-    inserted?.[1]?.id ?? "",
-    insertedSub?.id ? `sub:${insertedSub.id}` : "",
-  ]
-    .filter(Boolean)
-    .join(",");
+  const undoIds = insertedSub?.id ? `sub:${insertedSub.id}` : "";
   const undoUntil = Date.now() + 30_000;
   redirect(
     `/m/${matchId}?mode=edit&undo=${encodeURIComponent(undoIds)}&undo_until=${undoUntil}`,
@@ -1135,23 +1078,13 @@ async function undoSubstitutionEvent(
     redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
   }
 
-  const ids = rawIds.filter((v) => !v.startsWith("sub:"));
   const subIds = rawIds
     .filter((v) => v.startsWith("sub:"))
     .map((v) => v.slice(4))
     .filter(Boolean);
 
-  if (ids.length === 0 && subIds.length === 0) {
+  if (subIds.length === 0) {
     redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
-  }
-
-  if (ids.length > 0) {
-    await supabase
-      .from("match_participation_events")
-      .update({ deleted_at: new Date().toISOString() })
-      .in("id", ids)
-      .eq("match_id", matchId)
-      .is("deleted_at", null);
   }
 
   if (subIds.length > 0) {
@@ -1167,7 +1100,7 @@ async function undoSubstitutionEvent(
     matchId,
     channelSlug,
     "participation_substitution_undo",
-    { ids },
+    { subIds },
   );
 
   revalidatePath(`/m/${matchId}`);

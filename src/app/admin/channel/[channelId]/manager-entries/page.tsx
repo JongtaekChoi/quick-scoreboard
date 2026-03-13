@@ -36,7 +36,10 @@ export default async function ManagerEntriesPage({ params }: { params: Promise<{
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    if (manage.channel) {
+      const next = encodeURIComponent(`/admin/channel/${channelId}/manager-entries`)
+      redirect(`/c/${manage.channel.slug}?mgr=expired&next=${next}`)
+    }
     redirect('/admin/login')
   }
 

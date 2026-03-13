@@ -69,10 +69,10 @@ export default async function ChannelPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ acc?: string; pw?: string }>;
+  searchParams: Promise<{ acc?: string; pw?: string; mgr?: string; next?: string }>;
 }) {
   const { slug } = await params;
-  const { acc, pw } = await searchParams;
+  const { acc, pw, mgr, next } = await searchParams;
 
   const supabase = getSupabaseServerClient();
 
@@ -228,6 +228,14 @@ export default async function ChannelPage({
             ) : null}
             {pw === "1" ? (
               <span className="text-green-700">비밀번호가 변경되었습니다.</span>
+            ) : null}
+            {mgr === "expired" ? (
+              <span className="text-amber-700 inline-flex items-center gap-2">
+                매니저 세션이 만료되었거나 권한이 변경되어 접근이 차단되었습니다.
+                {next ? (
+                  <Link className="underline" href={next}>확인</Link>
+                ) : null}
+              </span>
             ) : null}
             {isAdmin || isChannelAdmin || managerTeamId ? (
               <Link

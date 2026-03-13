@@ -438,7 +438,10 @@ export default async function AdminGroupPage({
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    if (manage.channel) {
+      const next = encodeURIComponent(`/admin/channel/${channelId}/group/${groupId}?from=${from ?? ''}&tab=${tab}`)
+      redirect(`/c/${manage.channel.slug}?mgr=expired&next=${next}`)
+    }
     redirect('/admin/login')
   }
 

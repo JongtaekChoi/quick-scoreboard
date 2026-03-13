@@ -62,6 +62,30 @@ export default function SampleGuidePage() {
         </section>
 
         <section className="rounded border p-4 space-y-2 text-sm">
+          <h2 className="font-semibold">일일 운영 테스트 시나리오 (권장)</h2>
+          <ol className="list-decimal pl-5 text-gray-700 space-y-1">
+            <li>운영자: 경기그룹 일정 등록</li>
+            <li>각 매니저: 경기그룹 엔트리 등록</li>
+            <li>운영자: 경기그룹 엔트리 확정</li>
+            <li>일반 계정: 자기 팀 외 경기 진행 + 골/교체 이벤트 등록</li>
+            <li>경기 후 참여 계정: 상대 평점 등록</li>
+            <li>통계 업데이트 확인</li>
+          </ol>
+          <p className="text-xs text-gray-500">
+            상세 체크리스트는 저장소 문서를 참고하세요.
+            {" "}
+            <a
+              className="underline"
+              href="https://github.com/JongtaekChoi/quick-scoreboard/blob/main/docs/sample-test-scenarios.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              docs/sample-test-scenarios.md
+            </a>
+          </p>
+        </section>
+
+        <section className="rounded border p-4 space-y-2 text-sm">
           <h2 className="font-semibold">주의사항</h2>
           <ul className="list-disc pl-5 text-gray-700 space-y-1">
             <li>샘플 데이터는 운영 데이터가 아닙니다.</li>

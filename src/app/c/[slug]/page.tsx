@@ -116,6 +116,7 @@ export default async function ChannelPage({
   const managerTeamId = managerInfo?.teamId ?? null;
   const isChannelAdmin = accountSession?.role === "admin";
   const channelUrl = `https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}`;
+  const supportOpenChatUrl = process.env.NEXT_PUBLIC_SUPPORT_OPENCHAT_URL?.trim() || '';
 
   await autoStartDueMatches(supabase);
 
@@ -207,6 +208,16 @@ export default async function ChannelPage({
             <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/calendar`}>
               달력 보기
             </Link>
+            {supportOpenChatUrl ? (
+              <a
+                className="rounded-full border border-yellow-300 bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-900 hover:bg-yellow-100"
+                href={supportOpenChatUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                문의하기 (카카오 오픈채팅)
+              </a>
+            ) : null}
             {channel.slug === "sample" ? (
               <Link className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100" href="/c/sample/guide">
                 샘플 사용 가이드

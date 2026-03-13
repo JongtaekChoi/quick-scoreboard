@@ -15,6 +15,7 @@
 npm install
 cp .env.example .env.local
 # fill Supabase envs + ADMIN_PASSWORD
+# optional: NEXT_PUBLIC_SUPPORT_OPENCHAT_URL=https://open.kakao.com/o/.... (문의하기 버튼)
 npm run dev
 ```
 

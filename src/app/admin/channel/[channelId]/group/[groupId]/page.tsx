@@ -19,7 +19,7 @@ type Match = { id: string; seq: number; team_a_id: string | null; team_b_id: str
 type Team = { id: string; name: string }
 type TeamPlayer = { id: string; team_id: string; jersey_no: string; player_name: string; is_active: boolean }
 type GroupEntry = { id: string; team_id: string; player_id: string }
-type GroupGuest = { id: string; team_id: string; source_team_id: string; guest_name: string }
+type GroupGuest = { id: string; team_id: string; source_team_id: string; source_player_id: string | null; guest_name: string }
 type MatchPeriod = { id: string; match_id: string; sequence: number; label: string | null; period_code: string | null }
 type MatchPeriodLineup = { match_period_id: string; team_side: 'A' | 'B'; player_id: string | null }
 
@@ -453,7 +453,7 @@ export default async function AdminGroupPage({
     supabase.from('channel_teams_view').select('id,name').eq('channel_id', channelId).order('last_used_at', { ascending: false }).limit(50).returns<Team[]>(),
     supabase.from('team_players').select('id,team_id,jersey_no,player_name,is_active').eq('channel_id', channelId).eq('is_active', true).order('jersey_no', { ascending: true }).returns<TeamPlayer[]>(),
     supabase.from('match_group_entries').select('id,team_id,player_id').eq('match_group_id', groupId).returns<GroupEntry[]>(),
-    supabase.from('match_group_guests').select('id,team_id,source_team_id,guest_name').eq('match_group_id', groupId).returns<GroupGuest[]>(),
+    supabase.from('match_group_guests').select('id,team_id,source_team_id,source_player_id,guest_name').eq('match_group_id', groupId).returns<GroupGuest[]>(),
   ])
 
   if (!channel || !group) return <main className="p-6">리그/그룹을 찾을 수 없습니다.</main>
@@ -481,10 +481,12 @@ export default async function AdminGroupPage({
   ])
 
   const playersByTeam = new Map<string, TeamPlayer[]>()
+  const playersById = new Map<string, TeamPlayer>()
   for (const p of players ?? []) {
     const arr = playersByTeam.get(p.team_id) ?? []
     arr.push(p)
     playersByTeam.set(p.team_id, arr)
+    playersById.set(p.id, p)
   }
 
   const entriesByTeam = new Map<string, GroupEntry[]>()
@@ -721,6 +723,20 @@ export default async function AdminGroupPage({
                               const teamEntries = entriesByTeam.get(side.teamId) ?? []
                               const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
                               const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
+                              const guest = guestByTeam.get(side.teamId)
+                              if (guest?.source_player_id) {
+                                const guestSource = playersById.get(guest.source_player_id)
+                                const alreadyIncluded = candidates.some((p) => p.id === guest.source_player_id)
+                                if (!alreadyIncluded) {
+                                  candidates.push({
+                                    id: guest.source_player_id,
+                                    team_id: side.teamId,
+                                    jersey_no: guestSource?.jersey_no ?? '',
+                                    player_name: `${guest.guest_name} (용병)`,
+                                    is_active: true,
+                                  })
+                                }
+                              }
                               const lineupSelected = period
                                 ? lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
                                 : new Set<string>()
@@ -739,7 +755,7 @@ export default async function AdminGroupPage({
                                     {candidates.map((p) => (
                                       <label key={`${m.id}-${seq}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
                                         <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
-                                        <span>#{p.jersey_no} {p.player_name}</span>
+                                        <span>{p.jersey_no ? `#${p.jersey_no} ` : ''}{p.player_name}</span>
                                       </label>
                                     ))}
                                   </div>

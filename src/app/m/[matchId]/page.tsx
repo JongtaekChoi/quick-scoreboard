@@ -1867,7 +1867,7 @@ export default async function MatchDetailPage({
             >
               <input type="hidden" name="undo_ids" value={undo ?? ""} />
               <input type="hidden" name="undo_until" value={undo_until ?? ""} />
-              <span>최근 교체를 취소할 수 있어.</span>
+              <span>최근 교체를 취소할 수 있습니다.</span>
               <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
                 교체 취소
               </PendingSubmitButton>
@@ -2088,7 +2088,7 @@ export default async function MatchDetailPage({
                     />
                   </div>
 
-                <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해줘.</div>
+                <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해 주세요.</div>
 
                 {reservablePeriods.length > 0 ? (
                   <div className="rounded border p-2 space-y-1 text-xs">

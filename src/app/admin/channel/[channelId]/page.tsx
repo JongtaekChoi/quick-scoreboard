@@ -6,6 +6,7 @@ import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
+type GroupMatch = { match_group_id: string | null; team_a_name: string; team_b_name: string }
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -139,13 +140,30 @@ export default async function AdminChannelPage({
     redirect(`/admin/channel/${channelId}/manager-entries`)
   }
 
-  const { data: groups } = await supabase
-    .from('match_groups')
-    .select('id,play_date,venue,title,seq')
-    .eq('channel_id', channelId)
-    .order('play_date', { ascending: false })
-    .order('seq', { ascending: true })
-    .returns<MatchGroup[]>()
+  const [{ data: groups }, { data: groupMatches }] = await Promise.all([
+    supabase
+      .from('match_groups')
+      .select('id,play_date,venue,title,seq')
+      .eq('channel_id', channelId)
+      .order('play_date', { ascending: false })
+      .order('seq', { ascending: true })
+      .returns<MatchGroup[]>(),
+    supabase
+      .from('matches')
+      .select('match_group_id,team_a_name,team_b_name')
+      .eq('channel_id', channelId)
+      .not('match_group_id', 'is', null)
+      .returns<GroupMatch[]>(),
+  ])
+
+  const teamNamesByGroup = new Map<string, string[]>()
+  for (const m of groupMatches ?? []) {
+    if (!m.match_group_id) continue
+    const set = new Set(teamNamesByGroup.get(m.match_group_id) ?? [])
+    set.add(m.team_a_name)
+    set.add(m.team_b_name)
+    teamNamesByGroup.set(m.match_group_id, Array.from(set).sort())
+  }
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -192,30 +210,52 @@ export default async function AdminChannelPage({
           {(groups ?? []).length === 0 ? (
             <p className="text-sm text-gray-500">경기그룹이 없습니다.</p>
           ) : (
-            (groups ?? []).map((g) => (
-              <div key={g.id} className="rounded border p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-sm">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</div>
-                    <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
+            (groups ?? []).map((g) => {
+              const participantTeams = teamNamesByGroup.get(g.id) ?? []
+              return (
+                <div key={g.id} className="rounded border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-sm">{g.title ?? `${g.play_date}${g.venue ? ` · ${g.venue}` : ''}`}</div>
+                      <div className="text-xs text-gray-500">{g.play_date} {g.venue ? `· ${g.venue}` : ''}</div>
+                    </div>
+                    <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
+                      {managerTeamId ? '이 그룹 엔트리 관리' : '이 그룹 경기 관리'}
+                    </Link>
                   </div>
-                  <Link className="underline text-sm" href={`/admin/channel/${channel.id}/group/${g.id}?from=${fromChannel ? 'channel' : 'admin'}`}>
-                    {managerTeamId ? '이 그룹 엔트리 관리' : '이 그룹 경기 관리'}
-                  </Link>
+
+                  <div className="space-y-1">
+                    <div className="text-xs text-gray-500">참여팀</div>
+                    {participantTeams.length === 0 ? (
+                      <div className="text-xs text-gray-400">등록된 경기가 없어 참여팀이 없습니다.</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {participantTeams.map((teamName) => (
+                          <span key={`${g.id}-${teamName}`} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                            {teamName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {!managerTeamId ? (
+                    <details className="rounded bg-gray-50 p-2">
+                      <summary className="cursor-pointer text-xs font-medium text-gray-700">그룹 정보 수정</summary>
+                      <form action={updateGroupMeta} className="mt-2 grid md:grid-cols-5 gap-2 items-center">
+                        <input type="hidden" name="channelId" value={channel.id} />
+                        <input type="hidden" name="groupId" value={g.id} />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="play_date" type="date" defaultValue={g.play_date} required />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" defaultValue={g.venue ?? ''} />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" defaultValue={g.title ?? ''} />
+                        <input className="rounded border px-2 py-1.5 text-sm" name="first_kickoff_time" type="time" placeholder="1경기 시작시간" />
+                        <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
+                      </form>
+                    </details>
+                  ) : null}
                 </div>
-                {!managerTeamId ? (
-                  <form action={updateGroupMeta} className="grid md:grid-cols-5 gap-2 items-center">
-                    <input type="hidden" name="channelId" value={channel.id} />
-                    <input type="hidden" name="groupId" value={g.id} />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="play_date" type="date" defaultValue={g.play_date} required />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" defaultValue={g.venue ?? ''} />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" defaultValue={g.title ?? ''} />
-                    <input className="rounded border px-2 py-1.5 text-sm" name="first_kickoff_time" type="time" placeholder="1경기 시작시간" />
-                    <button className="rounded border px-2 py-1.5 text-xs" type="submit">그룹 정보 수정</button>
-                  </form>
-                ) : null}
-              </div>
-            ))
+              )
+            })
           )}
         </section>
       </section>

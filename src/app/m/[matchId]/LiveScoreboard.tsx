@@ -61,6 +61,7 @@ type MatchMini = {
 
 type PeriodStarterSummary = {
   id: string;
+  period_sequence: number;
   label: string;
   teamA: string;
   teamB: string;
@@ -264,7 +265,7 @@ function LiveScoreboardInner({
     text: `${p.label} START`,
     created_at: new Date(0).toISOString(),
     minute: p.startMinute,
-    period_sequence: idx + 1,
+    period_sequence: p.period_sequence,
     label: p.label,
     teamA: p.teamA,
     teamB: p.teamB,
@@ -284,7 +285,7 @@ function LiveScoreboardInner({
     (() => {
       const typePriority: Record<"starter" | "goal" | "replace", number> = {
         goal: 0,
-        replace: 1,
+        replace: 0,
         starter: 2,
       };
       const withMeta = [
@@ -297,7 +298,9 @@ function LiveScoreboardInner({
         .sort((a, b) => {
           if (a.period_sequence !== b.period_sequence) return b.period_sequence - a.period_sequence;
           if (a.minute !== b.minute) return b.minute - a.minute;
-          if (a.type !== b.type) return typePriority[a.type] - typePriority[b.type];
+          if (a.type !== b.type && (a.type === "starter" || b.type === "starter")) {
+            return typePriority[a.type] - typePriority[b.type];
+          }
           return new Date(b.event.created_at).getTime() - new Date(a.event.created_at).getTime();
         })
         .map(({ type, event }) => ({ type, event }));

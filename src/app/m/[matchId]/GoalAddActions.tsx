@@ -77,14 +77,14 @@ export default function GoalAddActions({
                 <label className="block text-xs text-gray-600 mb-1">득점 선수</label>
                 <select name="scorer" value={scorer} onChange={(e) => setScorer(e.target.value)} className="w-full rounded border px-2 py-1.5 text-sm">
                   <option value="">선수 선택</option>
-                  {roster.map((p) => <option key={`s-${p.value}`} value={p.value}>{p.playerName}</option>)}
+                  {roster.map((p) => <option key={`s-${p.value}`} value={p.value}>{p.jerseyNo ? `#${p.jerseyNo} ` : ''}{p.playerName}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">어시스트 선수</label>
                 <select name="assist" className="w-full rounded border px-2 py-1.5 text-sm">
                   <option value="">없음</option>
-                  {assistRoster.map((p) => <option key={`a-${p.value}`} value={p.value}>{p.playerName}</option>)}
+                  {assistRoster.map((p) => <option key={`a-${p.value}`} value={p.value}>{p.jerseyNo ? `#${p.jerseyNo} ` : ''}{p.playerName}</option>)}
                 </select>
               </div>
               <div className="flex justify-end">

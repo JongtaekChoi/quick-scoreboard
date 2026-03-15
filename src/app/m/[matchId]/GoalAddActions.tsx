@@ -13,6 +13,10 @@ export default function GoalAddActions({
   rosterA,
   rosterB,
   defaultMinute,
+  periodState,
+  firstHalfStartedAt,
+  secondHalfStartedAt,
+  firstHalfBaseMinute,
 }: {
   actionA: (formData: FormData) => void | Promise<void>
   actionB: (formData: FormData) => void | Promise<void>
@@ -21,21 +25,38 @@ export default function GoalAddActions({
   rosterA: RosterPlayer[]
   rosterB: RosterPlayer[]
   defaultMinute: number
+  periodState: 'pre' | 'first_half' | 'halftime' | 'second_half' | 'ended'
+  firstHalfStartedAt: string | null
+  secondHalfStartedAt: string | null
+  firstHalfBaseMinute: number
 }) {
   const [open, setOpen] = useState<'A' | 'B' | null>(null)
   const [scorer, setScorer] = useState('')
+  const [minuteValue, setMinuteValue] = useState<number>(defaultMinute)
   const roster = open === 'A' ? rosterA : rosterB
   const teamName = open === 'A' ? teamAName : teamBName
   const action = open === 'A' ? actionA : actionB
   const assistRoster = useMemo(() => roster.filter((p) => p.value !== scorer), [roster, scorer])
 
+  function currentMinuteValue() {
+    const now = Date.now()
+    if (periodState === 'first_half' && firstHalfStartedAt) {
+      return Math.max(0, Math.floor((now - new Date(firstHalfStartedAt).getTime()) / 60000))
+    }
+    if (periodState === 'second_half' && secondHalfStartedAt) {
+      const secondHalfElapsed = Math.max(0, Math.floor((now - new Date(secondHalfStartedAt).getTime()) / 60000))
+      return firstHalfBaseMinute + secondHalfElapsed
+    }
+    return defaultMinute
+  }
+
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="rounded border bg-black text-white px-4 py-3 text-lg font-semibold" onClick={() => { setScorer(''); setOpen('A') }}>
+        <button type="button" className="rounded border bg-black text-white px-4 py-3 text-lg font-semibold" onClick={() => { setScorer(''); setMinuteValue(currentMinuteValue()); setOpen('A') }}>
           {teamAName} +1
         </button>
-        <button type="button" className="rounded border bg-black text-white px-4 py-3 text-lg font-semibold" onClick={() => { setScorer(''); setOpen('B') }}>
+        <button type="button" className="rounded border bg-black text-white px-4 py-3 text-lg font-semibold" onClick={() => { setScorer(''); setMinuteValue(currentMinuteValue()); setOpen('B') }}>
           {teamBName} +1
         </button>
       </div>
@@ -50,7 +71,7 @@ export default function GoalAddActions({
             <form action={action} className="space-y-2">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">분</label>
-                <input name="minute" type="number" min={0} max={200} defaultValue={defaultMinute} className="w-full rounded border px-2 py-1.5 text-sm" />
+                <input name="minute" type="number" min={0} max={200} value={minuteValue} onChange={(e) => setMinuteValue(Math.max(0, Number(e.target.value) || 0))} className="w-full rounded border px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">득점 선수</label>

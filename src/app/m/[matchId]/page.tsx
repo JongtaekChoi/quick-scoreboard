@@ -15,6 +15,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
+import LiveMinuteBadge from "./LiveMinuteBadge";
 import {
   getPeriodDisplayLabel,
   summarizeLegacyPeriodControl,
@@ -1701,6 +1702,7 @@ export default async function MatchDetailPage({
     }));
 
   const periodStarters = sortedPeriods
+    .filter((p) => p.status !== "pending")
     .map((p) => {
       const rowsA = (periodLineups ?? []).filter(
         (row) => row.match_period_id === p.id && row.team_side === "A",
@@ -1717,13 +1719,14 @@ export default async function MatchDetailPage({
 
       return {
         id: p.id,
+        period_sequence: p.sequence,
         label: getPeriodDisplayLabel(p.sequence, p),
         startMinute: Math.max(0, (p.sequence - 1) * firstHalfBaseMinute),
         teamA: rowsA.map(toLabel).join(", "),
         teamB: rowsB.map(toLabel).join(", "),
       };
     })
-    .filter(Boolean) as { id: string; label: string; startMinute: number; teamA: string; teamB: string }[];
+    .filter(Boolean) as { id: string; period_sequence: number; label: string; startMinute: number; teamA: string; teamB: string }[];
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
@@ -1927,6 +1930,10 @@ export default async function MatchDetailPage({
                   return active.length > 0 ? active : rosterB;
                 })()}
                 defaultMinute={goalDefaultMinute}
+                periodState={match.period_state}
+                firstHalfStartedAt={match.first_half_started_at}
+                secondHalfStartedAt={match.second_half_started_at}
+                firstHalfBaseMinute={firstHalfBaseMinute}
               />
             ) : null}
 
@@ -1935,7 +1942,12 @@ export default async function MatchDetailPage({
                 <span className="text-gray-500">
                   현재:{" "}
                   {periodControlSummary.statusLabel}
-                  {elapsedMinutes !== null ? ` · ${elapsedMinutes}분` : ""}
+                  <LiveMinuteBadge
+                    periodState={match.period_state}
+                    firstHalfStartedAt={match.first_half_started_at}
+                    secondHalfStartedAt={match.second_half_started_at}
+                    firstHalfBaseMinute={firstHalfBaseMinute}
+                  />
                 </span>
                 {canStartPeriod ? (
                   <form action={startPeriodAction}>

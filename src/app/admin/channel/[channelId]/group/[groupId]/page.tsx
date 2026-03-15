@@ -212,6 +212,50 @@ async function deleteMatch(formData: FormData) {
   redirect(`/admin/channel/${channelId}/group/${groupId}`)
 }
 
+async function applyForfeitResult(formData: FormData) {
+  'use server'
+  const channelId = String(formData.get('channelId') || '')
+  const groupId = String(formData.get('groupId') || '')
+  const matchId = String(formData.get('matchId') || '')
+  const winnerSide = String(formData.get('winnerSide') || '') as 'A' | 'B'
+
+  const manage = await canManageChannel(channelId)
+  if (!manage.allowed) {
+    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
+    redirect('/admin/login')
+  }
+  if (manage.managerTeamId) {
+    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+  }
+
+  if (!channelId || !groupId || !matchId || (winnerSide !== 'A' && winnerSide !== 'B')) return
+
+  const supabase = getSupabaseServerClient()
+  if (!supabase) return
+
+  const now = new Date().toISOString()
+
+  await supabase
+    .from('matches')
+    .update({
+      status: 'ended',
+      period_state: 'ended',
+      score_a: winnerSide === 'A' ? 3 : 0,
+      score_b: winnerSide === 'B' ? 3 : 0,
+      ended_at: now,
+      scheduled_start_at: null,
+    })
+    .eq('id', matchId)
+
+  await supabase
+    .from('match_periods')
+    .update({ status: 'ended', ended_at: now })
+    .eq('match_id', matchId)
+    .is('deleted_at', null)
+
+  redirect(`/admin/channel/${channelId}/group/${groupId}`)
+}
+
 async function saveGroupEntries(formData: FormData) {
   'use server'
   const channelId = String(formData.get('channelId') || '')
@@ -848,14 +892,30 @@ export default async function AdminGroupPage({
                   <button className="md:col-span-2 rounded border px-2 py-1.5 text-xs h-9" type="submit">수정 저장</button>
                 </form>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link className="underline text-xs" href={`/m/${m.id}`}>경기 화면</Link>
-                  <form action={deleteMatch}>
-                    <input type="hidden" name="channelId" value={channel.id} />
-                    <input type="hidden" name="groupId" value={group.id} />
-                    <input type="hidden" name="matchId" value={m.id} />
-                    <button className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" type="submit">경기 삭제</button>
-                  </form>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <form action={applyForfeitResult}>
+                      <input type="hidden" name="channelId" value={channel.id} />
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="winnerSide" value="A" />
+                      <PendingSubmitButton className="rounded border border-amber-300 text-amber-800 px-2 py-1 text-xs" pendingText="처리중..." confirmMessage="A팀 몰수승(3:0)으로 처리하시겠습니까?">A팀 몰수승(3:0)</PendingSubmitButton>
+                    </form>
+                    <form action={applyForfeitResult}>
+                      <input type="hidden" name="channelId" value={channel.id} />
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <input type="hidden" name="winnerSide" value="B" />
+                      <PendingSubmitButton className="rounded border border-amber-300 text-amber-800 px-2 py-1 text-xs" pendingText="처리중..." confirmMessage="B팀 몰수승(3:0)으로 처리하시겠습니까?">B팀 몰수승(3:0)</PendingSubmitButton>
+                    </form>
+                    <form action={deleteMatch}>
+                      <input type="hidden" name="channelId" value={channel.id} />
+                      <input type="hidden" name="groupId" value={group.id} />
+                      <input type="hidden" name="matchId" value={m.id} />
+                      <button className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" type="submit">경기 삭제</button>
+                    </form>
+                  </div>
                 </div>
               </div>
                 ))

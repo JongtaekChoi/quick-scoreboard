@@ -279,6 +279,27 @@ async function saveGroupEntries(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
+  if (manage.managerTeamId) {
+    const [{ data: ownTeam }, { data: groupMatches }] = await Promise.all([
+      supabase.from('teams').select('name').eq('id', manage.managerTeamId).maybeSingle<{ name: string }>(),
+      supabase
+        .from('matches')
+        .select('team_a_id,team_b_id,team_a_name,team_b_name')
+        .eq('match_group_id', groupId)
+        .returns<{ team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string }[]>(),
+    ])
+
+    const participates = (groupMatches ?? []).some((m) => {
+      const byId = m.team_a_id === manage.managerTeamId || m.team_b_id === manage.managerTeamId
+      const byName = ownTeam?.name ? m.team_a_name === ownTeam.name || m.team_b_name === ownTeam.name : false
+      return byId || byName
+    })
+
+    if (!participates) {
+      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_not_in_group`)
+    }
+  }
+
   const { data: team } = await supabase
     .from('teams')
     .select('id,name')
@@ -404,6 +425,27 @@ async function saveMatchStarters(formData: FormData) {
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
+
+  if (manage.managerTeamId) {
+    const [{ data: ownTeam }, { data: groupMatches }] = await Promise.all([
+      supabase.from('teams').select('name').eq('id', manage.managerTeamId).maybeSingle<{ name: string }>(),
+      supabase
+        .from('matches')
+        .select('team_a_id,team_b_id,team_a_name,team_b_name')
+        .eq('match_group_id', groupId)
+        .returns<{ team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string }[]>(),
+    ])
+
+    const participates = (groupMatches ?? []).some((m) => {
+      const byId = m.team_a_id === manage.managerTeamId || m.team_b_id === manage.managerTeamId
+      const byName = ownTeam?.name ? m.team_a_name === ownTeam.name || m.team_b_name === ownTeam.name : false
+      return byId || byName
+    })
+
+    if (!participates) {
+      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_not_in_group`)
+    }
+  }
 
   const { data: period } = await supabase
     .from('match_periods')
@@ -573,6 +615,14 @@ export default async function AdminGroupPage({
     matchTeamNames.add(m.team_b_name)
   }
   const matchTeams = (teams ?? []).filter((t) => matchTeamNames.has(t.name))
+  const managerTeamName = managerTeamId ? teamNameMap.get(managerTeamId) ?? null : null
+  const managerParticipatesInGroup = managerTeamId
+    ? (matches ?? []).some((m) => {
+        const byId = m.team_a_id === managerTeamId || m.team_b_id === managerTeamId
+        const byName = managerTeamName ? m.team_a_name === managerTeamName || m.team_b_name === managerTeamName : false
+        return byId || byName
+      })
+    : false
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
@@ -602,6 +652,7 @@ export default async function AdminGroupPage({
           {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
           {err === 'starter_period' ? <p className="text-xs text-red-600">선발 period를 확인해 주세요.</p> : null}
           {err === 'starter_copy' ? <p className="text-xs text-red-600">이전 period 선발 복사에 실패했습니다.</p> : null}
+          {err === 'team_not_in_group' ? <p className="text-xs text-red-600">이 경기그룹에 참여하는 팀만 엔트리를 제출할 수 있습니다.</p> : null}
         </header>
 
         {!managerTeamId && (
@@ -621,7 +672,13 @@ export default async function AdminGroupPage({
           </nav>
         )}
 
-        {(managerTeamId || tab === 'entries') && (<section className="rounded border p-4 space-y-2">
+        {managerTeamId && !managerParticipatesInGroup ? (
+          <section className="rounded border p-4">
+            <p className="text-xs text-gray-600">이 경기그룹에 참여하지 않는 팀은 엔트리를 제출할 수 없습니다.</p>
+          </section>
+        ) : null}
+
+        {((managerTeamId && managerParticipatesInGroup) || tab === 'entries') && (<section className="rounded border p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">출전 엔트리 선택</h2>
             {!managerTeamId && (
@@ -732,7 +789,7 @@ export default async function AdminGroupPage({
           })()}
         </section>)}
 
-        {(managerTeamId || tab === 'entries') && (matches ?? []).length > 0 ? (
+        {((managerTeamId && managerParticipatesInGroup) || tab === 'entries') && (matches ?? []).length > 0 ? (
           <section className="rounded border p-4 space-y-3">
             <h2 className="text-sm font-semibold">경기별 선발 제출</h2>
             <p className="text-xs text-gray-500">선발은 경기 시작 전 미리 제출하고, 필요 시 다시 저장해 수정할 수 있습니다.</p>

@@ -629,9 +629,9 @@ export default async function AdminGroupPage({
                 <input type="hidden" name="channelId" value={channel.id} />
                 <input type="hidden" name="groupId" value={group.id} />
                 <input type="hidden" name="next" value={group.entry_confirmed_at ? '0' : '1'} />
-                <button className="rounded border px-3 py-1.5 text-xs" type="submit">
+                <PendingSubmitButton className="rounded border px-3 py-1.5 text-xs" pendingText="처리중...">
                   {group.entry_confirmed_at ? '엔트리 확정 해제' : '엔트리 확정'}
-                </button>
+                </PendingSubmitButton>
               </form>
             )}
           </div>
@@ -849,7 +849,7 @@ export default async function AdminGroupPage({
                   <input className="rounded border px-2 py-1.5 text-sm w-full" type="number" name="period_count" min={1} max={12} defaultValue={2} />
                   <div className="text-[11px] text-gray-500">예: 2=전/후반, 4=1~4쿼터</div>
                 </div>
-                <button className="md:col-span-3 rounded border px-3 py-2 text-sm h-10" type="submit">경기 추가</button>
+                <PendingSubmitButton className="md:col-span-3 rounded border px-3 py-2 text-sm h-10" pendingText="추가중...">경기 추가</PendingSubmitButton>
               </form>
             </section>
 
@@ -889,7 +889,7 @@ export default async function AdminGroupPage({
                     <label className="block text-[11px] text-gray-600">시작시간</label>
                     <input className="rounded border px-2 py-1.5 text-sm w-full" type="time" name="scheduled_start_time" defaultValue={toTimeLocalValue(m.scheduled_start_at)} />
                   </div>
-                  <button className="md:col-span-2 rounded border px-2 py-1.5 text-xs h-9" type="submit">수정 저장</button>
+                  <PendingSubmitButton className="md:col-span-2 rounded border px-2 py-1.5 text-xs h-9" pendingText="저장중...">수정 저장</PendingSubmitButton>
                 </form>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -913,7 +913,7 @@ export default async function AdminGroupPage({
                       <input type="hidden" name="channelId" value={channel.id} />
                       <input type="hidden" name="groupId" value={group.id} />
                       <input type="hidden" name="matchId" value={m.id} />
-                      <button className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" type="submit">경기 삭제</button>
+                      <PendingSubmitButton className="rounded border border-red-300 text-red-700 px-2 py-1 text-xs" pendingText="삭제중..." confirmMessage="정말 경기 삭제하시겠습니까?">경기 삭제</PendingSubmitButton>
                     </form>
                   </div>
                 </div>

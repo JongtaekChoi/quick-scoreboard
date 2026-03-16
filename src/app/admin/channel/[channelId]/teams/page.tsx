@@ -5,6 +5,7 @@ import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo } from '@/lib/channelSession'
 import { ensureTeamInChannel } from '@/lib/teamHelpers'
 import ImportTeamForm from './ImportTeamForm'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type Team = { id: string; name: string; color_hex: string | null; last_used_at: string }
@@ -199,7 +200,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
             <input type="hidden" name="channelId" value={channel.id} />
             <input className="rounded border px-2 py-1.5 text-sm" name="name" placeholder="팀명" required />
             <input className="h-10 w-full rounded border px-2 py-1.5 text-sm" type="color" name="color_hex" defaultValue="#9CA3AF" aria-label="팀 컬러" />
-            <button className="rounded border px-3 py-2 text-sm" type="submit">팀 저장</button>
+            <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="저장중...">팀 저장</PendingSubmitButton>
           </form>
         </section>
 
@@ -222,7 +223,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
                   <span className="inline-block h-3 w-3 rounded-sm border border-black/10" style={{ backgroundColor: t.color_hex ?? '#D1D5DB' }} />
                   <input className="rounded border px-2 py-1.5 text-sm" name="name" defaultValue={t.name} required />
                   <input className="h-9 w-12 rounded border px-1" type="color" name="color_hex" defaultValue={t.color_hex ?? '#9CA3AF'} aria-label={`${t.name} 팀 컬러`} />
-                  <button className="rounded border px-2 py-1.5 text-xs" type="submit">저장</button>
+                  <PendingSubmitButton className="rounded border px-2 py-1.5 text-xs" pendingText="저장중...">저장</PendingSubmitButton>
                 </form>
               </div>
             ))

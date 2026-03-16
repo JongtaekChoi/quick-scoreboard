@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PendingSubmitButton from "@/components/PendingSubmitButton";
 
 export default function LoginModal({
   slug,
@@ -65,12 +66,9 @@ export default function LoginModal({
                 placeholder="비밀번호"
                 required
               />
-              <button
-                className="w-full rounded border px-2 py-1 text-sm"
-                type="submit"
-              >
+              <PendingSubmitButton className="w-full rounded border px-2 py-1 text-sm" pendingText="로그인중...">
                 로그인
-              </button>
+              </PendingSubmitButton>
             </form>
           </div>
         </div>

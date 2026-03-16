@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -201,7 +202,7 @@ export default async function AdminChannelPage({
               <input className="rounded border px-2 py-1.5 text-sm" name="play_date" type="date" required />
               <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" />
               <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" />
-              <button className="rounded border px-3 py-2 text-sm" type="submit">생성</button>
+              <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="생성중...">생성</PendingSubmitButton>
             </form>
           </section>
         )}
@@ -249,7 +250,7 @@ export default async function AdminChannelPage({
                         <input className="rounded border px-2 py-1.5 text-sm" name="venue" placeholder="구장(선택)" defaultValue={g.venue ?? ''} />
                         <input className="rounded border px-2 py-1.5 text-sm" name="title" placeholder="그룹 제목(선택)" defaultValue={g.title ?? ''} />
                         <input className="rounded border px-2 py-1.5 text-sm" name="first_kickoff_time" type="time" placeholder="1경기 시작시간" />
-                        <button className="rounded border px-2 py-1.5 text-xs" type="submit">수정 저장</button>
+                        <PendingSubmitButton className="rounded border px-2 py-1.5 text-xs" pendingText="저장중...">수정 저장</PendingSubmitButton>
                       </form>
                     </details>
                   ) : null}

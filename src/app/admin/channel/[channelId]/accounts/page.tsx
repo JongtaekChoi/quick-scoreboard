@@ -5,6 +5,7 @@ import { isAdminAuthorized } from "@/lib/adminAuth";
 import { getAccountInfo } from "@/lib/channelSession";
 import { hashAccountPassword } from "@/lib/passwordHash";
 import UpsertAccountForm from "./UpsertAccountForm";
+import PendingSubmitButton from "@/components/PendingSubmitButton";
 
 type Channel = { id: string; name: string; slug: string };
 type Team = { id: string; name: string };
@@ -323,9 +324,9 @@ export default async function AdminAccountsPage({
           </div>
           <form action={createPlayerAccounts}>
             <input type="hidden" name="channelId" value={channel.id} />
-            <button className="rounded border px-3 py-2 text-sm" type="submit">
+            <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="생성중...">
               선수 계정 일괄 생성 (ID=선수명, PW=1234)
-            </button>
+            </PendingSubmitButton>
           </form>
           <p className="text-[11px] text-gray-500">
             계정을 클릭하면 편집 화면이 열립니다.
@@ -420,7 +421,7 @@ export default async function AdminAccountsPage({
                     </label>
                     <div className="md:col-span-2 flex justify-end gap-2">
                       <Link className="rounded border px-3 py-2 text-sm" href={`/admin/channel/${channel.id}/accounts`}>취소</Link>
-                      <button className="rounded border px-3 py-2 text-sm" type="submit">저장</button>
+                      <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="저장중...">저장</PendingSubmitButton>
                     </div>
                   </form>
                 </div>

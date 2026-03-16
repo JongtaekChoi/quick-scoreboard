@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type ChannelTeam = { channelId: string; channelName: string; teamId: string; teamName: string }
 
@@ -50,7 +51,7 @@ export default function ImportTeamForm({
               <input type="hidden" name="sourceChannelId" value={ct.channelId} />
               <input type="hidden" name="teamId" value={ct.teamId} />
               <span className="text-sm flex-1">{ct.teamName}</span>
-              <button className="rounded border px-2 py-1.5 text-xs" type="submit">가져오기</button>
+              <PendingSubmitButton className="rounded border px-2 py-1.5 text-xs" pendingText="가져오는 중...">가져오기</PendingSubmitButton>
             </form>
           ))}
         </div>

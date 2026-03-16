@@ -3,6 +3,7 @@ import Breadcrumb from '@/components/Breadcrumb'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo, createAccountSession } from '@/lib/channelSession'
 import { hashAccountPassword } from '@/lib/passwordHash'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Channel = { id: string; slug: string; name: string; edit_session_version: number }
 type AccountRow = { id: string; role: 'admin' | 'manager' | 'player'; login_id: string; team_id: string | null; session_version: number; must_change_password: boolean }
@@ -114,7 +115,7 @@ export default async function ChannelAccountPage({
           <input type="hidden" name="next" value={next ?? ''} />
           <input className="w-full rounded border px-3 py-2 text-sm" name="newPassword" type="password" placeholder="새 비밀번호 (최소 4자)" required minLength={4} />
           <input className="w-full rounded border px-3 py-2 text-sm" name="confirmPassword" type="password" placeholder="새 비밀번호 확인" required minLength={4} />
-          <button className="rounded border px-3 py-2 text-sm" type="submit">비밀번호 변경</button>
+          <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="변경중...">비밀번호 변경</PendingSubmitButton>
         </form>
       </section>
     </main>

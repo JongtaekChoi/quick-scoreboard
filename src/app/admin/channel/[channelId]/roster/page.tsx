@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo } from '@/lib/channelSession'
+import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type Team = { id: string; name: string }
@@ -155,7 +156,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
                         <input type="hidden" name="teamId" value={t.id} />
                         <input className="rounded border px-2 py-1.5 text-sm" name="jersey_no" placeholder="등번호" required />
                         <input className="rounded border px-2 py-1.5 text-sm" name="player_name" placeholder="이름" required />
-                        <button className="rounded border px-3 py-2 text-sm" type="submit">멤버 추가/수정</button>
+                        <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="저장중...">멤버 추가/수정</PendingSubmitButton>
                       </form>
 
                       {list.length === 0 ? (
@@ -172,7 +173,7 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
                                 <input type="hidden" name="channelId" value={channel.id} />
                                 <input type="hidden" name="playerId" value={p.id} />
                                 <input type="hidden" name="next" value={p.is_active ? '0' : '1'} />
-                                <button className="text-xs underline" type="submit">{p.is_active ? '비활성화' : '활성화'}</button>
+                                <PendingSubmitButton className="text-xs underline" pendingText="처리중...">{p.is_active ? '비활성화' : '활성화'}</PendingSubmitButton>
                               </form>
                             </li>
                           ))}

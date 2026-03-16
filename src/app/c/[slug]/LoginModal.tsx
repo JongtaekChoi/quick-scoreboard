@@ -10,6 +10,7 @@ export default function LoginModal({
   accError?: boolean;
 }) {
   const [open, setOpen] = useState(!!accError);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
     <>
@@ -50,6 +51,7 @@ export default function LoginModal({
               action={`/c/${encodeURIComponent(slug)}/login`}
               method="post"
               className="space-y-2"
+              onSubmit={() => setIsSubmitting(true)}
             >
               <input
                 className="w-full rounded border px-2 py-1 text-sm"
@@ -66,10 +68,11 @@ export default function LoginModal({
                 required
               />
               <button
-                className="w-full rounded border px-2 py-1 text-sm"
+                className="w-full rounded border px-2 py-1 text-sm disabled:opacity-60"
                 type="submit"
+                disabled={isSubmitting}
               >
-                로그인
+                {isSubmitting ? "로그인중..." : "로그인"}
               </button>
             </form>
           </div>

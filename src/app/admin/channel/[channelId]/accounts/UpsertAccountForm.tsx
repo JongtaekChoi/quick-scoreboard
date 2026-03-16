@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PendingSubmitButton from "@/components/PendingSubmitButton";
 
 interface Props {
   upsertAccount(formData: FormData): void;
@@ -58,9 +59,9 @@ export default function UpsertAccountForm({
           ))}
         </select>
       ) : null}
-      <button className="rounded border px-3 py-2 text-sm" type="submit">
+      <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="저장중...">
         저장
-      </button>
+      </PendingSubmitButton>
     </form>
   );
 }

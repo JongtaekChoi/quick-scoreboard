@@ -8,6 +8,7 @@ import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GoalAddActions from "./GoalAddActions";
+import GoalEditModal from "./GoalEditModal";
 import LiveScoreboard from "./LiveScoreboard";
 import MatchEditHelp from "./MatchEditHelp";
 import ShareButton from "@/components/ShareButton";
@@ -657,9 +658,13 @@ async function updateGoalEvent(
     }
     return { playerId: null, name: raw || null };
   };
+  const normalizeStoredName = (name: string | null) =>
+    name ? name.replace(/^#\S+\s+/, "").trim() || null : null;
 
-  const scorer = parsePlayerValue(scorerRaw);
-  const assist = parsePlayerValue(assistRaw);
+  const scorerParsed = parsePlayerValue(scorerRaw);
+  const assistParsed = parsePlayerValue(assistRaw);
+  const scorer = { ...scorerParsed, name: normalizeStoredName(scorerParsed.name) };
+  const assist = { ...assistParsed, name: normalizeStoredName(assistParsed.name) };
 
   await supabase
     .from("goal_events")
@@ -698,7 +703,7 @@ async function updateGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
+  redirect(`/m/${matchId}?mode=edit&ok=goal_saved`);
 }
 
 async function deleteGoalEvent(
@@ -750,7 +755,32 @@ async function deleteGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
+  redirect(`/m/${matchId}?mode=edit&ok=goal_deleted`);
+}
+
+async function updateGoalEventFromForm(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+  const goalId = String(formData.get("goalId") || "").trim();
+  if (!goalId) return;
+  await updateGoalEvent(matchId, goalId, channelSlug, channelVersion, formData);
+}
+
+async function deleteGoalEventFromForm(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+  const goalId = String(formData.get("goalId") || "").trim();
+  const teamSide = String(formData.get("teamSide") || "") as "A" | "B";
+  if (!goalId || (teamSide !== "A" && teamSide !== "B")) return;
+  await deleteGoalEvent(matchId, goalId, teamSide, channelSlug, channelVersion);
 }
 
 async function submitAnonymousRating(
@@ -1211,15 +1241,15 @@ export default async function MatchDetailPage({
 }: {
   params: Promise<{ matchId: string }>;
   searchParams: Promise<{
-    goal?: string;
     err?: string;
     mode?: string;
     undo?: string;
     undo_until?: string;
+    ok?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { goal: goalParam, err, mode, undo, undo_until } = await searchParams;
+  const { err, mode, undo, undo_until, ok } = await searchParams;
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -1565,10 +1595,6 @@ export default async function MatchDetailPage({
     : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const activeGoalId = goalParam ?? "";
-  const activeGoal = activeGoalId
-    ? ((goals ?? []).find((g) => g.id === activeGoalId) ?? null)
-    : null;
   const undoAvailable = !!undo && !!undo_until;
 
   const suggestedNames = Array.from(
@@ -1796,6 +1822,8 @@ export default async function MatchDetailPage({
               </span>
             ) : null}
           </div>
+          {ok === "goal_saved" ? <p className="text-xs text-green-700">이벤트가 저장되었습니다.</p> : null}
+          {ok === "goal_deleted" ? <p className="text-xs text-green-700">이벤트가 삭제되었습니다.</p> : null}
           {err ? (
             <p className="text-xs text-red-600">
               저장 중 오류가 발생했습니다: {err}
@@ -2212,183 +2240,40 @@ export default async function MatchDetailPage({
           </section>
         ) : null}
 
-        {canEditGoalNow ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">
-              현재 편집 이벤트
-            </h2>
-            {!activeGoal || !channel ? (
-              <p className="text-sm text-gray-500">편집할 이벤트가 없습니다.</p>
-            ) : (
-              (() => {
-                const roster = activeGoal.team_side === "A" ? rosterA : rosterB;
-                const hasRoster = roster.length > 0;
-                const findRosterValue = (
-                  playerId: string | null,
-                  playerName: string | null,
-                ) => {
-                  if (playerId) {
-                    const byId = roster.find((p) => p.playerId === playerId);
-                    if (byId) return byId.value;
-                  }
-                  if (playerName) {
-                    const byName = roster.find((p) => p.playerName === playerName);
-                    if (byName) return byName.value;
-                  }
-                  return playerName ?? "";
-                };
-                const scorerDefault = findRosterValue(
-                  activeGoal.scorer_player_id,
-                  activeGoal.scorer_name,
-                );
-                const assistDefault = findRosterValue(
-                  activeGoal.assist_player_id,
-                  activeGoal.assist_name,
-                );
-                return (
-                  <>
-                    <div className="flex items-center justify-between gap-2 text-sm text-gray-700">
-                      <span>
-                        {activeGoal.team_side}팀 ·{" "}
-                        {activeGoal.minute !== null
-                          ? `${activeGoal.minute}분`
-                          : "시간 미설정"}
-                      </span>
-                      <Link
-                        href={`/m/${matchId}?mode=edit`}
-                        className="text-xs underline text-gray-500"
-                      >
-                        선택 해제
-                      </Link>
-                    </div>
-                    <form
-                      key={activeGoal.id}
-                      action={updateGoalEvent.bind(
-                        null,
-                        matchId,
-                        activeGoal.id,
-                        channel.slug,
-                        channel.edit_session_version,
-                      )}
-                      className="grid grid-cols-2 md:grid-cols-3 gap-2"
-                    >
-                      <input
-                        className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                        name="minute"
-                        type="number"
-                        min={0}
-                        placeholder="분"
-                        defaultValue={activeGoal.minute ?? ""}
-                      />
-                      {hasRoster ? (
-                        <select
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          name="scorer"
-                          defaultValue={scorerDefault}
-                        >
-                          <option value="">득점자 선택</option>
-                          {roster.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              #{p.jerseyNo} {p.playerName}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          list="name-suggestions"
-                          name="scorer"
-                          placeholder="득점자"
-                          defaultValue={activeGoal.scorer_name ?? ""}
-                        />
-                      )}
-                      {hasRoster ? (
-                        <select
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          name="assist"
-                          defaultValue={assistDefault}
-                        >
-                          <option value="">어시스트 선택</option>
-                          {roster.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              #{p.jerseyNo} {p.playerName}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          list="name-suggestions"
-                          name="assist"
-                          placeholder="어시"
-                          defaultValue={activeGoal.assist_name ?? ""}
-                        />
-                      )}
-                      <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
-                        <button
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-xs"
-                          type="reset"
-                        >
-                          편집 취소
-                        </button>
-                        <PendingSubmitButton
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-xs"
-                          pendingText="저장중..."
-                        >
-                          이벤트 저장
-                        </PendingSubmitButton>
-                      </div>
-                    </form>
-                    <form
-                      action={deleteGoalEvent.bind(
-                        null,
-                        matchId,
-                        activeGoal.id,
-                        activeGoal.team_side,
-                        channel.slug,
-                        channel.edit_session_version,
-                      )}
-                    >
-                      <PendingSubmitButton
-                        className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs"
-                        pendingText="삭제중..."
-                      >
-                        이벤트 삭제
-                      </PendingSubmitButton>
-                    </form>
-                  </>
-                );
-              })()
+        {rosterA.length === 0 && rosterB.length === 0 ? (
+          <datalist id="name-suggestions">
+            {suggestedNames.map((name) => (
+              <option key={`name-${name}`} value={name} />
+            ))}
+          </datalist>
+        ) : null}
+
+        {canEditGoalNow && channel ? (
+          <GoalEditModal
+            goals={(goals ?? []).map((g) => ({
+              id: g.id,
+              team_side: g.team_side,
+              minute: g.minute,
+              scorer_player_id: g.scorer_player_id,
+              scorer_name: g.scorer_name,
+              assist_player_id: g.assist_player_id,
+              assist_name: g.assist_name,
+            }))}
+            rosterA={rosterA}
+            rosterB={rosterB}
+            updateAction={updateGoalEventFromForm.bind(
+              null,
+              matchId,
+              channel.slug,
+              channel.edit_session_version,
             )}
-
-            {rosterA.length === 0 &&
-            rosterB.length === 0 &&
-            suggestedNames.length > 0 ? (
-              <div className="space-y-1">
-                <div className="text-xs text-gray-500">
-                  이 경기에서 자주 쓴 값 추천
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {suggestedNames.map((name) => (
-                    <span
-                      key={name}
-                      className="text-[11px] rounded-lg border border-gray-200 px-1.5 py-0.5 text-gray-600"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {rosterA.length === 0 && rosterB.length === 0 ? (
-              <datalist id="name-suggestions">
-                {suggestedNames.map((name) => (
-                  <option key={`name-${name}`} value={name} />
-                ))}
-              </datalist>
-            ) : null}
-          </section>
+            deleteAction={deleteGoalEventFromForm.bind(
+              null,
+              matchId,
+              channel.slug,
+              channel.edit_session_version,
+            )}
+          />
         ) : null}
       </section>
     </main>

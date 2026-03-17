@@ -1,18 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import {
-  ReadonlyURLSearchParams,
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { useState, useTransition } from "react";
 import {
   QueryClient,
   QueryClientProvider,
   useQuery,
 } from "@tanstack/react-query";
-import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 type Goal = {
   id: string;
@@ -77,23 +70,19 @@ function EventLine({
   type,
   match,
   readonly,
-  idx,
-  router,
-  searchParams,
-  pathname,
   onStarterClick,
   activeStarterId,
+  selectingGoalId,
+  onSelectGoal,
 }: {
   event: Goal | Replacement | StarterLine;
   type: "goal" | "replace" | "starter";
   match: MatchMini;
   readonly: boolean;
-  idx: number;
-  router: AppRouterInstance;
-  searchParams: ReadonlyURLSearchParams;
-  pathname: string;
   onStarterClick?: (id: string) => void;
   activeStarterId?: string | null;
+  selectingGoalId?: string | null;
+  onSelectGoal?: (id: string) => void;
 }) {
   const g = type == "goal" ? (event as Goal) : null;
   const replacement = type == "replace" ? (event as Replacement) : null;
@@ -103,8 +92,8 @@ function EventLine({
       (g.team_side === "A" ? match.team_a_name : match.team_b_name))
     : "";
   const assist = g?.assist_name ?? "";
-  const currentGoal = searchParams.get("goal");
-  const active = !readonly && (currentGoal ? currentGoal === g?.id : idx === 0);
+  const active = !readonly && !!g?.id && selectingGoalId === g.id;
+  const isSelecting = active;
 
   if (type === "starter") {
     return (
@@ -126,13 +115,10 @@ function EventLine({
       type="button"
       onClick={() => {
         if (readonly || g == null) return;
-        const qs = new URLSearchParams(searchParams.toString());
-        qs.set("goal", g.id);
-        router.replace(`${pathname}?${qs.toString()}`, {
-          scroll: false,
-        });
+        onSelectGoal?.(g.id);
+        window.dispatchEvent(new CustomEvent('qsb:goal-select', { detail: { id: g.id } }));
       }}
-      className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? "bg-white ring-1 ring-gray-300" : "hover:bg-white/70"}`}
+      className={`w-full text-left grid grid-cols-[1fr_auto_1fr] items-center text-xs gap-2 rounded-lg px-2 py-1 ${active ? "bg-white ring-1 ring-gray-300" : "hover:bg-white/70"} ${isSelecting ? "opacity-70" : ""}`}
     >
       <div className="text-right truncate">
         {side === "A" ? (
@@ -152,11 +138,13 @@ function EventLine({
       </div>
 
       <div className="text-gray-500 tabular-nums">
-        {g?.minute !== null && g?.minute !== undefined
-          ? `${g.minute}’`
-          : replacement?.minute !== null && replacement?.minute !== undefined
-            ? `${replacement.minute}’`
-            : ""}
+        {isSelecting
+          ? "선택중..."
+          : g?.minute !== null && g?.minute !== undefined
+            ? `${g.minute}’`
+            : replacement?.minute !== null && replacement?.minute !== undefined
+              ? `${replacement.minute}’`
+              : ""}
       </div>
 
       <div className="truncate">
@@ -196,11 +184,10 @@ function LiveScoreboardInner({
   substitutionEvents?: SubstitutionEvent[];
   periodStarters?: PeriodStarterSummary[];
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [autoUpdate, setAutoUpdate] = useState(false);
   const [selectedStarterId, setSelectedStarterId] = useState<string | null>(null);
+  const [selectingGoalId, setSelectingGoalId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["scoreboard", matchId],
@@ -352,20 +339,21 @@ function LiveScoreboardInner({
         {timeEvents.length === 0 ? (
           <p className="text-xs text-gray-500">이벤트 없음</p>
         ) : (
-          timeEvents.map((event, idx) => {
+          timeEvents.map((event) => {
             return (
               <EventLine
                 key={`${event.type}-${event.event.id}`}
                 event={event.event}
                 type={event.type}
-                router={router}
-                idx={idx}
                 match={match}
-                pathname={pathname}
                 readonly={readonly}
-                searchParams={searchParams}
                 onStarterClick={setSelectedStarterId}
                 activeStarterId={selectedStarterId}
+                selectingGoalId={selectingGoalId}
+                onSelectGoal={(id) => {
+                  startTransition(() => setSelectingGoalId(id));
+                  window.setTimeout(() => setSelectingGoalId((prev) => (prev === id ? null : prev)), 1200);
+                }}
               />
             );
           })

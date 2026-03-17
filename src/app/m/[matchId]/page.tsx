@@ -657,9 +657,13 @@ async function updateGoalEvent(
     }
     return { playerId: null, name: raw || null };
   };
+  const normalizeStoredName = (name: string | null) =>
+    name ? name.replace(/^#\S+\s+/, "").trim() || null : null;
 
-  const scorer = parsePlayerValue(scorerRaw);
-  const assist = parsePlayerValue(assistRaw);
+  const scorerParsed = parsePlayerValue(scorerRaw);
+  const assistParsed = parsePlayerValue(assistRaw);
+  const scorer = { ...scorerParsed, name: normalizeStoredName(scorerParsed.name) };
+  const assist = { ...assistParsed, name: normalizeStoredName(assistParsed.name) };
 
   await supabase
     .from("goal_events")

@@ -2,12 +2,15 @@ export const revalidate = 180;
 
 import { getSupabaseServerClient } from "@/lib/supabase";
 import ExpandableRankingList from "./ExpandableRankingList";
+import ScorerRankingWithLogs from "./ScorerRankingWithLogs";
 import Breadcrumb from "@/components/Breadcrumb";
 import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = { id: string; name: string; slug: string };
 type Match = {
   id: string;
+  match_group_id: string | null;
+  seq: number;
   team_a_id: string | null;
   team_b_id: string | null;
   team_a_name: string;
@@ -18,6 +21,8 @@ type Match = {
 };
 type Goal = {
   match_id: string;
+  minute: number | null;
+  created_at: string;
   scorer_player_id: string | null;
   assist_player_id: string | null;
   scorer_name: string | null;
@@ -65,17 +70,26 @@ export default async function StatsPage({
 
   const { data: matches } = await supabase
     .from("matches")
-    .select("id,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status")
+    .select("id,match_group_id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status")
     .eq("channel_id", channel.id)
     .eq("status", "ended")
     .returns<Match[]>();
 
   const matchIds = (matches ?? []).map((m) => m.id);
+  const groupIds = Array.from(new Set((matches ?? []).map((m) => m.match_group_id).filter((v): v is string => Boolean(v))));
+
+  const { data: groups } = groupIds.length
+    ? await supabase
+        .from("match_groups")
+        .select("id,play_date,title,seq")
+        .in("id", groupIds)
+        .returns<{ id: string; play_date: string; title: string | null; seq: number }[]>()
+    : { data: [] as { id: string; play_date: string; title: string | null; seq: number }[] };
 
   const { data: goals } = matchIds.length
     ? await supabase
         .from("goal_events")
-        .select("match_id,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
+        .select("match_id,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
         .in("match_id", matchIds)
         .is("deleted_at", null)
         .returns<Goal[]>()
@@ -159,24 +173,44 @@ export default async function StatsPage({
 
   const playerById = new Map((players ?? []).map((p) => [p.id, p]));
 
-  const scorerMap = new Map<string, { name: string; team: string; jersey: string | null; goals: number }>();
+  const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
+  const matchById = new Map((matches ?? []).map((m) => [m.id, m]));
+
+  const scorerMap = new Map<string, { key: string; name: string; team: string; jersey: string | null; goals: number }>();
+  const scorerLogs = new Map<string, { matchId: string; matchLabel: string; minute: number | null; assistLabel: string | null; createdAt: string }[]>();
   const assistMap = new Map<string, { name: string; team: string; jersey: string | null; assists: number }>();
 
   for (const g of goals ?? []) {
-    if (g.scorer_player_id) {
-      const p = playerById.get(g.scorer_player_id);
-      const key = `p:${g.scorer_player_id}`;
+    if (g.scorer_player_id || g.scorer_name) {
+      const key = g.scorer_player_id ? `p:${g.scorer_player_id}` : `n:${g.scorer_name}`;
+      const p = g.scorer_player_id ? playerById.get(g.scorer_player_id) : undefined;
       const prev = scorerMap.get(key) ?? {
+        key,
         name: p?.player_name ?? g.scorer_name ?? "-",
         team: p ? (teamNameById.get(p.team_id) ?? "-") : "-",
         jersey: p?.jersey_no ?? null,
         goals: 0,
       };
       scorerMap.set(key, { ...prev, goals: prev.goals + 1 });
-    } else if (g.scorer_name) {
-      const key = `n:${g.scorer_name}`;
-      const prev = scorerMap.get(key) ?? { name: g.scorer_name, team: "-", jersey: null, goals: 0 };
-      scorerMap.set(key, { ...prev, goals: prev.goals + 1 });
+
+      const m = matchById.get(g.match_id);
+      const group = m?.match_group_id ? groupById.get(m.match_group_id) : null;
+      const matchLabel = group
+        ? `${group.play_date} · ${m?.seq ?? "-"}경기 · ${m?.team_a_name ?? ""} vs ${m?.team_b_name ?? ""}`
+        : `${m?.team_a_name ?? "-"} vs ${m?.team_b_name ?? "-"}`;
+      const assistPlayer = g.assist_player_id ? playerById.get(g.assist_player_id) : null;
+      const assistLabel = assistPlayer
+        ? `${assistPlayer.jersey_no ? `#${assistPlayer.jersey_no} ` : ""}${assistPlayer.player_name}`
+        : g.assist_name;
+      const logs = scorerLogs.get(key) ?? [];
+      logs.push({
+        matchId: g.match_id,
+        matchLabel,
+        minute: g.minute,
+        assistLabel: assistLabel ?? null,
+        createdAt: g.created_at,
+      });
+      scorerLogs.set(key, logs);
     }
 
     if (g.assist_player_id) {
@@ -295,8 +329,15 @@ export default async function StatsPage({
             {scorers.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
-              <ExpandableRankingList
-                items={scorers.map((s) => ({ name: s.name, team: s.team, jersey: s.jersey, value: s.goals }))}
+              <ScorerRankingWithLogs
+                items={scorers.map((s) => ({
+                  key: s.key,
+                  name: s.name,
+                  team: s.team,
+                  jersey: s.jersey,
+                  value: s.goals,
+                  logs: scorerLogs.get(s.key) ?? [],
+                }))}
               />
             )}
           </section>

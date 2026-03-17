@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
+import TransientToast from '@/components/TransientToast'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
@@ -125,6 +126,10 @@ export default async function AdminChannelPage({
   const { channelId } = await params
   const { from, err } = await searchParams
   const fromChannel = from === 'channel'
+  const errToastMap: Record<string, string> = {
+    forbidden: '팀장 계정은 경기그룹 생성 권한이 없습니다.',
+  }
+  const errToast = err ? errToastMap[err] : null
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -169,6 +174,7 @@ export default async function AdminChannelPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
+        {errToast ? <TransientToast message={errToast} tone="error" /> : null}
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
@@ -190,7 +196,6 @@ export default async function AdminChannelPage({
               <Link className="underline" href={`/admin/channel/${channel.id}/export`}>엑셀 내보내기</Link>
             </div>
           )}
-          {err === 'forbidden' ? <p className="text-xs text-red-600">팀장 계정은 경기그룹 생성 권한이 없습니다.</p> : null}
         </header>
 
         {managerTeamId ? null : (

@@ -14,6 +14,7 @@ export default function GoalEditForm({
   minuteDefault,
   scorerNameDefault,
   assistNameDefault,
+  goalId,
 }: {
   action: (formData: FormData) => void | Promise<void>
   roster: RosterPlayer[]
@@ -23,12 +24,14 @@ export default function GoalEditForm({
   minuteDefault: number | null
   scorerNameDefault: string | null
   assistNameDefault: string | null
+  goalId: string
 }) {
   const [scorer, setScorer] = useState(scorerDefault)
   const assistRoster = useMemo(() => roster.filter((p) => p.value !== scorer), [roster, scorer])
 
   return (
     <form action={action} className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      <input type="hidden" name="goalId" value={goalId} />
       <input
         className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
         name="minute"

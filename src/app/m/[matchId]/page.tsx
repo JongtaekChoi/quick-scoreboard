@@ -698,7 +698,7 @@ async function updateGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit&ok=goal_saved&goal=${goalId}`);
+  redirect(`/m/${matchId}?mode=edit&ok=goal_saved`);
 }
 
 async function deleteGoalEvent(
@@ -751,6 +751,31 @@ async function deleteGoalEvent(
 
   revalidatePath(`/m/${matchId}`);
   redirect(`/m/${matchId}?mode=edit&ok=goal_deleted`);
+}
+
+async function updateGoalEventFromForm(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+  const goalId = String(formData.get("goalId") || "").trim();
+  if (!goalId) return;
+  await updateGoalEvent(matchId, goalId, channelSlug, channelVersion, formData);
+}
+
+async function deleteGoalEventFromForm(
+  matchId: string,
+  channelSlug: string,
+  channelVersion: number,
+  formData: FormData,
+) {
+  "use server";
+  const goalId = String(formData.get("goalId") || "").trim();
+  const teamSide = String(formData.get("teamSide") || "") as "A" | "B";
+  if (!goalId || (teamSide !== "A" && teamSide !== "B")) return;
+  await deleteGoalEvent(matchId, goalId, teamSide, channelSlug, channelVersion);
 }
 
 async function submitAnonymousRating(
@@ -1211,7 +1236,6 @@ export default async function MatchDetailPage({
 }: {
   params: Promise<{ matchId: string }>;
   searchParams: Promise<{
-    goal?: string;
     err?: string;
     mode?: string;
     undo?: string;
@@ -1220,7 +1244,7 @@ export default async function MatchDetailPage({
   }>;
 }) {
   const { matchId } = await params;
-  const { goal: goalParam, err, mode, undo, undo_until, ok } = await searchParams;
+  const { err, mode, undo, undo_until, ok } = await searchParams;
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -1566,10 +1590,6 @@ export default async function MatchDetailPage({
     : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const activeGoalId = goalParam ?? "";
-  const activeGoal = activeGoalId
-    ? ((goals ?? []).find((g) => g.id === activeGoalId) ?? null)
-    : null;
   const undoAvailable = !!undo && !!undo_until;
 
   const suggestedNames = Array.from(
@@ -2214,52 +2234,32 @@ export default async function MatchDetailPage({
           </datalist>
         ) : null}
 
-        {canEditGoalNow && activeGoal && channel ? (
-          (() => {
-            const roster = activeGoal.team_side === "A" ? rosterA : rosterB;
-            const hasRoster = roster.length > 0;
-            const findRosterValue = (playerId: string | null, playerName: string | null) => {
-              if (playerId) {
-                const byId = roster.find((p) => p.playerId === playerId);
-                if (byId) return byId.value;
-              }
-              if (playerName) {
-                const byName = roster.find((p) => p.playerName === playerName);
-                if (byName) return byName.value;
-              }
-              return playerName ?? "";
-            };
-            const scorerDefault = findRosterValue(activeGoal.scorer_player_id, activeGoal.scorer_name);
-            const assistDefault = findRosterValue(activeGoal.assist_player_id, activeGoal.assist_name);
-
-            return (
-              <GoalEditModal
-                teamSide={activeGoal.team_side}
-                minute={activeGoal.minute}
-                scorerName={activeGoal.scorer_name}
-                assistName={activeGoal.assist_name}
-                roster={roster}
-                hasRoster={hasRoster}
-                scorerDefault={scorerDefault}
-                assistDefault={assistDefault}
-                updateAction={updateGoalEvent.bind(
-                  null,
-                  matchId,
-                  activeGoal.id,
-                  channel.slug,
-                  channel.edit_session_version,
-                )}
-                deleteAction={deleteGoalEvent.bind(
-                  null,
-                  matchId,
-                  activeGoal.id,
-                  activeGoal.team_side,
-                  channel.slug,
-                  channel.edit_session_version,
-                )}
-              />
-            );
-          })()
+        {canEditGoalNow && channel ? (
+          <GoalEditModal
+            goals={(goals ?? []).map((g) => ({
+              id: g.id,
+              team_side: g.team_side,
+              minute: g.minute,
+              scorer_player_id: g.scorer_player_id,
+              scorer_name: g.scorer_name,
+              assist_player_id: g.assist_player_id,
+              assist_name: g.assist_name,
+            }))}
+            rosterA={rosterA}
+            rosterB={rosterB}
+            updateAction={updateGoalEventFromForm.bind(
+              null,
+              matchId,
+              channel.slug,
+              channel.edit_session_version,
+            )}
+            deleteAction={deleteGoalEventFromForm.bind(
+              null,
+              matchId,
+              channel.slug,
+              channel.edit_session_version,
+            )}
+          />
         ) : null}
       </section>
     </main>

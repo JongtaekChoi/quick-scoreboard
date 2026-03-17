@@ -8,6 +8,7 @@ import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GoalAddActions from "./GoalAddActions";
+import GoalEditForm from "./GoalEditForm";
 import LiveScoreboard from "./LiveScoreboard";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
@@ -697,7 +698,7 @@ async function updateGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
+  redirect(`/m/${matchId}?mode=edit&ok=goal_saved&goal=${goalId}`);
 }
 
 async function deleteGoalEvent(
@@ -749,7 +750,7 @@ async function deleteGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
+  redirect(`/m/${matchId}?mode=edit&ok=goal_deleted`);
 }
 
 async function submitAnonymousRating(
@@ -1215,10 +1216,11 @@ export default async function MatchDetailPage({
     mode?: string;
     undo?: string;
     undo_until?: string;
+    ok?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { goal: goalParam, err, mode, undo, undo_until } = await searchParams;
+  const { goal: goalParam, err, mode, undo, undo_until, ok } = await searchParams;
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -1795,6 +1797,8 @@ export default async function MatchDetailPage({
               </span>
             ) : null}
           </div>
+          {ok === "goal_saved" ? <p className="text-xs text-green-700">이벤트가 저장되었습니다.</p> : null}
+          {ok === "goal_deleted" ? <p className="text-xs text-green-700">이벤트가 삭제되었습니다.</p> : null}
           {err ? (
             <p className="text-xs text-red-600">
               저장 중 오류가 발생했습니다: {err}
@@ -2251,8 +2255,7 @@ export default async function MatchDetailPage({
                         선택 해제
                       </Link>
                     </div>
-                    <form
-                      key={activeGoal.id}
+                    <GoalEditForm
                       action={updateGoalEvent.bind(
                         null,
                         matchId,
@@ -2260,75 +2263,14 @@ export default async function MatchDetailPage({
                         channel.slug,
                         channel.edit_session_version,
                       )}
-                      className="grid grid-cols-2 md:grid-cols-3 gap-2"
-                    >
-                      <input
-                        className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                        name="minute"
-                        type="number"
-                        min={0}
-                        placeholder="분"
-                        defaultValue={activeGoal.minute ?? ""}
-                      />
-                      {hasRoster ? (
-                        <select
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          name="scorer"
-                          defaultValue={scorerDefault}
-                        >
-                          <option value="">득점자 선택</option>
-                          {roster.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              #{p.jerseyNo} {p.playerName}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          list="name-suggestions"
-                          name="scorer"
-                          placeholder="득점자"
-                          defaultValue={activeGoal.scorer_name ?? ""}
-                        />
-                      )}
-                      {hasRoster ? (
-                        <select
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          name="assist"
-                          defaultValue={assistDefault}
-                        >
-                          <option value="">어시스트 선택</option>
-                          {roster.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              #{p.jerseyNo} {p.playerName}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          list="name-suggestions"
-                          name="assist"
-                          placeholder="어시"
-                          defaultValue={activeGoal.assist_name ?? ""}
-                        />
-                      )}
-                      <div className="md:col-span-3 flex flex-wrap gap-2 justify-end">
-                        <button
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-xs"
-                          type="reset"
-                        >
-                          편집 취소
-                        </button>
-                        <PendingSubmitButton
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-xs"
-                          pendingText="저장중..."
-                        >
-                          이벤트 저장
-                        </PendingSubmitButton>
-                      </div>
-                    </form>
+                      roster={roster}
+                      hasRoster={hasRoster}
+                      scorerDefault={scorerDefault}
+                      assistDefault={assistDefault}
+                      minuteDefault={activeGoal.minute}
+                      scorerNameDefault={activeGoal.scorer_name}
+                      assistNameDefault={activeGoal.assist_name}
+                    />
                     <form
                       action={deleteGoalEvent.bind(
                         null,

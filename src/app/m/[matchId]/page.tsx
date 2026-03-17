@@ -8,7 +8,7 @@ import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GoalAddActions from "./GoalAddActions";
-import GoalEditForm from "./GoalEditForm";
+import GoalEditModal from "./GoalEditModal";
 import LiveScoreboard from "./LiveScoreboard";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
@@ -2207,112 +2207,21 @@ export default async function MatchDetailPage({
         ) : null}
 
         {canEditGoalNow ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">
-              현재 편집 이벤트
-            </h2>
-            {!activeGoal || !channel ? (
-              <p className="text-sm text-gray-500">편집할 이벤트가 없습니다.</p>
-            ) : (
-              (() => {
-                const roster = activeGoal.team_side === "A" ? rosterA : rosterB;
-                const hasRoster = roster.length > 0;
-                const findRosterValue = (
-                  playerId: string | null,
-                  playerName: string | null,
-                ) => {
-                  if (playerId) {
-                    const byId = roster.find((p) => p.playerId === playerId);
-                    if (byId) return byId.value;
-                  }
-                  if (playerName) {
-                    const byName = roster.find((p) => p.playerName === playerName);
-                    if (byName) return byName.value;
-                  }
-                  return playerName ?? "";
-                };
-                const scorerDefault = findRosterValue(
-                  activeGoal.scorer_player_id,
-                  activeGoal.scorer_name,
-                );
-                const assistDefault = findRosterValue(
-                  activeGoal.assist_player_id,
-                  activeGoal.assist_name,
-                );
-                return (
-                  <>
-                    <div className="flex items-center justify-between gap-2 text-sm text-gray-700">
-                      <span>
-                        {activeGoal.team_side}팀 ·{" "}
-                        {activeGoal.minute !== null
-                          ? `${activeGoal.minute}분`
-                          : "시간 미설정"}
-                      </span>
-                      <Link
-                        href={`/m/${matchId}?mode=edit`}
-                        className="text-xs underline text-gray-500"
-                      >
-                        선택 해제
-                      </Link>
-                    </div>
-                    <GoalEditForm
-                      action={updateGoalEvent.bind(
-                        null,
-                        matchId,
-                        activeGoal.id,
-                        channel.slug,
-                        channel.edit_session_version,
-                      )}
-                      roster={roster}
-                      hasRoster={hasRoster}
-                      scorerDefault={scorerDefault}
-                      assistDefault={assistDefault}
-                      minuteDefault={activeGoal.minute}
-                      scorerNameDefault={activeGoal.scorer_name}
-                      assistNameDefault={activeGoal.assist_name}
-                    />
-                    <form
-                      action={deleteGoalEvent.bind(
-                        null,
-                        matchId,
-                        activeGoal.id,
-                        activeGoal.team_side,
-                        channel.slug,
-                        channel.edit_session_version,
-                      )}
-                    >
-                      <PendingSubmitButton
-                        className="rounded-lg border border-red-200 text-red-700 px-2 py-1 text-xs"
-                        pendingText="삭제중..."
-                      >
-                        이벤트 삭제
-                      </PendingSubmitButton>
-                    </form>
-                  </>
-                );
-              })()
-            )}
-
-            {rosterA.length === 0 &&
-            rosterB.length === 0 &&
-            suggestedNames.length > 0 ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
+            <h2 className="text-sm font-semibold text-gray-700">이벤트 편집</h2>
+            <p className="text-xs text-gray-500">상단 스코어보드에서 골 이벤트를 누르면 편집 모달이 열립니다.</p>
+            {rosterA.length === 0 && rosterB.length === 0 && suggestedNames.length > 0 ? (
               <div className="space-y-1">
-                <div className="text-xs text-gray-500">
-                  이 경기에서 자주 쓴 값 추천
-                </div>
+                <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
                 <div className="flex flex-wrap gap-1">
                   {suggestedNames.map((name) => (
-                    <span
-                      key={name}
-                      className="text-[11px] rounded-lg border border-gray-200 px-1.5 py-0.5 text-gray-600"
-                    >
+                    <span key={name} className="text-[11px] rounded-lg border border-gray-200 px-1.5 py-0.5 text-gray-600">
                       {name}
                     </span>
                   ))}
                 </div>
               </div>
             ) : null}
-
             {rosterA.length === 0 && rosterB.length === 0 ? (
               <datalist id="name-suggestions">
                 {suggestedNames.map((name) => (
@@ -2321,6 +2230,54 @@ export default async function MatchDetailPage({
               </datalist>
             ) : null}
           </section>
+        ) : null}
+
+        {canEditGoalNow && activeGoal && channel ? (
+          (() => {
+            const roster = activeGoal.team_side === "A" ? rosterA : rosterB;
+            const hasRoster = roster.length > 0;
+            const findRosterValue = (playerId: string | null, playerName: string | null) => {
+              if (playerId) {
+                const byId = roster.find((p) => p.playerId === playerId);
+                if (byId) return byId.value;
+              }
+              if (playerName) {
+                const byName = roster.find((p) => p.playerName === playerName);
+                if (byName) return byName.value;
+              }
+              return playerName ?? "";
+            };
+            const scorerDefault = findRosterValue(activeGoal.scorer_player_id, activeGoal.scorer_name);
+            const assistDefault = findRosterValue(activeGoal.assist_player_id, activeGoal.assist_name);
+
+            return (
+              <GoalEditModal
+                teamSide={activeGoal.team_side}
+                minute={activeGoal.minute}
+                scorerName={activeGoal.scorer_name}
+                assistName={activeGoal.assist_name}
+                roster={roster}
+                hasRoster={hasRoster}
+                scorerDefault={scorerDefault}
+                assistDefault={assistDefault}
+                updateAction={updateGoalEvent.bind(
+                  null,
+                  matchId,
+                  activeGoal.id,
+                  channel.slug,
+                  channel.edit_session_version,
+                )}
+                deleteAction={deleteGoalEvent.bind(
+                  null,
+                  matchId,
+                  activeGoal.id,
+                  activeGoal.team_side,
+                  channel.slug,
+                  channel.edit_session_version,
+                )}
+              />
+            );
+          })()
         ) : null}
       </section>
     </main>

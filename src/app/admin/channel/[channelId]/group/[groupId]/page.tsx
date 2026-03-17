@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
+import TransientToast from '@/components/TransientToast'
 import { ensureTeamInChannel } from '@/lib/teamHelpers'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
@@ -519,6 +520,16 @@ export default async function AdminGroupPage({
   const { from, err, tab: tabParam, warn_team: warnTeam } = await searchParams
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
   const fromChannel = from === 'channel'
+  const toastMessageMap: Record<string, string> = {
+    forbidden: '권한이 없습니다.',
+    team_scope: '본인 팀만 제출할 수 있습니다.',
+    team_not_in_group: '이 경기그룹 참여팀만 엔트리 제출할 수 있습니다.',
+    starter_count: '선발을 1명 이상 선택해 주세요.',
+    starter_period: '선발 period를 확인해 주세요.',
+    entry_affects_starters: '엔트리 변경 시 기존 선발이 정리됩니다. 다시 제출해 주세요.',
+    guest_source: '용병 소속팀은 동일 팀으로 선택할 수 없습니다.',
+  }
+  const toastMessage = err ? toastMessageMap[err] : null
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -627,6 +638,7 @@ export default async function AdminGroupPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
+        {toastMessage ? <TransientToast message={toastMessage} tone="error" /> : null}
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>

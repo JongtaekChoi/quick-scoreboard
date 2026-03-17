@@ -17,6 +17,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
+import TransientToast from "@/components/TransientToast";
 import LiveMinuteBadge from "./LiveMinuteBadge";
 import {
   getPeriodDisplayLabel,
@@ -1250,6 +1251,19 @@ export default async function MatchDetailPage({
 }) {
   const { matchId } = await params;
   const { err, mode, undo, undo_until, ok } = await searchParams;
+  const errToastMap: Record<string, string> = {
+    forbidden: '권한이 없습니다.',
+    participation_player: '선수를 1명 이상 선택해 주세요.',
+    participation_minute: '분(minute)은 0~200 사이여야 합니다.',
+    participation_invalid: '출전 이벤트 입력값을 확인해 주세요.',
+    participation_closed: '경기 종료 후에는 수정할 수 없습니다.',
+    participation_same_player: '같은 선수를 동시에 OUT/IN으로 선택할 수 없습니다.',
+    participation_reserve_period: '예약할 period를 다시 선택해 주세요.',
+    participation_reserve_duplicate: '이미 예약된 선수가 포함되어 있습니다.',
+    participation_reserve_cancel: '예약 취소에 실패했습니다.',
+    undo_expired: '교체 취소 가능 시간이 지났습니다.',
+  }
+  const errToastMessage = err ? errToastMap[err] : null
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {
@@ -1758,6 +1772,9 @@ export default async function MatchDetailPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
+        {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
+        {ok === "goal_saved" ? <TransientToast message="이벤트가 저장되었습니다." tone="success" /> : null}
+        {ok === "goal_deleted" ? <TransientToast message="이벤트가 삭제되었습니다." tone="success" /> : null}
         <header className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1">
@@ -1822,8 +1839,6 @@ export default async function MatchDetailPage({
               </span>
             ) : null}
           </div>
-          {ok === "goal_saved" ? <p className="text-xs text-green-700">이벤트가 저장되었습니다.</p> : null}
-          {ok === "goal_deleted" ? <p className="text-xs text-green-700">이벤트가 삭제되었습니다.</p> : null}
           {err ? (
             <p className="text-xs text-red-600">
               저장 중 오류가 발생했습니다: {err}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
 import GoalEditForm from './GoalEditForm'
@@ -32,12 +33,16 @@ export default function GoalEditModal({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [open, setOpen] = useState(true)
 
   function closeModal() {
+    setOpen(false)
     const qs = new URLSearchParams(searchParams.toString())
     qs.delete('goal')
     router.replace(`${pathname}?${qs.toString()}`, { scroll: false })
   }
+
+  if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeModal}>

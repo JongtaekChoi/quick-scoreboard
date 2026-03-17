@@ -2206,30 +2206,12 @@ export default async function MatchDetailPage({
           </section>
         ) : null}
 
-        {canEditGoalNow ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">이벤트 편집</h2>
-            <p className="text-xs text-gray-500">상단 스코어보드에서 골 이벤트를 누르면 편집 모달이 열립니다.</p>
-            {rosterA.length === 0 && rosterB.length === 0 && suggestedNames.length > 0 ? (
-              <div className="space-y-1">
-                <div className="text-xs text-gray-500">이 경기에서 자주 쓴 값 추천</div>
-                <div className="flex flex-wrap gap-1">
-                  {suggestedNames.map((name) => (
-                    <span key={name} className="text-[11px] rounded-lg border border-gray-200 px-1.5 py-0.5 text-gray-600">
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {rosterA.length === 0 && rosterB.length === 0 ? (
-              <datalist id="name-suggestions">
-                {suggestedNames.map((name) => (
-                  <option key={`name-${name}`} value={name} />
-                ))}
-              </datalist>
-            ) : null}
-          </section>
+        {rosterA.length === 0 && rosterB.length === 0 ? (
+          <datalist id="name-suggestions">
+            {suggestedNames.map((name) => (
+              <option key={`name-${name}`} value={name} />
+            ))}
+          </datalist>
         ) : null}
 
         {canEditGoalNow && activeGoal && channel ? (

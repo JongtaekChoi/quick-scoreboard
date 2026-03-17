@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
@@ -393,7 +394,8 @@ async function saveGroupEntries(formData: FormData) {
     }
   }
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
+  revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
+  return
 }
 
 async function saveMatchStarters(formData: FormData) {
@@ -478,7 +480,8 @@ async function saveMatchStarters(formData: FormData) {
     })),
   )
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
+  revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
+  return
 }
 
 async function toggleEntryConfirm(formData: FormData) {
@@ -506,7 +509,8 @@ async function toggleEntryConfirm(formData: FormData) {
     .update({ entry_confirmed_at: next === '1' ? new Date().toISOString() : null })
     .eq('id', groupId)
 
-  redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries`)
+  revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
+  return
 }
 
 export default async function AdminGroupPage({

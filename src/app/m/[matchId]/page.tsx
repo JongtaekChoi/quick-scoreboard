@@ -9,6 +9,7 @@ import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GoalAddActions from "./GoalAddActions";
 import LiveScoreboard from "./LiveScoreboard";
+import MatchEditHelp from "./MatchEditHelp";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -1875,6 +1876,12 @@ export default async function MatchDetailPage({
           ) : null}
         </header>
 
+        <MatchEditHelp
+          isEditMode={isEditMode}
+          canStartPeriod={canStartPeriod}
+          startPeriodLabel={startPeriodLabel}
+        />
+
         <LiveScoreboard
           matchId={matchId}
           readonly={!isEditMode}
@@ -1916,25 +1923,28 @@ export default async function MatchDetailPage({
         {isEditMode ? (
           <div className="space-y-2">
             {canAddGoalNow ? (
-              <GoalAddActions
-                actionA={addGoalA}
-                actionB={addGoalB}
-                teamAName={match.team_a_name}
-                teamBName={match.team_b_name}
-                rosterA={(() => {
-                  const active = rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`));
-                  return active.length > 0 ? active : rosterA;
-                })()}
-                rosterB={(() => {
-                  const active = rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`));
-                  return active.length > 0 ? active : rosterB;
-                })()}
-                defaultMinute={goalDefaultMinute}
-                periodState={match.period_state}
-                firstHalfStartedAt={match.first_half_started_at}
-                secondHalfStartedAt={match.second_half_started_at}
-                firstHalfBaseMinute={firstHalfBaseMinute}
-              />
+              <>
+                <GoalAddActions
+                  actionA={addGoalA}
+                  actionB={addGoalB}
+                  teamAName={match.team_a_name}
+                  teamBName={match.team_b_name}
+                  rosterA={(() => {
+                    const active = rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`));
+                    return active.length > 0 ? active : rosterA;
+                  })()}
+                  rosterB={(() => {
+                    const active = rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`));
+                    return active.length > 0 ? active : rosterB;
+                  })()}
+                  defaultMinute={goalDefaultMinute}
+                  periodState={match.period_state}
+                  firstHalfStartedAt={match.first_half_started_at}
+                  secondHalfStartedAt={match.second_half_started_at}
+                  firstHalfBaseMinute={firstHalfBaseMinute}
+                />
+                <p className="text-[11px] text-gray-500">득점자/어시스트를 모르면 비워두고 저장한 뒤 나중에 수정할 수 있습니다.</p>
+              </>
             ) : null}
 
             {canManageMatch ? (
@@ -1952,7 +1962,7 @@ export default async function MatchDetailPage({
                 {canStartPeriod ? (
                   <form action={startPeriodAction}>
                     <PendingSubmitButton
-                      className="rounded border px-2 py-1"
+                      className="rounded border border-emerald-300 bg-emerald-50 text-emerald-800 px-2 py-1"
                       pendingText="처리중..."
                       confirmMessage="경기를 시작하시겠습니까? 시작 후에는 되돌릴 수 없습니다."
                     >

@@ -704,7 +704,7 @@ async function updateGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit&ok=goal_saved`);
+  return;
 }
 
 async function deleteGoalEvent(
@@ -756,7 +756,7 @@ async function deleteGoalEvent(
   });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit&ok=goal_deleted`);
+  return;
 }
 
 async function updateGoalEventFromForm(
@@ -1246,11 +1246,10 @@ export default async function MatchDetailPage({
     mode?: string;
     undo?: string;
     undo_until?: string;
-    ok?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { err, mode, undo, undo_until, ok } = await searchParams;
+  const { err, mode, undo, undo_until } = await searchParams;
   const errToastMap: Record<string, string> = {
     forbidden: '권한이 없습니다.',
     participation_player: '선수를 1명 이상 선택해 주세요.',
@@ -1773,8 +1772,6 @@ export default async function MatchDetailPage({
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
-        {ok === "goal_saved" ? <TransientToast message="이벤트가 저장되었습니다." tone="success" /> : null}
-        {ok === "goal_deleted" ? <TransientToast message="이벤트가 삭제되었습니다." tone="success" /> : null}
         <header className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1">

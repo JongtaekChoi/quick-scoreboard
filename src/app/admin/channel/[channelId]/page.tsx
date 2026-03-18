@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
@@ -9,6 +10,13 @@ import TransientToast from '@/components/TransientToast'
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type GroupMatch = { match_group_id: string | null; team_a_name: string; team_b_name: string }
+
+const CHANNEL_FEEDBACK_COOKIE = 'qsb_channel_feedback'
+
+async function setChannelFeedback(code: string) {
+  const store = await cookies()
+  store.set(CHANNEL_FEEDBACK_COOKIE, code, { path: '/', maxAge: 10, sameSite: 'lax' })
+}
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -41,7 +49,8 @@ async function createGroup(formData: FormData) {
     redirect('/admin/login')
   }
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}?from=channel&err=forbidden`)
+    await setChannelFeedback('forbidden')
+    return
   }
 
   const playDate = String(formData.get('play_date') || '')
@@ -85,7 +94,8 @@ async function updateGroupMeta(formData: FormData) {
     redirect('/admin/login')
   }
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}?from=channel&err=forbidden`)
+    await setChannelFeedback('forbidden')
+    return
   }
 
   const playDate = String(formData.get('play_date') || '').trim()
@@ -126,10 +136,13 @@ export default async function AdminChannelPage({
   const { channelId } = await params
   const { from, err } = await searchParams
   const fromChannel = from === 'channel'
+  const store = await cookies()
+  const feedbackCode = err ?? store.get(CHANNEL_FEEDBACK_COOKIE)?.value ?? null
   const errToastMap: Record<string, string> = {
     forbidden: '팀장 계정은 경기그룹 생성 권한이 없습니다.',
   }
-  const errToast = err ? errToastMap[err] : null
+  const errToast = feedbackCode ? errToastMap[feedbackCode] : null
+  if (feedbackCode) store.delete(CHANNEL_FEEDBACK_COOKIE)
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 

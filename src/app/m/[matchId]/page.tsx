@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
@@ -119,6 +120,17 @@ type RosterPlayer = {
 type GoalPermission = { canGoalEdit: boolean; canManageMatch: boolean };
 
 type ChangeActor = { loginId: string | null; role: string | null };
+
+const MATCH_FEEDBACK_COOKIE = "qsb_match_feedback";
+
+async function setMatchFeedback(code: string) {
+  const store = await cookies();
+  store.set(MATCH_FEEDBACK_COOKIE, code, {
+    path: "/",
+    maxAge: 10,
+    sameSite: "lax",
+  });
+}
 
 async function getChangeActor(channelSlug: string): Promise<ChangeActor> {
   const isAdmin = await isAdminAuthorized();
@@ -380,7 +392,8 @@ async function addGoalDetailed(
       teamSide,
       error: insertError?.message,
     });
-    redirect(`/m/${matchId}?mode=edit&err=goal_insert_failed`);
+    await setMatchFeedback("goal_insert_failed");
+    return;
   }
 
   const { data: countedGoals, error: countError } = await supabase
@@ -394,7 +407,8 @@ async function addGoalDetailed(
       matchId,
       error: countError.message,
     });
-    redirect(`/m/${matchId}?mode=edit&err=goal_recount_failed`);
+    await setMatchFeedback("goal_recount_failed");
+    return;
   }
 
   let scoreA = 0;
@@ -424,7 +438,8 @@ async function addGoalDetailed(
       matchId,
       error: updateError.message,
     });
-    redirect(`/m/${matchId}?mode=edit&err=score_update_failed`);
+    await setMatchFeedback("score_update_failed");
+    return;
   }
 
   await logMatchChange(matchId, channelSlug, "goal_add", { teamSide, minute });
@@ -479,7 +494,8 @@ async function applyPeriodAction(
     >();
 
   if (!periods || periods.length === 0) {
-    redirect(`/m/${matchId}?mode=edit&err=periods_not_ready`);
+    await setMatchFeedback("periods_not_ready");
+    return;
   }
 
   const livePeriod = periods.find((p) => p.status === "live") ?? null;
@@ -492,7 +508,8 @@ async function applyPeriodAction(
 
   if (action === "start_period") {
     if (livePeriod || !nextPending) {
-      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+      await setMatchFeedback("invalid_period_action");
+    return;
     }
 
     await supabase
@@ -561,7 +578,8 @@ async function applyPeriodAction(
 
   if (action === "end_period") {
     if (!livePeriod) {
-      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+      await setMatchFeedback("invalid_period_action");
+    return;
     }
 
     await supabase
@@ -590,7 +608,8 @@ async function applyPeriodAction(
 
   if (action === "resume_previous") {
     if (livePeriod || !lastEndedPeriod) {
-      redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+      await setMatchFeedback("invalid_period_action");
+    return;
     }
 
     await supabase
@@ -611,7 +630,8 @@ async function applyPeriodAction(
   }
 
   if (Object.keys(patch).length === 0) {
-    redirect(`/m/${matchId}?mode=edit&err=invalid_period_action`);
+    await setMatchFeedback("invalid_period_action");
+    return;
   }
 
   await supabase.from("matches").update(patch).eq("id", matchId);
@@ -800,7 +820,8 @@ async function submitAnonymousRating(
     (account.role !== "player" && account.role !== "manager") ||
     !account.teamId
   ) {
-    redirect(`/m/${matchId}?err=rating_forbidden`);
+    await setMatchFeedback("rating_forbidden");
+    return;
   }
 
   const targetPlayerId = String(formData.get("target_player_id") || "").trim();
@@ -814,7 +835,8 @@ async function submitAnonymousRating(
     rating > 5 ||
     !isHalfStep
   ) {
-    redirect(`/m/${matchId}?err=rating_invalid`);
+    await setMatchFeedback("rating_invalid");
+    return;
   }
 
   const { data: match } = await supabase
@@ -830,7 +852,8 @@ async function submitAnonymousRating(
     }>();
 
   if (!match || match.status !== "ended") {
-    redirect(`/m/${matchId}?err=rating_closed`);
+    await setMatchFeedback("rating_closed");
+    return;
   }
 
   const [{ data: ownTeam }, { data: targetPlayer }] = await Promise.all([
@@ -851,7 +874,8 @@ async function submitAnonymousRating(
     !targetPlayer ||
     targetPlayer.channel_id !== match.channel_id
   ) {
-    redirect(`/m/${matchId}?err=rating_forbidden`);
+    await setMatchFeedback("rating_forbidden");
+    return;
   }
 
   const { data: teamRows } = await supabase
@@ -866,10 +890,12 @@ async function submitAnonymousRating(
     !matchTeamIds.has(ownTeam.id) ||
     !matchTeamIds.has(targetPlayer.team_id)
   ) {
-    redirect(`/m/${matchId}?err=rating_forbidden`);
+    await setMatchFeedback("rating_forbidden");
+    return;
   }
   if (targetPlayer.team_id === ownTeam.id) {
-    redirect(`/m/${matchId}?err=rating_same_team`);
+    await setMatchFeedback("rating_same_team");
+    return;
   }
 
   const fingerprintSalt =
@@ -913,7 +939,8 @@ async function addSubstitutionEvent(
 
   const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
-    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+    await setMatchFeedback("forbidden");
+    return;
   }
 
   const { data: stateRow } = await supabase
@@ -924,7 +951,8 @@ async function addSubstitutionEvent(
       period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
     }>();
   if (stateRow?.period_state === "ended") {
-    redirect(`/m/${matchId}?mode=edit&err=participation_closed`);
+    await setMatchFeedback("participation_closed");
+    return;
   }
 
   const teamSide = String(formData.get("team_side") || "").trim() as "A" | "B";
@@ -935,13 +963,16 @@ async function addSubstitutionEvent(
   const playerInValue = String(formData.get("player_in_value") || "").trim();
 
   if (teamSide !== "A" && teamSide !== "B") {
-    redirect(`/m/${matchId}?mode=edit&err=participation_invalid`);
+    await setMatchFeedback("participation_invalid");
+    return;
   }
   if (!Number.isFinite(minute) || minute < 0 || minute > 200) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_minute`);
+    await setMatchFeedback("participation_minute");
+    return;
   }
   if (!playerOutValue || !playerInValue) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_player`);
+    await setMatchFeedback("participation_player");
+    return;
   }
 
   const [outIdRaw, outDisplayRaw] = playerOutValue.split("|");
@@ -952,7 +983,8 @@ async function addSubstitutionEvent(
   const inName = (inDisplayRaw?.trim() || "").replace(/^#\d+\s*/, "");
 
   if (outId && inId && outId === inId) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_same_player`);
+    await setMatchFeedback("participation_same_player");
+    return;
   }
 
   const shouldReserve =
@@ -982,7 +1014,8 @@ async function addSubstitutionEvent(
       null;
 
     if (!targetPeriod || targetPeriod.status !== "pending") {
-      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_period`);
+      await setMatchFeedback("participation_reserve_period");
+    return;
     }
 
     const targetSequence = targetPeriod.sequence;
@@ -1012,7 +1045,8 @@ async function addSubstitutionEvent(
     });
 
     if (hasDuplicate) {
-      redirect(`/m/${matchId}?mode=edit&err=participation_reserve_duplicate`);
+      await setMatchFeedback("participation_reserve_duplicate");
+    return;
     }
 
     await supabase.from("match_period_substitution_plans").insert({
@@ -1094,13 +1128,15 @@ async function undoSubstitutionEvent(
 
   const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
-    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+    await setMatchFeedback("forbidden");
+    return;
   }
 
   const undoIdsRaw = String(formData.get("undo_ids") || "").trim();
   const undoUntil = Number(formData.get("undo_until") || 0);
   if (!undoIdsRaw || !Number.isFinite(undoUntil) || Date.now() > undoUntil) {
-    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+    await setMatchFeedback("undo_expired");
+    return;
   }
 
   const rawIds = undoIdsRaw
@@ -1108,7 +1144,8 @@ async function undoSubstitutionEvent(
     .map((v) => v.trim())
     .filter(Boolean);
   if (rawIds.length === 0) {
-    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+    await setMatchFeedback("undo_expired");
+    return;
   }
 
   const subIds = rawIds
@@ -1117,7 +1154,8 @@ async function undoSubstitutionEvent(
     .filter(Boolean);
 
   if (subIds.length === 0) {
-    redirect(`/m/${matchId}?mode=edit&err=undo_expired`);
+    await setMatchFeedback("undo_expired");
+    return;
   }
 
   if (subIds.length > 0) {
@@ -1152,12 +1190,14 @@ async function cancelReservedSubstitution(
 
   const canMutate = await canMutateParticipation(channelSlug, matchId);
   if (!canMutate) {
-    redirect(`/m/${matchId}?mode=edit&err=forbidden`);
+    await setMatchFeedback("forbidden");
+    return;
   }
 
   const reservationId = String(formData.get("reservation_id") || "").trim();
   if (!reservationId) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+    await setMatchFeedback("participation_reserve_cancel");
+    return;
   }
 
   const { data: reservation } = await supabase
@@ -1174,7 +1214,8 @@ async function cancelReservedSubstitution(
     }>();
 
   if (!reservation || reservation.applied_at) {
-    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+    await setMatchFeedback("participation_reserve_cancel");
+    return;
   }
 
   const { data: periodRow } = await supabase
@@ -1186,7 +1227,8 @@ async function cancelReservedSubstitution(
     .maybeSingle<{ status: "pending" | "live" | "ended" }>();
 
   if (!periodRow || periodRow.status !== "pending") {
-    redirect(`/m/${matchId}?mode=edit&err=participation_reserve_cancel`);
+    await setMatchFeedback("participation_reserve_cancel");
+    return;
   }
 
   await supabase
@@ -1250,6 +1292,8 @@ export default async function MatchDetailPage({
 }) {
   const { matchId } = await params;
   const { err, mode, undo, undo_until } = await searchParams;
+  const store = await cookies();
+  const feedbackCode = err ?? store.get(MATCH_FEEDBACK_COOKIE)?.value ?? null;
   const errToastMap: Record<string, string> = {
     forbidden: '권한이 없습니다.',
     participation_player: '선수를 1명 이상 선택해 주세요.',
@@ -1262,7 +1306,10 @@ export default async function MatchDetailPage({
     participation_reserve_cancel: '예약 취소에 실패했습니다.',
     undo_expired: '교체 취소 가능 시간이 지났습니다.',
   }
-  const errToastMessage = err ? errToastMap[err] : null
+  const errToastMessage = feedbackCode ? errToastMap[feedbackCode] : null
+  if (feedbackCode) {
+    store.delete(MATCH_FEEDBACK_COOKIE)
+  }
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {

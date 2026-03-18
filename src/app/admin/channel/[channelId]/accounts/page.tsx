@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { getAccountInfo } from "@/lib/channelSession";
@@ -9,6 +10,17 @@ import PendingSubmitButton from "@/components/PendingSubmitButton";
 
 type Channel = { id: string; name: string; slug: string };
 type Team = { id: string; name: string };
+const ACCOUNTS_FEEDBACK_COOKIE = "qsb_accounts_feedback";
+
+async function setAccountsFeedback(code: string, detail?: string) {
+  const store = await cookies();
+  store.set(ACCOUNTS_FEEDBACK_COOKIE, detail ? `${code}:${encodeURIComponent(detail)}` : code, {
+    path: "/",
+    maxAge: 10,
+    sameSite: "lax",
+  });
+}
+
 type AccountRow = {
   id: string;
   role: "admin" | "manager" | "player";
@@ -60,7 +72,8 @@ async function upsertAccount(formData: FormData) {
   if (!["admin", "manager", "player"].includes(role)) return;
   if ((role === "manager" || role === "player") && !teamId) return;
   if (role === "admin" && teamId) {
-    redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
+    await setAccountsFeedback("team_role");
+    return;
   }
 
   const supabase = getSupabaseServerClient();
@@ -105,18 +118,21 @@ async function createPlayerAccounts(formData: FormData) {
 
   if (playersError) {
     const detail = encodeURIComponent(`${playersError.code ?? 'unknown'}:${playersError.message ?? 'query failed'}`);
-    redirect(`/admin/channel/${channelId}/accounts?err=players_query_failed&detail=${detail}`);
+    await setAccountsFeedback("players_query_failed", detail);
+    return;
   }
 
   const list = (players ?? []).filter((p) => p.player_name?.trim());
   if (list.length === 0) {
-    redirect(`/admin/channel/${channelId}/accounts?err=no_players`);
+    await setAccountsFeedback("no_players");
+    return;
   }
 
   const names = list.map((p) => p.player_name.trim());
   const dup = names.find((n, i) => names.indexOf(n) !== i);
   if (dup) {
-    redirect(`/admin/channel/${channelId}/accounts?err=dup_login`);
+    await setAccountsFeedback("dup_login");
+    return;
   }
 
   const { data: conflicted, error: conflictedError } = await supabase
@@ -129,10 +145,12 @@ async function createPlayerAccounts(formData: FormData) {
 
   if (conflictedError) {
     const detail = encodeURIComponent(`${conflictedError.code ?? 'unknown'}:${conflictedError.message ?? 'reserved check failed'}`);
-    redirect(`/admin/channel/${channelId}/accounts?err=reserved_check_failed&detail=${detail}`);
+    await setAccountsFeedback("reserved_check_failed", detail);
+    return;
   }
   if ((conflicted ?? []).length > 0) {
-    redirect(`/admin/channel/${channelId}/accounts?err=reserved_login`);
+    await setAccountsFeedback("reserved_login");
+    return;
   }
 
   const rows = list.map((p) => ({
@@ -152,7 +170,8 @@ async function createPlayerAccounts(formData: FormData) {
 
   if (upsertError) {
     const detail = encodeURIComponent(`${upsertError.code ?? 'unknown'}:${upsertError.message ?? 'bulk create failed'}`);
-    redirect(`/admin/channel/${channelId}/accounts?err=bulk_create_failed&detail=${detail}`);
+    await setAccountsFeedback("bulk_create_failed", detail);
+    return;
   }
 
   redirect(`/admin/channel/${channelId}/accounts?saved=1`);
@@ -177,10 +196,12 @@ async function updateAccount(formData: FormData) {
   if (!accountId) return;
   if (!["admin", "manager", "player"].includes(role)) return;
   if ((role === "manager" || role === "player") && !teamId) {
-    redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
+    await setAccountsFeedback("team_role");
+    return;
   }
   if (role === "admin" && teamId) {
-    redirect(`/admin/channel/${channelId}/accounts?err=team_role`);
+    await setAccountsFeedback("team_role");
+    return;
   }
 
   const supabase = getSupabaseServerClient();
@@ -221,6 +242,11 @@ export default async function AdminAccountsPage({
 }) {
   const { channelId } = await params;
   const { saved, err, reset, detail, modal, edit } = await searchParams;
+  const store = await cookies();
+  const rawFeedback = err ? (detail ? `${err}:${encodeURIComponent(detail)}` : err) : (store.get(ACCOUNTS_FEEDBACK_COOKIE)?.value ?? null);
+  const [feedbackErr, feedbackDetailEncoded] = rawFeedback ? rawFeedback.split(":", 2) : [null, null];
+  const feedbackDetail = feedbackDetailEncoded ? decodeURIComponent(feedbackDetailEncoded) : null;
+  if (rawFeedback) store.delete(ACCOUNTS_FEEDBACK_COOKIE);
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>;
@@ -280,34 +306,34 @@ export default async function AdminAccountsPage({
           {reset === "1" ? (
             <p className="text-xs text-green-700">비밀번호가 변경되었습니다.</p>
           ) : null}
-          {err === "last_admin" ? (
+          {feedbackErr === "last_admin" ? (
             <p className="text-xs text-red-600">
               활성 어드민 계정은 최소 1개 이상 유지되어야 합니다.
             </p>
           ) : null}
-          {err === "team_role" ? (
+          {feedbackErr === "team_role" ? (
             <p className="text-xs text-red-600">
               팀 지정은 팀관리자(manager) 또는 팀원(player) 계정에만 가능합니다.
             </p>
           ) : null}
-          {err === "dup_login" ? (
+          {feedbackErr === "dup_login" ? (
             <p className="text-xs text-red-600">
               동일 선수명이 있어 일괄 계정 생성을 중단했습니다. 로그인 ID 중복을 먼저 정리해 주세요.
             </p>
           ) : null}
-          {err === "reserved_login" ? (
+          {feedbackErr === "reserved_login" ? (
             <p className="text-xs text-red-600">
               기존 관리자/팀장 계정과 동일한 로그인 ID가 있어 일괄 생성을 중단했습니다.
             </p>
           ) : null}
-          {err === "no_players" ? (
+          {feedbackErr === "no_players" ? (
             <p className="text-xs text-red-600">
               활성 선수 데이터가 없어 계정을 생성하지 못했습니다. 팀 멤버 관리에서 선수 등록/활성화를 먼저 해주세요.
             </p>
           ) : null}
-          {err === "players_query_failed" || err === "reserved_check_failed" || err === "bulk_create_failed" ? (
+          {feedbackErr === "players_query_failed" || feedbackErr === "reserved_check_failed" || feedbackErr === "bulk_create_failed" ? (
             <p className="text-xs text-red-600">
-              일괄 생성 중 DB 오류가 발생했습니다. {detail ? `(${decodeURIComponent(detail)})` : "잠시 후 다시 시도해 주세요."}
+              일괄 생성 중 DB 오류가 발생했습니다. {feedbackDetail ? `(${feedbackDetail})` : "잠시 후 다시 시도해 주세요."}
             </p>
           ) : null}
         </header>

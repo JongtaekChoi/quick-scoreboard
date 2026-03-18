@@ -246,7 +246,6 @@ export default async function AdminAccountsPage({
   const rawFeedback = err ? (detail ? `${err}:${encodeURIComponent(detail)}` : err) : (store.get(ACCOUNTS_FEEDBACK_COOKIE)?.value ?? null);
   const [feedbackErr, feedbackDetailEncoded] = rawFeedback ? rawFeedback.split(":", 2) : [null, null];
   const feedbackDetail = feedbackDetailEncoded ? decodeURIComponent(feedbackDetailEncoded) : null;
-  if (rawFeedback) store.delete(ACCOUNTS_FEEDBACK_COOKIE);
 
   const supabase = getSupabaseServerClient();
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>;

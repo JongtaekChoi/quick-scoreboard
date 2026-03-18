@@ -142,7 +142,6 @@ export default async function AdminChannelPage({
     forbidden: '팀장 계정은 경기그룹 생성 권한이 없습니다.',
   }
   const errToast = feedbackCode ? errToastMap[feedbackCode] : null
-  if (feedbackCode) store.delete(CHANNEL_FEEDBACK_COOKIE)
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 

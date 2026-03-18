@@ -1307,9 +1307,6 @@ export default async function MatchDetailPage({
     undo_expired: '교체 취소 가능 시간이 지났습니다.',
   }
   const errToastMessage = feedbackCode ? errToastMap[feedbackCode] : null
-  if (feedbackCode) {
-    store.delete(MATCH_FEEDBACK_COOKIE)
-  }
   const supabase = getSupabaseServerClient();
 
   if (!supabase) {

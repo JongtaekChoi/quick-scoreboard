@@ -86,7 +86,6 @@ export default async function ChannelAccountPage({
   const { force, err, next } = await searchParams
   const store = await cookies()
   const feedback = err ?? store.get(ACCOUNT_FEEDBACK_COOKIE)?.value ?? null
-  if (feedback) store.delete(ACCOUNT_FEEDBACK_COOKIE)
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>

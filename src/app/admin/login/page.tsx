@@ -6,7 +6,6 @@ const ADMIN_LOGIN_FEEDBACK_COOKIE = 'qsb_admin_login_feedback'
 export default async function AdminLoginPage() {
   const store = await cookies()
   const feedback = store.get(ADMIN_LOGIN_FEEDBACK_COOKIE)?.value ?? null
-  if (feedback) store.delete(ADMIN_LOGIN_FEEDBACK_COOKIE)
 
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">

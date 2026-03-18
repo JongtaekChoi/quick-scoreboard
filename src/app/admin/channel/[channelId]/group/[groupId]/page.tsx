@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
@@ -24,6 +25,17 @@ type GroupEntry = { id: string; team_id: string; player_id: string }
 type GroupGuest = { id: string; team_id: string; source_team_id: string; source_player_id: string | null; guest_name: string }
 type MatchPeriod = { id: string; match_id: string; sequence: number; label: string | null; period_code: string | null }
 type MatchPeriodLineup = { match_period_id: string; team_side: 'A' | 'B'; player_id: string | null }
+
+const GROUP_FEEDBACK_COOKIE = 'qsb_group_feedback'
+
+async function setGroupFeedback(code: string) {
+  const store = await cookies()
+  store.set(GROUP_FEEDBACK_COOKIE, code, {
+    path: '/',
+    maxAge: 10,
+    sameSite: 'lax',
+  })
+}
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -275,7 +287,8 @@ async function saveGroupEntries(formData: FormData) {
 
   if (!channelId || !groupId || !teamId) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
+    await setGroupFeedback('team_scope')
+    return
   }
 
   const supabase = getSupabaseServerClient()
@@ -298,7 +311,8 @@ async function saveGroupEntries(formData: FormData) {
     })
 
     if (!participates) {
-      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_not_in_group`)
+      await setGroupFeedback('team_not_in_group')
+      return
     }
   }
 
@@ -335,7 +349,8 @@ async function saveGroupEntries(formData: FormData) {
     const sideKey = new Set(affectedMatchSides.map((x) => `${x.matchId}:${x.side}`))
     const hasStarterChanges = (existingLineups ?? []).some((r) => sideKey.has(`${r.match_id}:${r.team_side}`))
     if (hasStarterChanges) {
-      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=entry_affects_starters&warn_team=${teamId}`)
+      await setGroupFeedback('entry_affects_starters')
+      return
     }
   }
 
@@ -416,14 +431,17 @@ async function saveMatchStarters(formData: FormData) {
 
   if (!channelId || !groupId || !matchId || !teamId || (teamSide !== 'A' && teamSide !== 'B')) return
   if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_scope`)
+    await setGroupFeedback('team_scope')
+    return
   }
   if (!Number.isFinite(periodSequence) || periodSequence < 1) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_period`)
+    await setGroupFeedback('starter_period')
+    return
   }
 
   if (playerIds.length === 0) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_count`)
+    await setGroupFeedback('starter_count')
+    return
   }
 
   const supabase = getSupabaseServerClient()
@@ -446,7 +464,8 @@ async function saveMatchStarters(formData: FormData) {
     })
 
     if (!participates) {
-      redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=team_not_in_group`)
+      await setGroupFeedback('team_not_in_group')
+      return
     }
   }
 
@@ -459,7 +478,8 @@ async function saveMatchStarters(formData: FormData) {
     .maybeSingle<{ id: string }>()
 
   if (!period) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=starter_period`)
+    await setGroupFeedback('starter_period')
+    return
   }
 
   await supabase
@@ -498,7 +518,8 @@ async function toggleEntryConfirm(formData: FormData) {
 
   if (!channelId || !groupId) return
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?tab=entries&err=forbidden`)
+    await setGroupFeedback('forbidden')
+    return
   }
 
   const supabase = getSupabaseServerClient()
@@ -524,6 +545,8 @@ export default async function AdminGroupPage({
   const { from, err, tab: tabParam, warn_team: warnTeam } = await searchParams
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
   const fromChannel = from === 'channel'
+  const store = await cookies()
+  const feedbackCode = err ?? store.get(GROUP_FEEDBACK_COOKIE)?.value ?? null
   const toastMessageMap: Record<string, string> = {
     forbidden: '권한이 없습니다.',
     team_scope: '본인 팀만 제출할 수 있습니다.',
@@ -533,7 +556,7 @@ export default async function AdminGroupPage({
     entry_affects_starters: '엔트리 변경 시 기존 선발이 정리됩니다. 다시 제출해 주세요.',
     guest_source: '용병 소속팀은 동일 팀으로 선택할 수 없습니다.',
   }
-  const toastMessage = err ? toastMessageMap[err] : null
+  const toastMessage = feedbackCode ? toastMessageMap[feedbackCode] : null
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 

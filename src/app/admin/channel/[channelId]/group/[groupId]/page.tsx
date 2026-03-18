@@ -30,7 +30,7 @@ const GROUP_FEEDBACK_COOKIE = 'qsb_group_feedback'
 
 async function setGroupFeedback(code: string) {
   const store = await cookies()
-  store.set(GROUP_FEEDBACK_COOKIE, code, {
+  store.set(GROUP_FEEDBACK_COOKIE, `${code}:${Date.now()}`, {
     path: '/',
     maxAge: 10,
     sameSite: 'lax',
@@ -550,7 +550,8 @@ export default async function AdminGroupPage({
   const tab = tabParam === 'entries' ? 'entries' : 'matches'
   const fromChannel = from === 'channel'
   const store = await cookies()
-  const feedbackCode = err ?? store.get(GROUP_FEEDBACK_COOKIE)?.value ?? null
+  const rawFeedback = err ?? store.get(GROUP_FEEDBACK_COOKIE)?.value ?? null
+  const feedbackCode = rawFeedback ? rawFeedback.split(':', 1)[0] : null
   const toastMessageMap: Record<string, string> = {
     forbidden: '권한이 없습니다.',
     team_scope: '본인 팀만 제출할 수 있습니다.',
@@ -669,7 +670,7 @@ export default async function AdminGroupPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
-        {toastMessage ? <TransientToast message={toastMessage} tone="error" /> : null}
+        {toastMessage ? <TransientToast key={rawFeedback ?? toastMessage} message={toastMessage} tone="error" /> : null}
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>

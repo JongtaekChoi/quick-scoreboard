@@ -77,7 +77,8 @@ async function createMatch(formData: FormData) {
   }
   const groupId = String(formData.get('groupId') || '')
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+    await setGroupFeedback('forbidden')
+    return
   }
   const teamA = String(formData.get('team_a_name') || '').trim()
   const teamB = String(formData.get('team_b_name') || '').trim()
@@ -140,7 +141,8 @@ async function updateMatch(formData: FormData) {
   }
   const groupId = String(formData.get('groupId') || '')
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+    await setGroupFeedback('forbidden')
+    return
   }
   const matchId = String(formData.get('matchId') || '')
   const teamA = String(formData.get('team_a_name') || '').trim()
@@ -212,7 +214,8 @@ async function deleteMatch(formData: FormData) {
   }
   const groupId = String(formData.get('groupId') || '')
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+    await setGroupFeedback('forbidden')
+    return
   }
   const matchId = String(formData.get('matchId') || '')
   if (!channelId || !groupId || !matchId) return
@@ -239,7 +242,8 @@ async function applyForfeitResult(formData: FormData) {
     redirect('/admin/login')
   }
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}/group/${groupId}?err=forbidden`)
+    await setGroupFeedback('forbidden')
+    return
   }
 
   if (!channelId || !groupId || !matchId || (winnerSide !== 'A' && winnerSide !== 'B')) return

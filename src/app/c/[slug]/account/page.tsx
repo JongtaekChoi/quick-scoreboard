@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Breadcrumb from '@/components/Breadcrumb'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo, createAccountSession } from '@/lib/channelSession'
@@ -8,6 +9,13 @@ import PendingSubmitButton from '@/components/PendingSubmitButton'
 type Channel = { id: string; slug: string; name: string; edit_session_version: number }
 type AccountRow = { id: string; role: 'admin' | 'manager' | 'player'; login_id: string; team_id: string | null; session_version: number; must_change_password: boolean }
 
+const ACCOUNT_FEEDBACK_COOKIE = 'qsb_account_feedback'
+
+async function setAccountFeedback(code: string) {
+  const store = await cookies()
+  store.set(ACCOUNT_FEEDBACK_COOKIE, code, { path: '/', maxAge: 10, sameSite: 'lax' })
+}
+
 async function changePassword(formData: FormData) {
   'use server'
   const slug = String(formData.get('slug') || '')
@@ -16,11 +24,15 @@ async function changePassword(formData: FormData) {
   const confirmPassword = String(formData.get('confirmPassword') || '').trim()
 
   if (!slug || !newPassword || newPassword.length < 4 || newPassword !== confirmPassword) {
-    redirect(`/c/${slug}/account?err=password`)
+    await setAccountFeedback('password')
+    redirect(`/c/${slug}/account`)
   }
 
   const supabase = getSupabaseServerClient()
-  if (!supabase) redirect(`/c/${slug}/account?err=env`)
+  if (!supabase) {
+    await setAccountFeedback('env')
+    redirect(`/c/${slug}/account`)
+  }
 
   const account = await getAccountInfo(slug)
   if (!account) redirect(`/c/${slug}`)
@@ -45,7 +57,10 @@ async function changePassword(formData: FormData) {
     .select('role,team_id,session_version')
     .maybeSingle<{ role: 'admin' | 'manager' | 'player'; team_id: string | null; session_version: number }>()
 
-  if (!updated) redirect(`/c/${slug}/account?err=update`)
+  if (!updated) {
+    await setAccountFeedback('update')
+    redirect(`/c/${slug}/account`)
+  }
 
   await createAccountSession(slug, {
     loginId: account.loginId,
@@ -69,6 +84,8 @@ export default async function ChannelAccountPage({
 }) {
   const { slug } = await params
   const { force, err, next } = await searchParams
+  const store = await cookies()
+  const feedback = err ?? store.get(ACCOUNT_FEEDBACK_COOKIE)?.value ?? null
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
@@ -106,8 +123,9 @@ export default async function ChannelAccountPage({
           {force === '1' || row.must_change_password ? (
             <p className="text-xs text-amber-700">초기 비밀번호를 변경해 주세요.</p>
           ) : null}
-          {err === 'password' ? <p className="text-xs text-red-600">비밀번호 확인이 일치하지 않거나 너무 짧습니다.</p> : null}
-          {err === 'update' ? <p className="text-xs text-red-600">비밀번호 변경에 실패했습니다.</p> : null}
+          {feedback === 'password' ? <p className="text-xs text-red-600">비밀번호 확인이 일치하지 않거나 너무 짧습니다.</p> : null}
+          {feedback === 'update' ? <p className="text-xs text-red-600">비밀번호 변경에 실패했습니다.</p> : null}
+          {feedback === 'env' ? <p className="text-xs text-red-600">서버 환경 설정 문제로 처리에 실패했습니다.</p> : null}
         </header>
 
         <form action={changePassword} className="rounded border p-4 space-y-2">

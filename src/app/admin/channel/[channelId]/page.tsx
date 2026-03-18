@@ -1,13 +1,22 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { isAdminAuthorized } from '@/lib/adminAuth'
 import { getAccountInfo, validateManagerAgainstDb } from '@/lib/channelSession'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
+import TransientToast from '@/components/TransientToast'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
 type MatchGroup = { id: string; play_date: string; venue: string | null; title: string | null; seq: number }
 type GroupMatch = { match_group_id: string | null; team_a_name: string; team_b_name: string }
+
+const CHANNEL_FEEDBACK_COOKIE = 'qsb_channel_feedback'
+
+async function setChannelFeedback(code: string) {
+  const store = await cookies()
+  store.set(CHANNEL_FEEDBACK_COOKIE, code, { path: '/', maxAge: 10, sameSite: 'lax' })
+}
 
 async function canManageChannel(channelId: string) {
   const supabase = getSupabaseServerClient()
@@ -40,7 +49,8 @@ async function createGroup(formData: FormData) {
     redirect('/admin/login')
   }
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}?from=channel&err=forbidden`)
+    await setChannelFeedback('forbidden')
+    return
   }
 
   const playDate = String(formData.get('play_date') || '')
@@ -84,7 +94,8 @@ async function updateGroupMeta(formData: FormData) {
     redirect('/admin/login')
   }
   if (manage.managerTeamId) {
-    redirect(`/admin/channel/${channelId}?from=channel&err=forbidden`)
+    await setChannelFeedback('forbidden')
+    return
   }
 
   const playDate = String(formData.get('play_date') || '').trim()
@@ -125,6 +136,12 @@ export default async function AdminChannelPage({
   const { channelId } = await params
   const { from, err } = await searchParams
   const fromChannel = from === 'channel'
+  const store = await cookies()
+  const feedbackCode = err ?? store.get(CHANNEL_FEEDBACK_COOKIE)?.value ?? null
+  const errToastMap: Record<string, string> = {
+    forbidden: '팀장 계정은 경기그룹 생성 권한이 없습니다.',
+  }
+  const errToast = feedbackCode ? errToastMap[feedbackCode] : null
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -169,6 +186,7 @@ export default async function AdminChannelPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
+        {errToast ? <TransientToast message={errToast} tone="error" /> : null}
         <header className="space-y-1">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <Link className="underline" href={fromChannel ? `/c/${channel.slug}` : '/admin'}>
@@ -190,7 +208,6 @@ export default async function AdminChannelPage({
               <Link className="underline" href={`/admin/channel/${channel.id}/export`}>엑셀 내보내기</Link>
             </div>
           )}
-          {err === 'forbidden' ? <p className="text-xs text-red-600">팀장 계정은 경기그룹 생성 권한이 없습니다.</p> : null}
         </header>
 
         {managerTeamId ? null : (

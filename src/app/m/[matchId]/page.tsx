@@ -1801,12 +1801,13 @@ export default async function MatchDetailPage({
           subtitle={`${match.seq}경기 · ${match.team_a_name} vs ${match.team_b_name}`}
           rightActions={(
             <>
-              {accountSession ? (
+              {accountSession && channel ? (
                 <AccountBadge
                   loginId={accountSession.loginId}
                   role={accountSession.role}
-                  slug={channel!.slug}
+                  slug={channel.slug}
                   redirectTo={currentPath}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account?next=${encodeURIComponent(currentPath)}`}
                 />
               ) : null}
               <ShareButton

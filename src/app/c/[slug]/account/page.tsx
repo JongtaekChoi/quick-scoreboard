@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
-import Breadcrumb from '@/components/Breadcrumb'
+import UserGNB from '@/components/UserGNB'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo, createAccountSession } from '@/lib/channelSession'
 import { hashAccountPassword } from '@/lib/passwordHash'
@@ -113,13 +113,14 @@ export default async function ChannelAccountPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-xl mx-auto space-y-4">
+        <UserGNB
+          slug={channel.slug}
+          channelName={channel.name}
+          current="account"
+          subtitle={`${row.login_id} (${row.role})`}
+        />
         <header className="space-y-1">
-          <Breadcrumb items={[
-            { label: "리그 경기목록", href: `/c/${channel.slug}` },
-            { label: "내 계정" },
-          ]} />
           <h1 className="text-xl font-semibold">비밀번호 변경</h1>
-          <p className="text-sm text-gray-600">{row.login_id} ({row.role})</p>
           {force === '1' || row.must_change_password ? (
             <p className="text-xs text-amber-700">초기 비밀번호를 변경해 주세요.</p>
           ) : null}

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { createHash } from "crypto";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -14,12 +13,12 @@ import LiveScoreboard from "./LiveScoreboard";
 import MatchEditHelp from "./MatchEditHelp";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
-import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import TransientToast from "@/components/TransientToast";
 import LiveMinuteBadge from "./LiveMinuteBadge";
+import UserGNB from "@/components/UserGNB";
 import {
   getPeriodDisplayLabel,
   summarizeLegacyPeriodControl,
@@ -48,14 +47,6 @@ type Match = {
 };
 
 type Channel = { id: string; slug: string; edit_session_version: number };
-type MatchGroup = {
-  id: string;
-  play_date: string;
-  venue: string | null;
-  title: string | null;
-  seq: number;
-};
-
 type GoalEvent = {
   id: string;
   team_side: "A" | "B";
@@ -1286,12 +1277,10 @@ export default async function MatchDetailPage({
   searchParams: Promise<{
     err?: string;
     mode?: string;
-    undo?: string;
-    undo_until?: string;
   }>;
 }) {
   const { matchId } = await params;
-  const { err, mode, undo, undo_until } = await searchParams;
+  const { err, mode } = await searchParams;
   const store = await cookies();
   const feedbackCode = err ?? store.get(MATCH_FEEDBACK_COOKIE)?.value ?? null;
   const errToastMap: Record<string, string> = {
@@ -1359,13 +1348,6 @@ export default async function MatchDetailPage({
     .eq("id", match.channel_id)
     .maybeSingle<Channel>();
 
-  const { data: group } = match.match_group_id
-    ? await supabase
-        .from("match_groups")
-        .select("id,play_date,venue,title,seq")
-        .eq("id", match.match_group_id)
-        .maybeSingle<MatchGroup>()
-    : { data: null as MatchGroup | null };
 
   // 엔트리/게스트 기반 roster 구성
   let rosterA: RosterPlayer[] = [];
@@ -1652,7 +1634,6 @@ export default async function MatchDetailPage({
     : async () => {};
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
-  const undoAvailable = !!undo && !!undo_until;
 
   const suggestedNames = Array.from(
     new Set([
@@ -1683,9 +1664,6 @@ export default async function MatchDetailPage({
     : async () => {};
   const addSubstitutionAction = channel
     ? addSubstitutionEvent.bind(null, matchId, channel.slug)
-    : async () => {};
-  const undoSubstitutionAction = channel
-    ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
     : async () => {};
   const cancelReservedSubstitutionAction = channel
     ? cancelReservedSubstitution.bind(null, matchId, channel.slug)
@@ -1816,33 +1794,13 @@ export default async function MatchDetailPage({
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
-        <header className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <Breadcrumb
-                items={[
-                  {
-                    label: "경기목록",
-                    href: channel ? `/c/${channel.slug}` : "/",
-                  },
-                  ...(group
-                    ? [
-                        {
-                          label:
-                            group.title ??
-                            `${group.play_date} 그룹 ${group.seq}`,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-              <span className="text-xs text-gray-500">›</span>
-              <span className="font-semibold text-gray-900 text-base">
-                {match.seq}경기
-              </span>
-              <span className="text-xs text-gray-400">({match.status})</span>
-            </div>
-            <div className="flex items-center gap-2">
+        <UserGNB
+          slug={channel?.slug ?? ""}
+          channelName={`${match.team_a_name} vs ${match.team_b_name}`}
+          current="matches"
+          subtitle={`${match.seq}경기 · ${match.team_a_name} vs ${match.team_b_name}`}
+          rightActions={(
+            <>
               {accountSession ? (
                 <AccountBadge
                   loginId={accountSession.loginId}
@@ -1855,45 +1813,9 @@ export default async function MatchDetailPage({
                 url={matchUrl}
                 title={`${match.seq}경기 ${match.team_a_name} vs ${match.team_b_name}`}
               />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {canGoalEdit && !isEditMode ? (
-              <Link
-                href={`/m/${matchId}?mode=edit`}
-                className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-700"
-              >
-                편집모드로 전환
-              </Link>
-            ) : null}
-            {isEditMode ? (
-              <Link
-                href={`/m/${matchId}`}
-                className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-gray-700"
-              >
-                보기모드로 돌아가기
-              </Link>
-            ) : null}
-            {accountSession?.role === "player" && !canEditThisMatch ? (
-              <span className="text-xs text-amber-700">
-                본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)
-              </span>
-            ) : null}
-          </div>
-          {undoAvailable ? (
-            <form
-              action={undoSubstitutionAction}
-              className="inline-flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
-            >
-              <input type="hidden" name="undo_ids" value={undo ?? ""} />
-              <input type="hidden" name="undo_until" value={undo_until ?? ""} />
-              <span>최근 교체를 취소할 수 있습니다.</span>
-              <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
-                교체 취소
-              </PendingSubmitButton>
-            </form>
-          ) : null}
-        </header>
+            </>
+          )}
+        />
 
         <MatchEditHelp
           isEditMode={isEditMode}

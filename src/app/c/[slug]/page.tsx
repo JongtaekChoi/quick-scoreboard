@@ -9,6 +9,7 @@ import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
 import LoginModal from "./LoginModal";
 import { resolveTeamColor } from "@/lib/teamColor";
+import UserGNB from "@/components/UserGNB";
 
 type Channel = {
   id: string;
@@ -179,10 +180,13 @@ export default async function ChannelPage({
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6 page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
-        <header className="sticky top-0 z-20 space-y-3 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
-          <div className="flex items-start justify-between gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{channel.name}</h1>
-            <div className="flex items-center gap-2">
+        <UserGNB
+          slug={channel.slug}
+          channelName={channel.name}
+          current="matches"
+          subtitle="경기목록 (날짜 기준)"
+          rightActions={(
+            <>
               {!accountSession ? (
                 <LoginModal slug={channel.slug} accError={acc === "password"} />
               ) : null}
@@ -198,66 +202,56 @@ export default async function ChannelPage({
                 url={channelUrl}
                 title={`${channel.name} 경기목록`}
               />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-gray-600">경기목록 (날짜 기준)</p>
-            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/stats`}>
-              통계 보기
-            </Link>
-            <Link className="rounded-full border px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50" href={`/c/${encodeURIComponent(channel.slug)}/calendar`}>
-              달력 보기
-            </Link>
-            {channel.slug === "sample" ? (
-              <Link className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100" href="/c/sample/guide">
-                샘플 사용 가이드
-              </Link>
-            ) : null}
-          </div>
-          {channel.slug === "sample" ? (
-            <section className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              처음 사용하면 <Link className="underline font-medium" href="/c/sample/guide">샘플 사용 가이드</Link>를 먼저 확인해 주세요.
-            </section>
-          ) : null}
+            </>
+          )}
+        />
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {accountSession?.mustChangePassword ? (
-              <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
-            ) : null}
-            {acc === "1" ? (
-              <span className="text-green-700">로그인되었습니다.</span>
-            ) : null}
-            {pw === "1" ? (
-              <span className="text-green-700">비밀번호가 변경되었습니다.</span>
-            ) : null}
-            {mgr === "expired" ? (
-              <span className="text-amber-700 inline-flex items-center gap-2">
-                매니저 세션이 만료되었거나 권한이 변경되어 접근이 차단되었습니다.
-                {next ? (
-                  <Link className="underline" href={next}>확인</Link>
-                ) : null}
-              </span>
-            ) : null}
-            {isAdmin || isChannelAdmin || managerTeamId ? (
-              <Link
-                className="underline"
-                href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
-              >
-                {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
-              </Link>
-            ) : null}
-            {supportOpenChatUrl ? (
-              <a
-                className="ml-auto text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600"
-                href={supportOpenChatUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                문의하기
-              </a>
-            ) : null}
-          </div>
-        </header>
+        {channel.slug === "sample" ? (
+          <section className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            처음 사용하면 <Link className="underline font-medium" href="/c/sample/guide">샘플 사용 가이드</Link>를 먼저 확인해 주세요.
+          </section>
+        ) : null}
+
+        <div className="rounded border bg-white px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
+          {accountSession?.mustChangePassword ? (
+            <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
+          ) : null}
+          {acc === "1" ? (
+            <span className="text-green-700">로그인되었습니다.</span>
+          ) : null}
+          {pw === "1" ? (
+            <span className="text-green-700">비밀번호가 변경되었습니다.</span>
+          ) : null}
+          {mgr === "expired" ? (
+            <span className="text-amber-700 inline-flex items-center gap-2">
+              매니저 세션이 만료되었거나 권한이 변경되어 접근이 차단되었습니다.
+              {next ? (
+                <Link className="underline" href={next}>확인</Link>
+              ) : null}
+            </span>
+          ) : null}
+          {isAdmin || isChannelAdmin || managerTeamId ? (
+            <Link
+              className="underline"
+              href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
+            >
+              {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
+            </Link>
+          ) : null}
+          {supportOpenChatUrl ? (
+            <a
+              className="ml-auto text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600"
+              href={supportOpenChatUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              문의하기
+            </a>
+          ) : null}
+          {channel.slug === "sample" ? (
+            <Link className="text-[11px] text-amber-700 underline" href="/c/sample/guide">샘플 가이드</Link>
+          ) : null}
+        </div>
 
         {(groups ?? []).length === 0 ? (
           <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">

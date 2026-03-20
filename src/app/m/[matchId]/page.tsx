@@ -1841,49 +1841,51 @@ export default async function MatchDetailPage({
           )}
         />
 
-        <div className="rounded border bg-white px-3 py-2 space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {canGoalEdit && !isEditMode ? (
-              <Link
-                href={`/m/${matchId}?mode=edit`}
-                className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-700"
+        {(canGoalEdit || isEditMode || (accountSession?.role === "player" && !canEditThisMatch) || group || undoAvailable) ? (
+          <div className="rounded border bg-white px-3 py-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {canGoalEdit && !isEditMode ? (
+                <Link
+                  href={`/m/${matchId}?mode=edit`}
+                  className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-700"
+                >
+                  편집모드로 전환
+                </Link>
+              ) : null}
+              {isEditMode ? (
+                <Link
+                  href={`/m/${matchId}`}
+                  className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-gray-700"
+                >
+                  보기모드로 돌아가기
+                </Link>
+              ) : null}
+              {accountSession?.role === "player" && !canEditThisMatch ? (
+                <span className="text-xs text-amber-700">
+                  본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)
+                </span>
+              ) : null}
+              {group ? (
+                <span className="text-xs text-gray-500">
+                  {group.title ?? `${group.play_date} 그룹 ${group.seq}`}
+                </span>
+              ) : null}
+            </div>
+            {undoAvailable ? (
+              <form
+                action={undoSubstitutionAction}
+                className="inline-flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
               >
-                편집모드로 전환
-              </Link>
-            ) : null}
-            {isEditMode ? (
-              <Link
-                href={`/m/${matchId}`}
-                className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-gray-700"
-              >
-                보기모드로 돌아가기
-              </Link>
-            ) : null}
-            {accountSession?.role === "player" && !canEditThisMatch ? (
-              <span className="text-xs text-amber-700">
-                본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)
-              </span>
-            ) : null}
-            {group ? (
-              <span className="text-xs text-gray-500">
-                {group.title ?? `${group.play_date} 그룹 ${group.seq}`}
-              </span>
+                <input type="hidden" name="undo_ids" value={undo ?? ""} />
+                <input type="hidden" name="undo_until" value={undo_until ?? ""} />
+                <span>최근 교체를 취소할 수 있습니다.</span>
+                <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
+                  교체 취소
+                </PendingSubmitButton>
+              </form>
             ) : null}
           </div>
-          {undoAvailable ? (
-            <form
-              action={undoSubstitutionAction}
-              className="inline-flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
-            >
-              <input type="hidden" name="undo_ids" value={undo ?? ""} />
-              <input type="hidden" name="undo_until" value={undo_until ?? ""} />
-              <span>최근 교체를 취소할 수 있습니다.</span>
-              <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
-                교체 취소
-              </PendingSubmitButton>
-            </form>
-          ) : null}
-        </div>
+        ) : null}
 
         <MatchEditHelp
           isEditMode={isEditMode}

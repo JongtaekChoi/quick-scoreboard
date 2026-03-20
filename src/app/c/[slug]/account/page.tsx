@@ -118,6 +118,8 @@ export default async function ChannelAccountPage({
           channelName={channel.name}
           current="account"
           subtitle={`${row.login_id} (${row.role})`}
+          isLoggedIn
+          currentPath={`/c/${encodeURIComponent(channel.slug)}/account${next ? `?next=${encodeURIComponent(next)}` : ""}`}
         />
         <header className="space-y-1">
           <h1 className="text-xl font-semibold">비밀번호 변경</h1>

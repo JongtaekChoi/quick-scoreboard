@@ -1,5 +1,8 @@
+"use client";
+
 import Link from 'next/link'
 import { ReactNode } from 'react'
+import LoginModal from '@/app/c/[slug]/LoginModal'
 
 type TabKey = 'matches' | 'stats' | 'calendar' | 'account'
 
@@ -9,12 +12,16 @@ export default function UserGNB({
   current,
   rightActions,
   subtitle,
+  isLoggedIn = false,
+  currentPath,
 }: {
   slug?: string | null
   channelName: string
   current: TabKey
   rightActions?: ReactNode
   subtitle?: ReactNode
+  isLoggedIn?: boolean
+  currentPath?: string
 }) {
   const normalizedSlug = slug?.trim() ?? ''
   const hasSlug = normalizedSlug.length > 0
@@ -39,15 +46,29 @@ export default function UserGNB({
 
       {hasSlug ? (
         <nav className="flex flex-wrap items-center gap-1">
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              href={tab.href}
-              className={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-            >
-              {tab.label}
-            </Link>
-          ))}
+          {tabs.map((tab) => {
+            const isAccountTab = tab.key === 'account'
+            if (isAccountTab && !isLoggedIn) {
+              return (
+                <LoginModal
+                  key={tab.key}
+                  slug={normalizedSlug}
+                  redirectTo={currentPath ?? `/c/${encodeURIComponent(normalizedSlug)}`}
+                  triggerLabel={tab.label}
+                  triggerClassName={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                />
+              )
+            }
+            return (
+              <Link
+                key={tab.key}
+                href={tab.href}
+                className={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {tab.label}
+              </Link>
+            )
+          })}
         </nav>
       ) : null}
     </header>

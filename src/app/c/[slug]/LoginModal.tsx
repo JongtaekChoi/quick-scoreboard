@@ -1,35 +1,32 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 export default function LoginModal({
   slug,
   accError,
+  redirectTo,
+  triggerLabel = "로그인",
+  triggerClassName = "rounded border px-2 py-1 text-xs",
 }: {
   slug: string;
   accError?: boolean;
+  redirectTo?: string;
+  triggerLabel?: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(!!accError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  return (
-    <>
-      <button
-        className="rounded border px-2 py-1 text-xs"
-        type="button"
-        onClick={() => setOpen(true)}
-      >
-        로그인
-      </button>
-
-      {open ? (
+  const modal = open ? (
         <div
-          className="fixed inset-0 z-50 bg-black/30 p-4 flex items-center justify-center"
+          className="fixed inset-0 z-[100] bg-black/40 p-4 flex items-center justify-center"
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-xl border bg-white p-4 space-y-3">
+          <div className="w-full max-w-sm rounded-xl border bg-white p-4 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">로그인</h3>
               <button
@@ -53,6 +50,7 @@ export default function LoginModal({
               className="space-y-2"
               onSubmit={() => setIsSubmitting(true)}
             >
+              {redirectTo ? <input type="hidden" name="redirect_to" value={redirectTo} /> : null}
               <input
                 className="w-full rounded border px-2 py-1 text-sm"
                 name="login_id"
@@ -77,7 +75,18 @@ export default function LoginModal({
             </form>
           </div>
         </div>
-      ) : null}
+      ) : null;
+
+  return (
+    <>
+      <button
+        className={triggerClassName}
+        type="button"
+        onClick={() => setOpen(true)}
+      >
+        {triggerLabel}
+      </button>
+      {typeof document !== "undefined" ? createPortal(modal, document.body) : null}
     </>
   );
 }

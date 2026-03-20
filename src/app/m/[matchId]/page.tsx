@@ -1820,6 +1820,8 @@ export default async function MatchDetailPage({
           channelName={channel?.name ?? "경기"}
           current="matches"
           subtitle={`${match.seq}경기 · ${match.status}`}
+          isLoggedIn={!!accountSession}
+          currentPath={currentPath}
           rightActions={(
             <>
               {accountSession && channel ? (

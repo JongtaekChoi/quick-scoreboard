@@ -2,6 +2,7 @@ export const revalidate = 120;
 
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { getAccountInfo } from "@/lib/channelSession";
 import UserGNB from "@/components/UserGNB";
 
 type Channel = { id: string; name: string; slug: string };
@@ -47,6 +48,8 @@ export default async function ChannelCalendarPage({
   if (!channel) {
     return <main className="min-h-screen p-4">리그를 찾을 수 없습니다.</main>;
   }
+
+  const accountSession = await getAccountInfo(channel.slug);
 
   const now = new Date();
   let year = now.getFullYear();
@@ -162,6 +165,8 @@ export default async function ChannelCalendarPage({
           channelName={channel.name}
           current="calendar"
           subtitle="날짜를 누르면 해당 날짜 경기로 이동할 수 있습니다."
+          isLoggedIn={!!accountSession}
+          currentPath={`/c/${encodeURIComponent(channel.slug)}/calendar`}
         />
 
         <section className="rounded-2xl border border-gray-200 bg-white p-2.5 md:p-3 shadow-sm">

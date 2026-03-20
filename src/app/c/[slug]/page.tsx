@@ -185,10 +185,12 @@ export default async function ChannelPage({
           channelName={channel.name}
           current="matches"
           subtitle="경기목록 (날짜 기준)"
+          isLoggedIn={!!accountSession}
+          currentPath={`/c/${encodeURIComponent(channel.slug)}`}
           rightActions={(
             <>
               {!accountSession ? (
-                <LoginModal slug={channel.slug} accError={acc === "password"} />
+                <LoginModal slug={channel.slug} accError={acc === "password"} redirectTo={`/c/${encodeURIComponent(channel.slug)}`} />
               ) : null}
               {accountSession ? (
                 <AccountBadge
@@ -247,9 +249,6 @@ export default async function ChannelPage({
             >
               문의하기
             </a>
-          ) : null}
-          {channel.slug === "sample" ? (
-            <Link className="text-[11px] text-amber-700 underline" href="/c/sample/guide">샘플 가이드</Link>
           ) : null}
         </div>
 

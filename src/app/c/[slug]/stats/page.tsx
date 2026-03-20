@@ -1,6 +1,7 @@
 export const revalidate = 180;
 
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { getAccountInfo } from "@/lib/channelSession";
 import ExpandableRankingList from "./ExpandableRankingList";
 import ScorerRankingWithLogs from "./ScorerRankingWithLogs";
 import UserGNB from "@/components/UserGNB";
@@ -67,6 +68,8 @@ export default async function StatsPage({
   if (!channel) {
     return <main className="p-6">리그를 찾을 수 없습니다.</main>;
   }
+
+  const accountSession = await getAccountInfo(channel.slug);
 
   const { data: matches } = await supabase
     .from("matches")
@@ -269,6 +272,8 @@ export default async function StatsPage({
           channelName={channel.name}
           current="stats"
           subtitle="팀 순위 / 득점 / 어시스트 / 평점"
+          isLoggedIn={!!accountSession}
+          currentPath={`/c/${encodeURIComponent(channel.slug)}/stats`}
         />
 
         <section className="rounded border p-4">

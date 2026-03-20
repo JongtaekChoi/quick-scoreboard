@@ -52,14 +52,14 @@ export default function LoginModal({
             >
               {redirectTo ? <input type="hidden" name="redirect_to" value={redirectTo} /> : null}
               <input
-                className="w-full rounded border px-2 py-1 text-sm"
+                className="w-full rounded border px-2 py-1 text-base"
                 name="login_id"
                 placeholder="계정 ID"
                 required
                 autoFocus
               />
               <input
-                className="w-full rounded border px-2 py-1 text-sm"
+                className="w-full rounded border px-2 py-1 text-base"
                 type="password"
                 name="password"
                 placeholder="비밀번호"

@@ -214,43 +214,45 @@ export default async function ChannelPage({
           </section>
         ) : null}
 
-        <div className="rounded border bg-white px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
-          {accountSession?.mustChangePassword ? (
-            <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
-          ) : null}
-          {acc === "1" ? (
-            <span className="text-green-700">로그인되었습니다.</span>
-          ) : null}
-          {pw === "1" ? (
-            <span className="text-green-700">비밀번호가 변경되었습니다.</span>
-          ) : null}
-          {mgr === "expired" ? (
-            <span className="text-amber-700 inline-flex items-center gap-2">
-              매니저 세션이 만료되었거나 권한이 변경되어 접근이 차단되었습니다.
-              {next ? (
-                <Link className="underline" href={next}>확인</Link>
-              ) : null}
-            </span>
-          ) : null}
-          {isAdmin || isChannelAdmin || managerTeamId ? (
-            <Link
-              className="underline"
-              href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
-            >
-              {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
-            </Link>
-          ) : null}
-          {supportOpenChatUrl ? (
-            <a
-              className="ml-auto text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600"
-              href={supportOpenChatUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              문의하기
-            </a>
-          ) : null}
-        </div>
+        {(accountSession?.mustChangePassword || acc === "1" || pw === "1" || mgr === "expired" || isAdmin || isChannelAdmin || managerTeamId || supportOpenChatUrl) ? (
+          <div className="rounded border bg-white px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
+            {accountSession?.mustChangePassword ? (
+              <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
+            ) : null}
+            {acc === "1" ? (
+              <span className="text-green-700">로그인되었습니다.</span>
+            ) : null}
+            {pw === "1" ? (
+              <span className="text-green-700">비밀번호가 변경되었습니다.</span>
+            ) : null}
+            {mgr === "expired" ? (
+              <span className="text-amber-700 inline-flex items-center gap-2">
+                매니저 세션이 만료되었거나 권한이 변경되어 접근이 차단되었습니다.
+                {next ? (
+                  <Link className="underline" href={next}>확인</Link>
+                ) : null}
+              </span>
+            ) : null}
+            {isAdmin || isChannelAdmin || managerTeamId ? (
+              <Link
+                className="underline"
+                href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
+              >
+                {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
+              </Link>
+            ) : null}
+            {supportOpenChatUrl ? (
+              <a
+                className="ml-auto text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600"
+                href={supportOpenChatUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                문의하기
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         {(groups ?? []).length === 0 ? (
           <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">

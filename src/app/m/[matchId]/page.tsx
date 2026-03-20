@@ -14,12 +14,12 @@ import LiveScoreboard from "./LiveScoreboard";
 import MatchEditHelp from "./MatchEditHelp";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
-import Breadcrumb from "@/components/Breadcrumb";
 import StarRatingInput from "@/components/StarRatingInput";
 import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import TransientToast from "@/components/TransientToast";
 import LiveMinuteBadge from "./LiveMinuteBadge";
+import UserGNB from "@/components/UserGNB";
 import {
   getPeriodDisplayLabel,
   summarizeLegacyPeriodControl,
@@ -47,7 +47,7 @@ type Match = {
   period_count: number;
 };
 
-type Channel = { id: string; slug: string; edit_session_version: number };
+type Channel = { id: string; slug: string; name: string; edit_session_version: number };
 type MatchGroup = {
   id: string;
   play_date: string;
@@ -55,7 +55,6 @@ type MatchGroup = {
   title: string | null;
   seq: number;
 };
-
 type GoalEvent = {
   id: string;
   team_side: "A" | "B";
@@ -1355,7 +1354,7 @@ export default async function MatchDetailPage({
 
   const { data: channel } = await supabase
     .from("channels")
-    .select("id,slug,edit_session_version")
+    .select("id,slug,name,edit_session_version")
     .eq("id", match.channel_id)
     .maybeSingle<Channel>();
 
@@ -1816,47 +1815,33 @@ export default async function MatchDetailPage({
     <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
-        <header className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <Breadcrumb
-                items={[
-                  {
-                    label: "경기목록",
-                    href: channel ? `/c/${channel.slug}` : "/",
-                  },
-                  ...(group
-                    ? [
-                        {
-                          label:
-                            group.title ??
-                            `${group.play_date} 그룹 ${group.seq}`,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-              <span className="text-xs text-gray-500">›</span>
-              <span className="font-semibold text-gray-900 text-base">
-                {match.seq}경기
-              </span>
-              <span className="text-xs text-gray-400">({match.status})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {accountSession ? (
+        <UserGNB
+          slug={channel?.slug}
+          channelName={channel?.name ?? "경기"}
+          current="matches"
+          subtitle={`${match.seq}경기 · ${match.status}`}
+          isLoggedIn={!!accountSession}
+          currentPath={currentPath}
+          rightActions={(
+            <>
+              {accountSession && channel ? (
                 <AccountBadge
                   loginId={accountSession.loginId}
                   role={accountSession.role}
-                  slug={channel!.slug}
+                  slug={channel.slug}
                   redirectTo={currentPath}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account?next=${encodeURIComponent(currentPath)}`}
                 />
               ) : null}
               <ShareButton
                 url={matchUrl}
                 title={`${match.seq}경기 ${match.team_a_name} vs ${match.team_b_name}`}
               />
-            </div>
-          </div>
+            </>
+          )}
+        />
+
+        <div className="rounded border bg-white px-3 py-2 space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {canGoalEdit && !isEditMode ? (
               <Link
@@ -1879,6 +1864,11 @@ export default async function MatchDetailPage({
                 본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)
               </span>
             ) : null}
+            {group ? (
+              <span className="text-xs text-gray-500">
+                {group.title ?? `${group.play_date} 그룹 ${group.seq}`}
+              </span>
+            ) : null}
           </div>
           {undoAvailable ? (
             <form
@@ -1893,7 +1883,7 @@ export default async function MatchDetailPage({
               </PendingSubmitButton>
             </form>
           ) : null}
-        </header>
+        </div>
 
         <MatchEditHelp
           isEditMode={isEditMode}

@@ -2,6 +2,8 @@ export const revalidate = 120;
 
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { getAccountInfo } from "@/lib/channelSession";
+import UserGNB from "@/components/UserGNB";
 
 type Channel = { id: string; name: string; slug: string };
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null };
@@ -46,6 +48,8 @@ export default async function ChannelCalendarPage({
   if (!channel) {
     return <main className="min-h-screen p-4">리그를 찾을 수 없습니다.</main>;
   }
+
+  const accountSession = await getAccountInfo(channel.slug);
 
   const now = new Date();
   let year = now.getFullYear();
@@ -156,15 +160,14 @@ export default async function ChannelCalendarPage({
   return (
     <main className="min-h-screen bg-gray-50 p-3 pb-24 md:p-6">
       <section className="mx-auto max-w-4xl space-y-3 md:space-y-4">
-        <header className="rounded-2xl border border-gray-200 bg-white p-3 md:p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h1 className="text-lg md:text-xl font-semibold">{channel.name} · 달력 보기</h1>
-            <Link href={`/c/${encodeURIComponent(channel.slug)}`} className="text-xs underline text-gray-700">
-              경기목록으로
-            </Link>
-          </div>
-          <p className="mt-1 text-xs text-gray-500">날짜를 누르면 해당 날짜 경기로 이동할 수 있습니다.</p>
-        </header>
+        <UserGNB
+          slug={channel.slug}
+          channelName={channel.name}
+          current="calendar"
+          subtitle="날짜를 누르면 해당 날짜 경기로 이동할 수 있습니다."
+          isLoggedIn={!!accountSession}
+          currentPath={`/c/${encodeURIComponent(channel.slug)}/calendar`}
+        />
 
         <section className="rounded-2xl border border-gray-200 bg-white p-2.5 md:p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">

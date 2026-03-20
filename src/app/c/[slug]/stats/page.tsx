@@ -1,9 +1,10 @@
 export const revalidate = 180;
 
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { getAccountInfo } from "@/lib/channelSession";
 import ExpandableRankingList from "./ExpandableRankingList";
 import ScorerRankingWithLogs from "./ScorerRankingWithLogs";
-import Breadcrumb from "@/components/Breadcrumb";
+import UserGNB from "@/components/UserGNB";
 import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = { id: string; name: string; slug: string };
@@ -67,6 +68,8 @@ export default async function StatsPage({
   if (!channel) {
     return <main className="p-6">리그를 찾을 수 없습니다.</main>;
   }
+
+  const accountSession = await getAccountInfo(channel.slug);
 
   const { data: matches } = await supabase
     .from("matches")
@@ -264,14 +267,14 @@ export default async function StatsPage({
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
-        <header className="space-y-1">
-          <Breadcrumb items={[
-            { label: "리그 경기목록", href: `/c/${channel.slug}` },
-            { label: "통계" },
-          ]} />
-          <h1 className="text-2xl font-semibold">통계</h1>
-          <p className="text-sm text-gray-600">{channel.name} · 팀 순위 / 득점 / 어시스트 / 평점</p>
-        </header>
+        <UserGNB
+          slug={channel.slug}
+          channelName={channel.name}
+          current="stats"
+          subtitle="팀 순위 / 득점 / 어시스트 / 평점"
+          isLoggedIn={!!accountSession}
+          currentPath={`/c/${encodeURIComponent(channel.slug)}/stats`}
+        />
 
         <section className="rounded border p-4">
           <h2 className="text-sm font-semibold mb-2">팀 순위</h2>

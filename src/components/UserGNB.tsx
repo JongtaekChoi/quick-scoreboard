@@ -10,18 +10,22 @@ export default function UserGNB({
   rightActions,
   subtitle,
 }: {
-  slug: string
+  slug?: string | null
   channelName: string
   current: TabKey
   rightActions?: ReactNode
   subtitle?: ReactNode
 }) {
-  const tabs: { key: TabKey; label: string; href: string }[] = [
-    { key: 'matches', label: '경기', href: `/c/${encodeURIComponent(slug)}` },
-    { key: 'stats', label: '통계', href: `/c/${encodeURIComponent(slug)}/stats` },
-    { key: 'calendar', label: '달력', href: `/c/${encodeURIComponent(slug)}/calendar` },
-    { key: 'account', label: '계정', href: `/c/${encodeURIComponent(slug)}/account` },
-  ]
+  const normalizedSlug = slug?.trim() ?? ''
+  const hasSlug = normalizedSlug.length > 0
+  const tabs: { key: TabKey; label: string; href: string }[] = hasSlug
+    ? [
+        { key: 'matches', label: '경기', href: `/c/${encodeURIComponent(normalizedSlug)}` },
+        { key: 'stats', label: '통계', href: `/c/${encodeURIComponent(normalizedSlug)}/stats` },
+        { key: 'calendar', label: '달력', href: `/c/${encodeURIComponent(normalizedSlug)}/calendar` },
+        { key: 'account', label: '계정', href: `/c/${encodeURIComponent(normalizedSlug)}/account` },
+      ]
+    : []
 
   return (
     <header className="sticky top-0 z-20 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur space-y-3">
@@ -33,17 +37,19 @@ export default function UserGNB({
         <div className="flex items-center gap-2">{rightActions}</div>
       </div>
 
-      <nav className="flex flex-wrap items-center gap-1">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            className={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      {hasSlug ? (
+        <nav className="flex flex-wrap items-center gap-1">
+          {tabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
     </header>
   )
 }

@@ -1816,7 +1816,7 @@ export default async function MatchDetailPage({
       <section className="max-w-3xl mx-auto space-y-4">
         {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
         <UserGNB
-          slug={channel?.slug ?? ""}
+          slug={channel?.slug}
           channelName={channel?.name ?? "경기"}
           current="matches"
           subtitle={`${match.seq}경기 · ${match.status}`}

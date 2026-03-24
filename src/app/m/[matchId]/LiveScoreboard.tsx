@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 type Goal = {
   id: string;
@@ -380,10 +376,5 @@ export default function LiveScoreboard(props: {
   substitutionEvents?: SubstitutionEvent[];
   periodStarters?: PeriodStarterSummary[];
 }) {
-  const [queryClient] = useState(() => new QueryClient());
-  return (
-    <QueryClientProvider client={queryClient}>
-      <LiveScoreboardInner {...props} />
-    </QueryClientProvider>
-  );
+  return <LiveScoreboardInner {...props} />;
 }

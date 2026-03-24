@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import { autoStartDueMatches } from "@/lib/matchSchedule";
-import { getPeriodDisplayLabel, summarizeLegacyPeriodControl } from "@/lib/matchPeriods";
+import { summarizeLegacyPeriodControl } from "@/lib/matchPeriods";
 import type { MatchPeriodRow } from "@/lib/matchPeriods";
 import type {
   Match,

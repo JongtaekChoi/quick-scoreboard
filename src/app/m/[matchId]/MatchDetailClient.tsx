@@ -305,6 +305,7 @@ function MatchDetailInner({
   const activeKeysB = calcActiveKeys(subsB, starterKeySetB);
 
   // Time computations
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const activePeriodStart =
     match.period_state === "first_half"
@@ -403,7 +404,7 @@ function MatchDetailInner({
   const matchUrl = `https://quick-scoreboard.vercel.app/m/${matchId}`;
   const currentPath = `/m/${matchId}`;
   const undoAvailable =
-    !!undoIds && !!undoUntil && Date.now() < Number(undoUntil);
+    !!undoIds && !!undoUntil && now < Number(undoUntil);
 
   // Mutation hooks (only create when we have a channel)
   const mutationCallbacks = useMemo(

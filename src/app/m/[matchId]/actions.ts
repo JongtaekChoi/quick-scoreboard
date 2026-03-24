@@ -1,12 +1,20 @@
 "use server";
 
 import { createHash } from "crypto";
+import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { validateManagerAgainstDb, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
 import type { GoalPermission, ChangeActor } from "./types";
 
 type ActionResult = { success: true } | { error: string };
+
+async function revalidateMatchViews(matchId: string, channelSlug: string) {
+  const encodedSlug = encodeURIComponent(channelSlug);
+  revalidatePath(`/m/${matchId}`);
+  revalidatePath(`/c/${encodedSlug}`);
+  revalidatePath(`/c/${encodedSlug}/stats`);
+}
 
 async function getChangeActor(channelSlug: string): Promise<ChangeActor> {
   const isAdmin = await isAdminAuthorized();
@@ -322,6 +330,7 @@ export async function addGoalDetailed(
     minute,
   });
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -515,6 +524,7 @@ export async function applyPeriodAction(
     patch,
   });
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -597,6 +607,7 @@ export async function updateGoalEvent(
     assist: assist.name,
   });
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -645,6 +656,7 @@ export async function deleteGoalEvent(
     teamSide,
   });
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -786,6 +798,7 @@ export async function submitAnonymousRating(
     rating,
   });
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -943,7 +956,8 @@ export async function addSubstitutionEvent(
       },
     );
 
-    return { success: true };
+    await revalidateMatchViews(matchId, channelSlug);
+  return { success: true };
   }
 
   const { data: livePeriodForSub } = await supabase
@@ -1040,6 +1054,7 @@ export async function undoSubstitutionEvent(
     { subIds },
   );
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }
 
@@ -1107,5 +1122,6 @@ export async function cancelReservedSubstitution(
     { reservationId },
   );
 
+  await revalidateMatchViews(matchId, channelSlug);
   return { success: true };
 }

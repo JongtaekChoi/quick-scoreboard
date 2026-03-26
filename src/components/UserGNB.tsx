@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { ReactNode } from 'react'
-import LoginModal from '@/app/c/[slug]/LoginModal'
 
 type TabKey = 'matches' | 'stats' | 'calendar' | 'account'
 
@@ -30,7 +29,9 @@ export default function UserGNB({
         { key: 'matches', label: '경기', href: `/c/${encodeURIComponent(normalizedSlug)}` },
         { key: 'stats', label: '통계', href: `/c/${encodeURIComponent(normalizedSlug)}/stats` },
         { key: 'calendar', label: '달력', href: `/c/${encodeURIComponent(normalizedSlug)}/calendar` },
-        { key: 'account', label: '계정', href: `/c/${encodeURIComponent(normalizedSlug)}/account` },
+        ...(isLoggedIn
+          ? [{ key: 'account' as const, label: '계정', href: `/c/${encodeURIComponent(normalizedSlug)}/account` }]
+          : []),
       ]
     : []
 
@@ -46,31 +47,17 @@ export default function UserGNB({
 
       {hasSlug ? (
         <nav className="flex flex-wrap items-center gap-1">
-          {tabs.map((tab) => {
-            const isAccountTab = tab.key === 'account'
-            if (isAccountTab && !isLoggedIn) {
-              return (
-                <LoginModal
-                  key={tab.key}
-                  slug={normalizedSlug}
-                  redirectTo={currentPath ?? `/c/${encodeURIComponent(normalizedSlug)}`}
-                  triggerLabel={tab.label}
-                  triggerClassName={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                />
-              )
-            }
-            return (
-              <Link
-                key={tab.key}
-                href={tab.href}
-                prefetch
-                scroll={false}
-                className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                {tab.label}
-              </Link>
-            )
-          })}
+          {tabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              prefetch
+              scroll={false}
+              className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {tab.label}
+            </Link>
+          ))}
         </nav>
       ) : null}
     </header>

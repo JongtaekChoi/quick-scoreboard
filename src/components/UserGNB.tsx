@@ -63,6 +63,8 @@ export default function UserGNB({
               <Link
                 key={tab.key}
                 href={tab.href}
+                prefetch
+                scroll={false}
                 className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               >
                 {tab.label}

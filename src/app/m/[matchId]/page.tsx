@@ -1821,7 +1821,6 @@ export default async function MatchDetailPage({
           current="matches"
           subtitle={`${match.seq}경기 · ${match.status}`}
           isLoggedIn={!!accountSession}
-          currentPath={currentPath}
           rightActions={(
             <>
               {accountSession && channel ? (

@@ -4,6 +4,9 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { getAccountInfo } from "@/lib/channelSession";
 import UserGNB from "@/components/UserGNB";
+import ShareButton from "@/components/ShareButton";
+import AccountBadge from "@/components/AccountBadge";
+import LoginModal from "../LoginModal";
 
 type Channel = { id: string; name: string; slug: string };
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null };
@@ -158,7 +161,7 @@ export default async function ChannelCalendarPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-3 pb-24 md:p-6">
+    <main className="min-h-screen bg-gray-50 px-3 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0">
       <section className="mx-auto max-w-4xl space-y-3 md:space-y-4">
         <UserGNB
           slug={channel.slug}
@@ -166,7 +169,22 @@ export default async function ChannelCalendarPage({
           current="calendar"
           subtitle="날짜를 누르면 해당 날짜 경기로 이동할 수 있습니다."
           isLoggedIn={!!accountSession}
-          currentPath={`/c/${encodeURIComponent(channel.slug)}/calendar`}
+          rightActions={
+            <>
+              {!accountSession ? (
+                <LoginModal slug={channel.slug} redirectTo={`/c/${encodeURIComponent(channel.slug)}/calendar`} triggerClassName="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white" />
+              ) : null}
+              {accountSession ? (
+                <AccountBadge
+                  loginId={accountSession.loginId}
+                  role={accountSession.role}
+                  slug={channel.slug}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
+                />
+              ) : null}
+              <ShareButton url={`https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}/calendar`} title={`${channel.name} 달력`} />
+            </>
+          }
         />
 
         <section className="rounded-2xl bg-white p-2.5 md:p-3 shadow-sm">

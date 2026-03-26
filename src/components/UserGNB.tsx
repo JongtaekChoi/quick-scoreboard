@@ -12,7 +12,6 @@ export default function UserGNB({
   rightActions,
   subtitle,
   isLoggedIn = false,
-  currentPath,
 }: {
   slug?: string | null
   channelName: string
@@ -20,7 +19,6 @@ export default function UserGNB({
   rightActions?: ReactNode
   subtitle?: ReactNode
   isLoggedIn?: boolean
-  currentPath?: string
 }) {
   const normalizedSlug = slug?.trim() ?? ''
   const hasSlug = normalizedSlug.length > 0

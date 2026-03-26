@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import UserGNB from '@/components/UserGNB'
+import ShareButton from '@/components/ShareButton'
+import AccountBadge from '@/components/AccountBadge'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo, createAccountSession } from '@/lib/channelSession'
 import { hashAccountPassword } from '@/lib/passwordHash'
@@ -111,7 +113,7 @@ export default async function ChannelAccountPage({
   if (!row) redirect(`/c/${slug}`)
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-gray-50">
+    <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0">
       <section className="max-w-xl mx-auto space-y-4">
         <UserGNB
           slug={channel.slug}
@@ -119,7 +121,17 @@ export default async function ChannelAccountPage({
           current="account"
           subtitle={`${row.login_id} (${row.role})`}
           isLoggedIn
-          currentPath={`/c/${encodeURIComponent(channel.slug)}/account${next ? `?next=${encodeURIComponent(next)}` : ""}`}
+          rightActions={
+            <>
+              <AccountBadge
+                loginId={row.login_id}
+                role={row.role}
+                slug={channel.slug}
+                accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
+              />
+              <ShareButton url={`https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}/account`} title={`${channel.name} 계정`} />
+            </>
+          }
         />
         <header className="space-y-1 rounded-xl bg-white p-3 shadow-sm">
           <h1 className="text-xl font-semibold">비밀번호 변경</h1>

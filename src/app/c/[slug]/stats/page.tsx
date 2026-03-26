@@ -5,6 +5,9 @@ import { getAccountInfo } from "@/lib/channelSession";
 import ExpandableRankingList from "./ExpandableRankingList";
 import ScorerRankingWithLogs from "./ScorerRankingWithLogs";
 import UserGNB from "@/components/UserGNB";
+import ShareButton from "@/components/ShareButton";
+import AccountBadge from "@/components/AccountBadge";
+import LoginModal from "../LoginModal";
 import { resolveTeamColor } from "@/lib/teamColor";
 
 type Channel = { id: string; name: string; slug: string };
@@ -265,7 +268,7 @@ export default async function StatsPage({
     .sort((a, b) => b.avg - a.avg || b.count - a.count || a.player.localeCompare(b.player));
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-gray-50">
+    <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0">
       <section className="max-w-5xl mx-auto space-y-5">
         <UserGNB
           slug={channel.slug}
@@ -273,7 +276,22 @@ export default async function StatsPage({
           current="stats"
           subtitle="팀 순위 / 득점 / 어시스트 / 평점"
           isLoggedIn={!!accountSession}
-          currentPath={`/c/${encodeURIComponent(channel.slug)}/stats`}
+          rightActions={
+            <>
+              {!accountSession ? (
+                <LoginModal slug={channel.slug} redirectTo={`/c/${encodeURIComponent(channel.slug)}/stats`} triggerClassName="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white" />
+              ) : null}
+              {accountSession ? (
+                <AccountBadge
+                  loginId={accountSession.loginId}
+                  role={accountSession.role}
+                  slug={channel.slug}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
+                />
+              ) : null}
+              <ShareButton url={`https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}/stats`} title={`${channel.name} 통계`} />
+            </>
+          }
         />
 
         <section className="rounded-2xl bg-white p-4 shadow-sm">

@@ -177,7 +177,7 @@ export default async function ChannelPage({
   const matchesByGroupObj = Object.fromEntries(matchesByGroup.entries());
 
   return (
-    <main className="min-h-screen bg-gray-50 p-4 pb-24 md:p-6 page-enter">
+    <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0 page-enter">
       <section className="max-w-4xl mx-auto space-y-4">
         <UserGNB
           slug={channel.slug}
@@ -185,7 +185,6 @@ export default async function ChannelPage({
           current="matches"
           subtitle="경기목록 (날짜 기준)"
           isLoggedIn={!!accountSession}
-          currentPath={`/c/${encodeURIComponent(channel.slug)}`}
           rightActions={(
             <>
               {!accountSession ? (

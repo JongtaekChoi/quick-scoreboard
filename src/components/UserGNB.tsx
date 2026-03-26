@@ -36,7 +36,7 @@ export default function UserGNB({
     : []
 
   return (
-    <header className="sticky top-0 z-20 rounded-2xl bg-white/95 p-4 shadow-sm backdrop-blur space-y-3">
+    <header className="sticky top-0 z-20 -mx-4 border-b border-gray-100 bg-white/95 px-4 py-3 backdrop-blur md:mx-0 md:px-0 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{channelName}</h1>

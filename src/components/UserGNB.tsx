@@ -35,7 +35,7 @@ export default function UserGNB({
     : []
 
   return (
-    <header className="sticky top-0 z-20 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur space-y-3">
+    <header className="sticky top-0 z-20 rounded-2xl bg-white/95 p-4 shadow-sm backdrop-blur space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{channelName}</h1>
@@ -55,7 +55,7 @@ export default function UserGNB({
                   slug={normalizedSlug}
                   redirectTo={currentPath ?? `/c/${encodeURIComponent(normalizedSlug)}`}
                   triggerLabel={tab.label}
-                  triggerClassName={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  triggerClassName={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 />
               )
             }
@@ -63,7 +63,7 @@ export default function UserGNB({
               <Link
                 key={tab.key}
                 href={tab.href}
-                className={`rounded-full px-2.5 py-1 text-xs border ${current === tab.key ? 'border-black text-black bg-gray-50 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               >
                 {tab.label}
               </Link>

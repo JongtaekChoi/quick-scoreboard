@@ -31,7 +31,7 @@ export default function AccountBadge({ loginId, role, slug, redirectTo, accountH
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded px-2 py-0.5 border bg-green-50 border-green-200 text-green-700 text-xs cursor-pointer"
+        className="rounded-md px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-medium cursor-pointer"
       >
         {loginId} ({role})
       </button>

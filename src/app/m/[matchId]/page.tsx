@@ -20,6 +20,7 @@ import PendingSubmitButton from "@/components/PendingSubmitButton";
 import TransientToast from "@/components/TransientToast";
 import LiveMinuteBadge from "./LiveMinuteBadge";
 import UserGNB from "@/components/UserGNB";
+import LoginModal from "@/app/c/[slug]/LoginModal";
 import {
   getPeriodDisplayLabel,
   summarizeLegacyPeriodControl,
@@ -1310,7 +1311,7 @@ export default async function MatchDetailPage({
 
   if (!supabase) {
     return (
-      <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
+      <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0 page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기 상세</h1>
           <p className="text-sm text-amber-700">
@@ -1333,7 +1334,7 @@ export default async function MatchDetailPage({
 
   if (!match) {
     return (
-      <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
+      <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0 page-enter">
         <section className="max-w-3xl mx-auto space-y-3">
           <h1 className="text-2xl font-semibold">경기를 찾을 수 없음</h1>
           <p className="text-sm text-gray-600">
@@ -1812,7 +1813,7 @@ export default async function MatchDetailPage({
     .filter(Boolean) as { id: string; period_sequence: number; label: string; startMinute: number; teamA: string; teamB: string }[];
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white page-enter">
+    <main className="min-h-screen bg-gray-50 px-4 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0 page-enter">
       <section className="max-w-3xl mx-auto space-y-4">
         {errToastMessage ? <TransientToast message={errToastMessage} tone="error" /> : null}
         <UserGNB
@@ -1823,6 +1824,13 @@ export default async function MatchDetailPage({
           isLoggedIn={!!accountSession}
           rightActions={(
             <>
+              {!accountSession && channel ? (
+                <LoginModal
+                  slug={channel.slug}
+                  redirectTo={currentPath}
+                  triggerClassName="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white"
+                />
+              ) : null}
               {accountSession && channel ? (
                 <AccountBadge
                   loginId={accountSession.loginId}

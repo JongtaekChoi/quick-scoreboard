@@ -189,7 +189,7 @@ export default async function ChannelPage({
           rightActions={(
             <>
               {!accountSession ? (
-                <LoginModal slug={channel.slug} accError={acc === "password"} redirectTo={`/c/${encodeURIComponent(channel.slug)}`} />
+                <LoginModal slug={channel.slug} accError={acc === "password"} redirectTo={`/c/${encodeURIComponent(channel.slug)}`} triggerClassName="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white" />
               ) : null}
               {accountSession ? (
                 <AccountBadge
@@ -208,13 +208,13 @@ export default async function ChannelPage({
         />
 
         {channel.slug === "sample" ? (
-          <section className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <section className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow-sm">
             처음 사용하면 <Link className="underline font-medium" href="/c/sample/guide">샘플 사용 가이드</Link>를 먼저 확인해 주세요.
           </section>
         ) : null}
 
         {(accountSession?.mustChangePassword || acc === "1" || pw === "1" || mgr === "expired" || isAdmin || isChannelAdmin || managerTeamId || supportOpenChatUrl) ? (
-          <div className="rounded border bg-white px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
+          <div className="rounded-xl bg-white px-3 py-2.5 flex flex-wrap items-center gap-2 text-xs shadow-sm">
             {accountSession?.mustChangePassword ? (
               <span className="text-amber-700">초기 비밀번호 변경이 필요합니다.</span>
             ) : null}
@@ -234,7 +234,7 @@ export default async function ChannelPage({
             ) : null}
             {isAdmin || isChannelAdmin || managerTeamId ? (
               <Link
-                className="underline"
+                className="rounded-md bg-gray-900 px-2 py-0.5 text-white"
                 href={managerTeamId ? `/admin/channel/${channel.id}/manager-entries` : `/admin/channel/${channel.id}?from=channel`}
               >
                 {managerTeamId ? '내 팀 엔트리 관리' : '운영 관리 열기'}
@@ -254,7 +254,7 @@ export default async function ChannelPage({
         ) : null}
 
         {(groups ?? []).length === 0 ? (
-          <section className="rounded-2xl border bg-white p-4 text-sm text-gray-500 shadow-sm">
+          <section className="rounded-2xl bg-white p-4 text-sm text-gray-500 shadow-sm">
             표시할 경기그룹이 없습니다.
           </section>
         ) : (

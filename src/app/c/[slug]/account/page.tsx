@@ -111,7 +111,7 @@ export default async function ChannelAccountPage({
   if (!row) redirect(`/c/${slug}`)
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white">
+    <main className="min-h-screen p-4 md:p-6 bg-gray-50">
       <section className="max-w-xl mx-auto space-y-4">
         <UserGNB
           slug={channel.slug}
@@ -121,7 +121,7 @@ export default async function ChannelAccountPage({
           isLoggedIn
           currentPath={`/c/${encodeURIComponent(channel.slug)}/account${next ? `?next=${encodeURIComponent(next)}` : ""}`}
         />
-        <header className="space-y-1">
+        <header className="space-y-1 rounded-xl bg-white p-3 shadow-sm">
           <h1 className="text-xl font-semibold">비밀번호 변경</h1>
           {force === '1' || row.must_change_password ? (
             <p className="text-xs text-amber-700">초기 비밀번호를 변경해 주세요.</p>
@@ -131,12 +131,12 @@ export default async function ChannelAccountPage({
           {feedback === 'env' ? <p className="text-xs text-red-600">서버 환경 설정 문제로 처리에 실패했습니다.</p> : null}
         </header>
 
-        <form action={changePassword} className="rounded border p-4 space-y-2">
+        <form action={changePassword} className="rounded-xl bg-white p-4 space-y-2 shadow-sm">
           <input type="hidden" name="slug" value={slug} />
           <input type="hidden" name="next" value={next ?? ''} />
-          <input className="w-full rounded border px-3 py-2 text-sm" name="newPassword" type="password" placeholder="새 비밀번호 (최소 4자)" required minLength={4} />
-          <input className="w-full rounded border px-3 py-2 text-sm" name="confirmPassword" type="password" placeholder="새 비밀번호 확인" required minLength={4} />
-          <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="변경중...">비밀번호 변경</PendingSubmitButton>
+          <input className="w-full rounded-lg bg-gray-50 px-3 py-2 text-sm" name="newPassword" type="password" placeholder="새 비밀번호 (최소 4자)" required minLength={4} />
+          <input className="w-full rounded-lg bg-gray-50 px-3 py-2 text-sm" name="confirmPassword" type="password" placeholder="새 비밀번호 확인" required minLength={4} />
+          <PendingSubmitButton className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white" pendingText="변경중...">비밀번호 변경</PendingSubmitButton>
         </form>
       </section>
     </main>

@@ -265,7 +265,7 @@ export default async function StatsPage({
     .sort((a, b) => b.avg - a.avg || b.count - a.count || a.player.localeCompare(b.player));
 
   return (
-    <main className="min-h-screen p-4 md:p-6 bg-white">
+    <main className="min-h-screen p-4 md:p-6 bg-gray-50">
       <section className="max-w-5xl mx-auto space-y-5">
         <UserGNB
           slug={channel.slug}
@@ -276,15 +276,16 @@ export default async function StatsPage({
           currentPath={`/c/${encodeURIComponent(channel.slug)}/stats`}
         />
 
-        <section className="rounded border p-4">
-          <h2 className="text-sm font-semibold mb-2">팀 순위</h2>
+        <section className="rounded-2xl bg-white p-4 shadow-sm">
+          <h2 className="text-base font-semibold text-gray-900 mb-1">팀 순위</h2>
+          <p className="text-xs text-gray-500 mb-2">승점/득실/다득점 기준</p>
           {teamStats.length === 0 ? (
             <p className="text-sm text-gray-500">종료된 경기가 없습니다.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left border-b">
+                  <tr className="text-left border-b border-gray-100 text-xs text-gray-500">
                     <th className="py-1 pr-2">순위</th>
                     <th className="py-1 pr-2">팀</th>
                     <th className="py-1 pr-2">경기</th>
@@ -299,7 +300,7 @@ export default async function StatsPage({
                 </thead>
                 <tbody>
                   {teamStats.map((t, i) => (
-                    <tr key={t.key} className="border-b last:border-0">
+                    <tr key={t.key} className="border-b border-gray-100 last:border-0">
                       <td className="py-1 pr-2">{i + 1}</td>
                       <td className="py-1 pr-2">
                         <span className="inline-flex items-center gap-1.5">
@@ -327,8 +328,9 @@ export default async function StatsPage({
         </section>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <section className="rounded border p-4">
-            <h2 className="text-sm font-semibold mb-2">득점 순위</h2>
+          <section className="rounded-2xl bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">득점 순위</h2>
+            <p className="text-xs text-gray-500 mb-2">선수별 득점 기록</p>
             {scorers.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
@@ -345,8 +347,9 @@ export default async function StatsPage({
             )}
           </section>
 
-          <section className="rounded border p-4">
-            <h2 className="text-sm font-semibold mb-2">어시스트 순위</h2>
+          <section className="rounded-2xl bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">어시스트 순위</h2>
+            <p className="text-xs text-gray-500 mb-2">선수별 도움 기록</p>
             {assisters.length === 0 ? (
               <p className="text-sm text-gray-500">기록이 없습니다.</p>
             ) : (
@@ -356,14 +359,15 @@ export default async function StatsPage({
             )}
           </section>
 
-          <section className="rounded border p-4">
-            <h2 className="text-sm font-semibold mb-2">평점 순위</h2>
+          <section className="rounded-2xl bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">평점 순위</h2>
+            <p className="text-xs text-gray-500 mb-2">경기 후 입력된 평점 평균</p>
             {ratingLeaders.length === 0 ? (
               <p className="text-sm text-gray-500">평점 기록이 없습니다.</p>
             ) : (
-              <ul className="space-y-1 text-sm">
+              <ul className="divide-y divide-gray-100 text-sm">
                 {ratingLeaders.slice(0, 30).map((r, i) => (
-                  <li key={`${r.team}-${r.player}`} className="flex justify-between border-b last:border-0 py-1">
+                  <li key={`${r.team}-${r.player}`} className="flex justify-between py-2">
                     <span>{i + 1}. {r.player} <span className="text-xs text-gray-500">({r.team})</span></span>
                     <span className="font-medium">{r.avg} <span className="text-xs text-gray-500">({r.count})</span></span>
                   </li>

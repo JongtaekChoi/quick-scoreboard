@@ -31,9 +31,9 @@ export default function ExpandableRankingList({
 
   return (
     <>
-      <ul className="space-y-1 text-sm">
+      <ul className="divide-y divide-gray-100 rounded-xl bg-gray-50/60 px-2 text-sm">
         {visible.map((s, i) => (
-          <li key={`${s.name}-${s.rank}-${i}`} className="flex justify-between border-b last:border-0 py-1">
+          <li key={`${s.name}-${s.rank}-${i}`} className="flex justify-between py-2">
             <span>
               {s.rank}. {s.name}
               <span className="text-xs text-gray-500"> {s.team !== '-' ? `(${s.team}${s.jersey ? ` #${s.jersey}` : ''})` : ''}</span>
@@ -46,11 +46,11 @@ export default function ExpandableRankingList({
       {ranked.length > 5 ? (
         <div className="mt-2">
           {!expanded ? (
-            <button type="button" className="text-xs text-gray-600 underline" onClick={() => setExpanded(true)}>
+            <button type="button" className="text-xs rounded-md bg-gray-100 px-2 py-1 text-gray-600" onClick={() => setExpanded(true)}>
               더보기
             </button>
           ) : (
-            <button type="button" className="text-xs text-gray-600 underline" onClick={() => setExpanded(false)}>
+            <button type="button" className="text-xs rounded-md bg-gray-100 px-2 py-1 text-gray-600" onClick={() => setExpanded(false)}>
               접기
             </button>
           )}

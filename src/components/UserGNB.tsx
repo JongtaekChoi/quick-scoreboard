@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { ReactNode } from 'react'
-import LoginModal from '@/app/c/[slug]/LoginModal'
 
 type TabKey = 'matches' | 'stats' | 'calendar' | 'account'
 
@@ -13,7 +12,6 @@ export default function UserGNB({
   rightActions,
   subtitle,
   isLoggedIn = false,
-  currentPath,
 }: {
   slug?: string | null
   channelName: string
@@ -21,7 +19,6 @@ export default function UserGNB({
   rightActions?: ReactNode
   subtitle?: ReactNode
   isLoggedIn?: boolean
-  currentPath?: string
 }) {
   const normalizedSlug = slug?.trim() ?? ''
   const hasSlug = normalizedSlug.length > 0
@@ -30,12 +27,14 @@ export default function UserGNB({
         { key: 'matches', label: '경기', href: `/c/${encodeURIComponent(normalizedSlug)}` },
         { key: 'stats', label: '통계', href: `/c/${encodeURIComponent(normalizedSlug)}/stats` },
         { key: 'calendar', label: '달력', href: `/c/${encodeURIComponent(normalizedSlug)}/calendar` },
-        { key: 'account', label: '계정', href: `/c/${encodeURIComponent(normalizedSlug)}/account` },
+        ...(isLoggedIn
+          ? [{ key: 'account' as const, label: '계정', href: `/c/${encodeURIComponent(normalizedSlug)}/account` }]
+          : []),
       ]
     : []
 
   return (
-    <header className="sticky top-0 z-20 rounded-2xl bg-white/95 p-4 shadow-sm backdrop-blur space-y-3">
+    <header className="sticky top-0 z-20 -mx-4 border-b border-gray-100 bg-white/95 px-4 py-3 backdrop-blur md:mx-0 md:px-0 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{channelName}</h1>
@@ -46,29 +45,17 @@ export default function UserGNB({
 
       {hasSlug ? (
         <nav className="flex flex-wrap items-center gap-1">
-          {tabs.map((tab) => {
-            const isAccountTab = tab.key === 'account'
-            if (isAccountTab && !isLoggedIn) {
-              return (
-                <LoginModal
-                  key={tab.key}
-                  slug={normalizedSlug}
-                  redirectTo={currentPath ?? `/c/${encodeURIComponent(normalizedSlug)}`}
-                  triggerLabel={tab.label}
-                  triggerClassName={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                />
-              )
-            }
-            return (
-              <Link
-                key={tab.key}
-                href={tab.href}
-                className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                {tab.label}
-              </Link>
-            )
-          })}
+          {tabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              prefetch
+              scroll={false}
+              className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {tab.label}
+            </Link>
+          ))}
         </nav>
       ) : null}
     </header>

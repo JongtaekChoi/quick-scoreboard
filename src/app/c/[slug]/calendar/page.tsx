@@ -4,6 +4,9 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { getAccountInfo } from "@/lib/channelSession";
 import UserGNB from "@/components/UserGNB";
+import ShareButton from "@/components/ShareButton";
+import AccountBadge from "@/components/AccountBadge";
+import LoginModal from "../LoginModal";
 
 type Channel = { id: string; name: string; slug: string };
 type MatchGroup = { id: string; channel_id: string; play_date: string; venue: string | null; title: string | null };
@@ -158,7 +161,7 @@ export default async function ChannelCalendarPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-3 pb-24 md:p-6">
+    <main className="min-h-screen bg-gray-50 px-3 pb-24 pt-0 md:px-6 md:pb-24 md:pt-0">
       <section className="mx-auto max-w-4xl space-y-3 md:space-y-4">
         <UserGNB
           slug={channel.slug}
@@ -166,21 +169,36 @@ export default async function ChannelCalendarPage({
           current="calendar"
           subtitle="날짜를 누르면 해당 날짜 경기로 이동할 수 있습니다."
           isLoggedIn={!!accountSession}
-          currentPath={`/c/${encodeURIComponent(channel.slug)}/calendar`}
+          rightActions={
+            <>
+              {!accountSession ? (
+                <LoginModal slug={channel.slug} redirectTo={`/c/${encodeURIComponent(channel.slug)}/calendar`} triggerClassName="rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white" />
+              ) : null}
+              {accountSession ? (
+                <AccountBadge
+                  loginId={accountSession.loginId}
+                  role={accountSession.role}
+                  slug={channel.slug}
+                  accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
+                />
+              ) : null}
+              <ShareButton url={`https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}/calendar`} title={`${channel.name} 달력`} />
+            </>
+          }
         />
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-2.5 md:p-3 shadow-sm">
+        <section className="rounded-2xl bg-white p-2.5 md:p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <Link
               href={`/c/${encodeURIComponent(channel.slug)}/calendar?ym=${prevYm}`}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-200"
             >
               이전달
             </Link>
             <div className="text-sm font-medium">{year}년 {month0 + 1}월</div>
             <Link
               href={`/c/${encodeURIComponent(channel.slug)}/calendar?ym=${nextYm}`}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-200"
             >
               다음달
             </Link>
@@ -207,7 +225,7 @@ export default async function ChannelCalendarPage({
                 <Link
                   key={c.date}
                   href={`/c/${encodeURIComponent(channel.slug)}/calendar?ym=${currentYm}&d=${c.date}`}
-                  className={`h-14 rounded-lg border border-gray-200 p-1.5 text-left text-xs ${active ? "border-blue-300 bg-blue-50" : "hover:bg-gray-50"}`}
+                  className={`h-14 rounded-lg p-1.5 text-left text-xs ${active ? "bg-blue-50 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)]" : "bg-gray-50/70 hover:bg-gray-100"}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className={`font-medium ${dayColor}`}>{c.day}</div>
@@ -227,10 +245,10 @@ export default async function ChannelCalendarPage({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-3 md:p-4 shadow-sm space-y-2">
+        <section className="rounded-2xl bg-white p-3 md:p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">{selected} 경기</h2>
-            <Link href={`/c/${encodeURIComponent(channel.slug)}#date-${selected}`} className="text-xs underline text-gray-700">
+            <Link href={`/c/${encodeURIComponent(channel.slug)}#date-${selected}`} className="text-xs rounded-md bg-gray-100 px-2 py-0.5 text-gray-700">
               목록에서 보기
             </Link>
           </div>
@@ -238,13 +256,13 @@ export default async function ChannelCalendarPage({
           {selectedGroups.length === 0 ? (
             <p className="text-sm text-gray-500">선택한 날짜에 경기가 없습니다.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {selectedGroups.map((g) => (
-                <section key={g.id} className="rounded-xl border border-gray-200 p-3">
+                <section key={g.id} className="rounded-xl bg-gray-50 p-3 shadow-[inset_0_0_0_1px_rgba(17,24,39,0.03)]">
                   <h3 className="text-sm font-medium">{g.title ?? g.venue ?? "경기"}</h3>
-                  <ul className="mt-2 space-y-1">
+                  <ul className="mt-2 divide-y divide-gray-100 rounded-lg bg-white">
                     {(matchesByGroup.get(g.id) ?? []).map((m) => (
-                      <li key={m.id} className="text-sm text-gray-700">
+                      <li key={m.id} className="px-2 py-1.5 text-sm text-gray-700">
                         <Link href={`/m/${m.id}`} className="hover:underline">
                           {m.team_a_name} vs {m.team_b_name}
                         </Link>

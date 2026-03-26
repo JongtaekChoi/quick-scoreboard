@@ -113,7 +113,7 @@ export default function GroupList({
                             const badge = statusLabel(m.status)
                             return (
                               <li key={m.id} className="px-3 py-3">
-                                <Link href={`/m/${m.id}`} className="flex items-center justify-between gap-3">
+                                <Link href={`/m/${m.id}`} prefetch scroll={false} className="flex items-center justify-between gap-3">
                                   <div className="min-w-0 flex-1">
                                     <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 text-sm font-semibold leading-tight text-gray-900">
                                       <div className="flex items-center justify-end gap-1.5 text-right break-words">

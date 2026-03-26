@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { getManagerInfo, getAccountInfo } from "@/lib/channelSession";
 import { isAdminAuthorized } from "@/lib/adminAuth";
-import { autoStartDueMatches } from "@/lib/matchSchedule";
 import GroupList from "./GroupList";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
@@ -39,7 +38,7 @@ type Match = {
   scheduled_start_at: string | null;
 };
 
-export const revalidate = 60;
+export const revalidate = 180;
 
 export async function generateMetadata({
   params,
@@ -111,15 +110,15 @@ export default async function ChannelPage({
     );
   }
 
-  const isAdmin = await isAdminAuthorized();
-  const accountSession = await getAccountInfo(channel.slug);
-  const managerInfo = await getManagerInfo(channel.slug);
+  const [isAdmin, accountSession, managerInfo] = await Promise.all([
+    isAdminAuthorized(),
+    getAccountInfo(channel.slug),
+    getManagerInfo(channel.slug),
+  ]);
   const managerTeamId = managerInfo?.teamId ?? null;
   const isChannelAdmin = accountSession?.role === "admin";
   const channelUrl = `https://quick-scoreboard.vercel.app/c/${encodeURIComponent(channel.slug)}`;
   const supportOpenChatUrl = process.env.NEXT_PUBLIC_SUPPORT_OPENCHAT_URL?.trim() || '';
-
-  await autoStartDueMatches(supabase);
 
   const { data: groups } = await supabase
     .from("match_groups")

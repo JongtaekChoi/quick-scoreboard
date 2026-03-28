@@ -424,7 +424,6 @@ async function saveMatchStarters(formData: FormData) {
   const matchId = String(formData.get('matchId') || '')
   const teamId = String(formData.get('teamId') || '')
   const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
-  const periodSequence = Number(formData.get('periodSequence') || 1)
   const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
 
   const manage = await canManageChannel(channelId)
@@ -438,11 +437,6 @@ async function saveMatchStarters(formData: FormData) {
     await setGroupFeedback('team_scope')
     return
   }
-  if (!Number.isFinite(periodSequence) || periodSequence < 1) {
-    await setGroupFeedback('starter_period')
-    return
-  }
-
   if (playerIds.length === 0) {
     await setGroupFeedback('starter_count')
     return
@@ -473,15 +467,15 @@ async function saveMatchStarters(formData: FormData) {
     }
   }
 
-  const { data: period } = await supabase
+  const { data: periods } = await supabase
     .from('match_periods')
-    .select('id')
+    .select('id,sequence')
     .eq('match_id', matchId)
-    .eq('sequence', periodSequence)
     .is('deleted_at', null)
-    .maybeSingle<{ id: string }>()
+    .order('sequence', { ascending: true })
+    .returns<{ id: string; sequence: number }[]>()
 
-  if (!period) {
+  if (!periods || periods.length === 0) {
     await setGroupFeedback('starter_period')
     return
   }
@@ -490,18 +484,19 @@ async function saveMatchStarters(formData: FormData) {
     .from('match_period_lineups')
     .update({ deleted_at: new Date().toISOString() })
     .eq('match_id', matchId)
-    .eq('match_period_id', period.id)
     .eq('team_side', teamSide)
     .is('deleted_at', null)
 
   await supabase.from('match_period_lineups').insert(
-    playerIds.map((playerId) => ({
-      match_id: matchId,
-      match_period_id: period.id,
-      team_side: teamSide,
-      player_id: playerId,
-      is_starter: true,
-    })),
+    periods.flatMap((period) =>
+      playerIds.map((playerId) => ({
+        match_id: matchId,
+        match_period_id: period.id,
+        team_side: teamSide,
+        player_id: playerId,
+        is_starter: true,
+      })),
+    ),
   )
 
   revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
@@ -835,15 +830,12 @@ export default async function AdminGroupPage({
 
         {((managerTeamId && managerParticipatesInGroup) || tab === 'entries') && (matches ?? []).length > 0 ? (
           <section className="rounded border p-4 space-y-3">
-            <h2 className="text-sm font-semibold">경기별 선발 제출</h2>
-            <p className="text-xs text-gray-500">선발은 경기 시작 전 미리 제출하고, 필요 시 다시 저장해 수정할 수 있습니다.</p>
+            <h2 className="text-sm font-semibold">경기별 전체 엔트리 제출</h2>
+            <p className="text-xs text-gray-500">선수 선택을 한 번만 제출하면 모든 경기구간 선발에 자동 반영됩니다. 다시 제출하면 전체 선발이 갱신됩니다.</p>
             {(matches ?? []).map((m) => {
               const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null
               const teamBId = m.team_b_id ?? teamIdByName.get(m.team_b_name) ?? null
               const periods = periodsByMatch.get(m.id) ?? []
-              const periodCount = Math.max(1, m.period_count || periods.length || 1)
-              const periodSequences = Array.from({ length: periodCount }, (_, i) => i + 1)
-
               const sides: Array<{ teamSide: 'A' | 'B'; teamId: string | null; teamName: string }> = [
                 { teamSide: 'A', teamId: teamAId, teamName: m.team_a_name },
                 { teamSide: 'B', teamId: teamBId, teamName: m.team_b_name },
@@ -852,66 +844,56 @@ export default async function AdminGroupPage({
               return (
                 <div key={`starter-${m.id}`} className="rounded border p-3 space-y-3 bg-white">
                   <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                  <div className="space-y-3">
-                    {periodSequences.map((seq) => {
-                      const period = periods.find((p) => p.sequence === seq) ?? null
-                      const periodLabel = period?.label || period?.period_code || `${seq}P`
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {sides.map((side) => {
+                      if (!side.teamId) return null
+                      if (managerTeamId && managerTeamId !== side.teamId) return null
+
+                      const teamPlayers = playersByTeam.get(side.teamId) ?? []
+                      const teamEntries = entriesByTeam.get(side.teamId) ?? []
+                      const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
+                      const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
+                      const guest = guestByTeam.get(side.teamId)
+                      if (guest?.source_player_id) {
+                        const guestSource = playersById.get(guest.source_player_id)
+                        const alreadyIncluded = candidates.some((p) => p.id === guest.source_player_id)
+                        if (!alreadyIncluded) {
+                          candidates.push({
+                            id: guest.source_player_id,
+                            team_id: side.teamId,
+                            jersey_no: guestSource?.jersey_no ?? '',
+                            player_name: `${guest.guest_name} (용병)`,
+                            is_active: true,
+                          })
+                        }
+                      }
+
+                      const selected = new Set<string>()
+                      for (const period of periods) {
+                        const lineupSelected = lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
+                        for (const pid of lineupSelected) selected.add(pid)
+                      }
+
                       return (
-                        <div key={`${m.id}-period-panel-${seq}`} className="rounded bg-gray-50/70 p-2 space-y-2">
-                          <div className="text-xs font-medium text-gray-700">{periodLabel} 선발</div>
-                          <div className="grid md:grid-cols-2 gap-3">
-                            {sides.map((side) => {
-                              if (!side.teamId) return null
-                              if (managerTeamId && managerTeamId !== side.teamId) return null
-
-                              const teamPlayers = playersByTeam.get(side.teamId) ?? []
-                              const teamEntries = entriesByTeam.get(side.teamId) ?? []
-                              const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
-                              const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
-                              const guest = guestByTeam.get(side.teamId)
-                              if (guest?.source_player_id) {
-                                const guestSource = playersById.get(guest.source_player_id)
-                                const alreadyIncluded = candidates.some((p) => p.id === guest.source_player_id)
-                                if (!alreadyIncluded) {
-                                  candidates.push({
-                                    id: guest.source_player_id,
-                                    team_id: side.teamId,
-                                    jersey_no: guestSource?.jersey_no ?? '',
-                                    player_name: `${guest.guest_name} (용병)`,
-                                    is_active: true,
-                                  })
-                                }
-                              }
-                              const lineupSelected = period
-                                ? lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
-                                : new Set<string>()
-                              const selected = lineupSelected
-
-                              return (
-                                <form key={`${m.id}-${seq}-${side.teamSide}`} action={saveMatchStarters} className="rounded bg-white p-2 space-y-2 ring-1 ring-gray-200">
-                                  <input type="hidden" name="channelId" value={channel.id} />
-                                  <input type="hidden" name="groupId" value={group.id} />
-                                  <input type="hidden" name="matchId" value={m.id} />
-                                  <input type="hidden" name="teamId" value={side.teamId} />
-                                  <input type="hidden" name="teamSide" value={side.teamSide} />
-                                  <input type="hidden" name="periodSequence" value={seq} />
-                                  <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
-                                  <div className="max-h-40 overflow-auto rounded bg-gray-50 p-2 grid grid-cols-1 gap-1 text-xs">
-                                    {candidates.map((p) => (
-                                      <label key={`${m.id}-${seq}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
-                                        <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
-                                        <span>{p.jersey_no ? `#${p.jersey_no} ` : ''}{p.player_name}</span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="저장중...">선발 제출</PendingSubmitButton>
-                                  </div>
-                                </form>
-                              )
-                            })}
+                        <form key={`${m.id}-${side.teamSide}`} action={saveMatchStarters} className="rounded bg-white p-2 space-y-2 ring-1 ring-gray-200">
+                          <input type="hidden" name="channelId" value={channel.id} />
+                          <input type="hidden" name="groupId" value={group.id} />
+                          <input type="hidden" name="matchId" value={m.id} />
+                          <input type="hidden" name="teamId" value={side.teamId} />
+                          <input type="hidden" name="teamSide" value={side.teamSide} />
+                          <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
+                          <div className="max-h-40 overflow-auto rounded bg-gray-50 p-2 grid grid-cols-1 gap-1 text-xs">
+                            {candidates.map((p) => (
+                              <label key={`${m.id}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
+                                <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
+                                <span>{p.jersey_no ? `#${p.jersey_no} ` : ''}{p.player_name}</span>
+                              </label>
+                            ))}
                           </div>
-                        </div>
+                          <div className="flex items-center gap-2">
+                            <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="저장중...">전체 엔트리 제출</PendingSubmitButton>
+                          </div>
+                        </form>
                       )
                     })}
                   </div>

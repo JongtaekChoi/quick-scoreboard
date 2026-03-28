@@ -26,6 +26,14 @@ export default function SampleGuidePage() {
             <p className="text-gray-600 mb-1">
               <span className="font-medium">샘플리그운영자</span> — 비밀번호: <span className="font-medium">test1234</span>
             </p>
+            <form action="/c/sample/login" method="post" className="mt-2">
+              <input type="hidden" name="login_id" value="샘플리그운영자" />
+              <input type="hidden" name="password" value="test1234" />
+              <input type="hidden" name="redirect_to" value="/c/sample" />
+              <button type="submit" className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+                샘플리그 어드민으로 로그인
+              </button>
+            </form>
           </div>
 
           <div>

@@ -198,6 +198,11 @@ export default async function ChannelPage({
                   accountHref={`/c/${encodeURIComponent(channel.slug)}/account`}
                 />
               ) : null}
+              {channel.slug === "sample" ? (
+                <Link className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800" href="/c/sample/guide">
+                  샘플 가이드
+                </Link>
+              ) : null}
               <ShareButton
                 url={channelUrl}
                 title={`${channel.name} 경기목록`}

@@ -7,7 +7,10 @@ export default function SampleGuidePage() {
       <section className="max-w-3xl mx-auto space-y-5">
         <header className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <Link className="text-xs text-gray-600 underline" href="/c/sample">샘플 리그로 돌아가기</Link>
+            <div className="flex items-center gap-2">
+              <Link className="text-xs rounded-md bg-gray-100 px-2 py-1 text-gray-700" href="/c/sample">샘플 리그로 돌아가기</Link>
+              <Link className="text-xs rounded-md bg-amber-100 px-2 py-1 text-amber-800" href="/c/sample/guide">가이드 링크</Link>
+            </div>
             <LoginModal slug="sample" />
           </div>
           <h1 className="text-2xl font-semibold">샘플 리그 사용 가이드</h1>
@@ -26,13 +29,34 @@ export default function SampleGuidePage() {
           </div>
 
           <div>
-            <p className="text-gray-600 mb-1">매니저 계정 (비밀번호: <span className="font-medium">1234</span>)</p>
+            <p className="text-gray-600 mb-2">매니저 계정 (비밀번호: <span className="font-medium">1234</span>)</p>
             <ul className="list-disc pl-5 text-gray-700 space-y-1">
               <li>김민수 — FC 레드 매니저</li>
               <li>장동혁 — FC 블루 매니저</li>
               <li>조현식 — FC 그린 매니저</li>
               <li>나상호 — FC 옐로 매니저</li>
             </ul>
+
+            <div className="mt-3 rounded-lg bg-gray-50 p-2.5 space-y-2">
+              <p className="text-xs font-medium text-gray-700">원클릭 매니저 로그인</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {[
+                  { id: "김민수", label: "레드 매니저" },
+                  { id: "장동혁", label: "블루 매니저" },
+                  { id: "조현식", label: "그린 매니저" },
+                  { id: "나상호", label: "옐로 매니저" },
+                ].map((manager) => (
+                  <form key={manager.id} action="/c/sample/login" method="post">
+                    <input type="hidden" name="login_id" value={manager.id} />
+                    <input type="hidden" name="password" value="1234" />
+                    <input type="hidden" name="redirect_to" value="/c/sample" />
+                    <button type="submit" className="w-full rounded-md bg-gray-900 px-2 py-1.5 text-xs font-medium text-white hover:opacity-90">
+                      {manager.label}
+                    </button>
+                  </form>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div>
@@ -46,7 +70,7 @@ export default function SampleGuidePage() {
           </div>
         </section>
 
-        <section className="rounded border p-4 space-y-2 text-sm">
+        <section className="rounded-xl bg-white p-4 shadow-sm space-y-2 text-sm">
           <h2 className="font-semibold">체험 추천 순서</h2>
           <ol className="list-decimal pl-5 text-gray-700 space-y-1">
             <li>샘플 리그 로그인</li>
@@ -57,7 +81,7 @@ export default function SampleGuidePage() {
           </ol>
         </section>
 
-        <section className="rounded border p-4 space-y-2 text-sm">
+        <section className="rounded-xl bg-white p-4 shadow-sm space-y-2 text-sm">
           <h2 className="font-semibold">주의사항</h2>
           <ul className="list-disc pl-5 text-gray-700 space-y-1">
             <li>샘플 데이터는 운영 데이터가 아닙니다.</li>
@@ -66,9 +90,9 @@ export default function SampleGuidePage() {
           </ul>
         </section>
 
-        <div className="flex gap-3 text-sm">
-          <Link className="underline" href="/c/sample">샘플 리그로 이동</Link>
-          <Link className="underline" href="/c/sample/stats">샘플 통계 보기</Link>
+        <div className="flex gap-2 text-sm">
+          <Link className="rounded-md bg-gray-900 px-3 py-1.5 text-white" href="/c/sample">샘플 리그로 이동</Link>
+          <Link className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700" href="/c/sample/stats">샘플 통계 보기</Link>
         </div>
       </section>
     </main>

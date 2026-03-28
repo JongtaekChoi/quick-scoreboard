@@ -23,8 +23,6 @@ type Team = { id: string; name: string }
 type TeamPlayer = { id: string; team_id: string; jersey_no: string; player_name: string; is_active: boolean }
 type GroupEntry = { id: string; team_id: string; player_id: string }
 type GroupGuest = { id: string; team_id: string; source_team_id: string; source_player_id: string | null; guest_name: string }
-type MatchPeriod = { id: string; match_id: string; sequence: number; label: string | null; period_code: string | null }
-type MatchPeriodLineup = { match_period_id: string; team_side: 'A' | 'B'; player_id: string | null }
 
 const GROUP_FEEDBACK_COOKIE = 'qsb_group_feedback'
 
@@ -375,19 +373,6 @@ async function saveGroupEntries(formData: FormData) {
     )
   }
 
-  if (affectedMatchSides.length > 0) {
-    for (const target of affectedMatchSides) {
-      let q = supabase
-        .from('match_period_lineups')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('match_id', target.matchId)
-        .eq('team_side', target.side)
-        .is('deleted_at', null)
-      if (playerIds.length > 0) q = q.not('player_id', 'in', `(${playerIds.map((id) => `"${id}"`).join(',')})`)
-      await q
-    }
-  }
-
   if (sourcePlayer === '__NONE__') {
     await supabase
       .from('match_group_guests')
@@ -413,91 +398,51 @@ async function saveGroupEntries(formData: FormData) {
     }
   }
 
-  revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
-  return
-}
+  const selectedStarterIds = Array.from(new Set([
+    ...playerIds,
+    ...(sourcePlayer && sourcePlayer !== '__NONE__' ? [String(sourcePlayer.split('|')[1] || '').trim()] : []),
+  ].filter(Boolean)))
 
-async function saveMatchStarters(formData: FormData) {
-  'use server'
-  const channelId = String(formData.get('channelId') || '')
-  const groupId = String(formData.get('groupId') || '')
-  const matchId = String(formData.get('matchId') || '')
-  const teamId = String(formData.get('teamId') || '')
-  const teamSide = String(formData.get('teamSide') || '') as 'A' | 'B'
-  const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
+  if (affectedMatchSides.length > 0) {
+    const matchIds = Array.from(new Set(affectedMatchSides.map((x) => x.matchId)))
+    const { data: periods } = await supabase
+      .from('match_periods')
+      .select('id,match_id')
+      .in('match_id', matchIds)
+      .is('deleted_at', null)
+      .returns<{ id: string; match_id: string }[]>()
 
-  const manage = await canManageChannel(channelId)
-  if (!manage.allowed) {
-    if (manage.channel) redirect(`/c/${manage.channel.slug}`)
-    redirect('/admin/login')
-  }
+    const periodsByMatch = new Map<string, string[]>()
+    for (const period of periods ?? []) {
+      const arr = periodsByMatch.get(period.match_id) ?? []
+      arr.push(period.id)
+      periodsByMatch.set(period.match_id, arr)
+    }
 
-  if (!channelId || !groupId || !matchId || !teamId || (teamSide !== 'A' && teamSide !== 'B')) return
-  if (manage.managerTeamId && manage.managerTeamId !== teamId) {
-    await setGroupFeedback('team_scope')
-    return
-  }
-  if (playerIds.length === 0) {
-    await setGroupFeedback('starter_count')
-    return
-  }
+    for (const target of affectedMatchSides) {
+      await supabase
+        .from('match_period_lineups')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('match_id', target.matchId)
+        .eq('team_side', target.side)
+        .is('deleted_at', null)
 
-  const supabase = getSupabaseServerClient()
-  if (!supabase) return
+      const periodIds = periodsByMatch.get(target.matchId) ?? []
+      if (periodIds.length === 0 || selectedStarterIds.length === 0) continue
 
-  if (manage.managerTeamId) {
-    const [{ data: ownTeam }, { data: groupMatches }] = await Promise.all([
-      supabase.from('teams').select('name').eq('id', manage.managerTeamId).maybeSingle<{ name: string }>(),
-      supabase
-        .from('matches')
-        .select('team_a_id,team_b_id,team_a_name,team_b_name')
-        .eq('match_group_id', groupId)
-        .returns<{ team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string }[]>(),
-    ])
-
-    const participates = (groupMatches ?? []).some((m) => {
-      const byId = m.team_a_id === manage.managerTeamId || m.team_b_id === manage.managerTeamId
-      const byName = ownTeam?.name ? m.team_a_name === ownTeam.name || m.team_b_name === ownTeam.name : false
-      return byId || byName
-    })
-
-    if (!participates) {
-      await setGroupFeedback('team_not_in_group')
-      return
+      await supabase.from('match_period_lineups').insert(
+        periodIds.flatMap((periodId) =>
+          selectedStarterIds.map((playerId) => ({
+            match_id: target.matchId,
+            match_period_id: periodId,
+            team_side: target.side,
+            player_id: playerId,
+            is_starter: true,
+          })),
+        ),
+      )
     }
   }
-
-  const { data: periods } = await supabase
-    .from('match_periods')
-    .select('id,sequence')
-    .eq('match_id', matchId)
-    .is('deleted_at', null)
-    .order('sequence', { ascending: true })
-    .returns<{ id: string; sequence: number }[]>()
-
-  if (!periods || periods.length === 0) {
-    await setGroupFeedback('starter_period')
-    return
-  }
-
-  await supabase
-    .from('match_period_lineups')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('match_id', matchId)
-    .eq('team_side', teamSide)
-    .is('deleted_at', null)
-
-  await supabase.from('match_period_lineups').insert(
-    periods.flatMap((period) =>
-      playerIds.map((playerId) => ({
-        match_id: matchId,
-        match_period_id: period.id,
-        team_side: teamSide,
-        player_id: playerId,
-        is_starter: true,
-      })),
-    ),
-  )
 
   revalidatePath(`/admin/channel/${channelId}/group/${groupId}`)
   return
@@ -551,9 +496,9 @@ export default async function AdminGroupPage({
     forbidden: '권한이 없습니다.',
     team_scope: '본인 팀만 제출할 수 있습니다.',
     team_not_in_group: '이 경기그룹 참여팀만 엔트리 제출할 수 있습니다.',
-    starter_count: '선발을 1명 이상 선택해 주세요.',
+    starter_count: '엔트리를 1명 이상 선택해 주세요.',
     starter_period: '선발 period를 확인해 주세요.',
-    entry_affects_starters: '엔트리 변경 시 기존 선발이 정리됩니다. 다시 제출해 주세요.',
+    entry_affects_starters: '엔트리 변경 시 경기 선발이 자동 갱신됩니다. 다시 제출해 주세요.',
     guest_source: '용병 소속팀은 동일 팀으로 선택할 수 없습니다.',
   }
   const toastMessage = feedbackCode ? toastMessageMap[feedbackCode] : null
@@ -582,28 +527,6 @@ export default async function AdminGroupPage({
 
   if (!channel || !group) return <main className="p-6">리그/그룹을 찾을 수 없습니다.</main>
 
-  const matchIds = (matches ?? []).map((m) => m.id)
-
-  const [{ data: matchPeriods }, { data: periodLineups }] = await Promise.all([
-    matchIds.length
-      ? supabase
-          .from('match_periods')
-          .select('id,match_id,sequence,label,period_code')
-          .in('match_id', matchIds)
-          .is('deleted_at', null)
-          .order('sequence', { ascending: true })
-          .returns<MatchPeriod[]>()
-      : Promise.resolve({ data: [] as MatchPeriod[] }),
-    matchIds.length
-      ? supabase
-          .from('match_period_lineups')
-          .select('match_period_id,team_side,player_id')
-          .in('match_id', matchIds)
-          .is('deleted_at', null)
-          .returns<MatchPeriodLineup[]>()
-      : Promise.resolve({ data: [] as MatchPeriodLineup[] })
-  ])
-
   const playersByTeam = new Map<string, TeamPlayer[]>()
   const playersById = new Map<string, TeamPlayer>()
   for (const p of players ?? []) {
@@ -626,26 +549,6 @@ export default async function AdminGroupPage({
   }
 
   const teamNameMap = new Map((teams ?? []).map((t) => [t.id, t.name]))
-  const teamIdByName = new Map((teams ?? []).map((t) => [t.name, t.id]))
-
-  const periodsByMatch = new Map<string, MatchPeriod[]>()
-  for (const p of matchPeriods ?? []) {
-    const arr = periodsByMatch.get(p.match_id) ?? []
-    arr.push(p)
-    periodsByMatch.set(p.match_id, arr)
-  }
-  for (const [, arr] of periodsByMatch) {
-    arr.sort((a, b) => a.sequence - b.sequence)
-  }
-
-  const lineupPlayersByPeriodSide = new Map<string, Set<string>>()
-  for (const row of periodLineups ?? []) {
-    if (!row.player_id) continue
-    const key = `${row.match_period_id}:${row.team_side}`
-    const set = lineupPlayersByPeriodSide.get(key) ?? new Set<string>()
-    set.add(row.player_id)
-    lineupPlayersByPeriodSide.set(key, set)
-  }
 
   const matchTeamNames = new Set<string>()
   for (const m of matches ?? []) {
@@ -688,9 +591,6 @@ export default async function AdminGroupPage({
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
           {err === 'entry_affects_starters' ? <p className="text-xs text-amber-700">이 팀은 이미 경기별 선발 제출 이력이 있어요. 엔트리 변경 시 해당 선발명단에서 제외 선수가 정리됩니다. 같은 팀에서 다시 제출하면 진행됩니다.</p> : null}
-          {err === 'starter_count' ? <p className="text-xs text-red-600">선발을 1명 이상 선택해 주세요.</p> : null}
-          {err === 'starter_period' ? <p className="text-xs text-red-600">선발 period를 확인해 주세요.</p> : null}
-          {err === 'starter_copy' ? <p className="text-xs text-red-600">이전 period 선발 복사에 실패했습니다.</p> : null}
           {err === 'team_not_in_group' ? <p className="text-xs text-red-600">이 경기그룹에 참여하는 팀만 엔트리를 제출할 수 있습니다.</p> : null}
         </header>
 
@@ -828,80 +728,6 @@ export default async function AdminGroupPage({
           })()}
         </section>)}
 
-        {((managerTeamId && managerParticipatesInGroup) || tab === 'entries') && (matches ?? []).length > 0 ? (
-          <section className="rounded border p-4 space-y-3">
-            <h2 className="text-sm font-semibold">경기별 전체 엔트리 제출</h2>
-            <p className="text-xs text-gray-500">선수 선택을 한 번만 제출하면 모든 경기구간 선발에 자동 반영됩니다. 다시 제출하면 전체 선발이 갱신됩니다.</p>
-            {(matches ?? []).map((m) => {
-              const teamAId = m.team_a_id ?? teamIdByName.get(m.team_a_name) ?? null
-              const teamBId = m.team_b_id ?? teamIdByName.get(m.team_b_name) ?? null
-              const periods = periodsByMatch.get(m.id) ?? []
-              const sides: Array<{ teamSide: 'A' | 'B'; teamId: string | null; teamName: string }> = [
-                { teamSide: 'A', teamId: teamAId, teamName: m.team_a_name },
-                { teamSide: 'B', teamId: teamBId, teamName: m.team_b_name },
-              ]
-
-              return (
-                <div key={`starter-${m.id}`} className="rounded border p-3 space-y-3 bg-white">
-                  <div className="text-sm font-medium">{m.seq}경기 · {m.team_a_name} vs {m.team_b_name}</div>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {sides.map((side) => {
-                      if (!side.teamId) return null
-                      if (managerTeamId && managerTeamId !== side.teamId) return null
-
-                      const teamPlayers = playersByTeam.get(side.teamId) ?? []
-                      const teamEntries = entriesByTeam.get(side.teamId) ?? []
-                      const entryPlayerIds = new Set(teamEntries.map((e) => e.player_id))
-                      const candidates = teamPlayers.filter((p) => entryPlayerIds.has(p.id))
-                      const guest = guestByTeam.get(side.teamId)
-                      if (guest?.source_player_id) {
-                        const guestSource = playersById.get(guest.source_player_id)
-                        const alreadyIncluded = candidates.some((p) => p.id === guest.source_player_id)
-                        if (!alreadyIncluded) {
-                          candidates.push({
-                            id: guest.source_player_id,
-                            team_id: side.teamId,
-                            jersey_no: guestSource?.jersey_no ?? '',
-                            player_name: `${guest.guest_name} (용병)`,
-                            is_active: true,
-                          })
-                        }
-                      }
-
-                      const selected = new Set<string>()
-                      for (const period of periods) {
-                        const lineupSelected = lineupPlayersByPeriodSide.get(`${period.id}:${side.teamSide}`) ?? new Set<string>()
-                        for (const pid of lineupSelected) selected.add(pid)
-                      }
-
-                      return (
-                        <form key={`${m.id}-${side.teamSide}`} action={saveMatchStarters} className="rounded bg-white p-2 space-y-2 ring-1 ring-gray-200">
-                          <input type="hidden" name="channelId" value={channel.id} />
-                          <input type="hidden" name="groupId" value={group.id} />
-                          <input type="hidden" name="matchId" value={m.id} />
-                          <input type="hidden" name="teamId" value={side.teamId} />
-                          <input type="hidden" name="teamSide" value={side.teamSide} />
-                          <div className="text-xs font-medium text-gray-700">{side.teamName} ({side.teamSide}) · 현재 {selected.size}명</div>
-                          <div className="max-h-40 overflow-auto rounded bg-gray-50 p-2 grid grid-cols-1 gap-1 text-xs">
-                            {candidates.map((p) => (
-                              <label key={`${m.id}-${side.teamSide}-${p.id}`} className="flex items-center gap-2">
-                                <input type="checkbox" name="playerIds" value={p.id} defaultChecked={selected.has(p.id)} />
-                                <span>{p.jersey_no ? `#${p.jersey_no} ` : ''}{p.player_name}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="저장중...">전체 엔트리 제출</PendingSubmitButton>
-                          </div>
-                        </form>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </section>
-        ) : null}
 
         <datalist id="team-suggestions">
           {(teams ?? []).map((t) => (

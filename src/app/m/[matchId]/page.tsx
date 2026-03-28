@@ -198,37 +198,8 @@ async function canAccountEditThisMatch(
   channelSlug: string,
   matchId: string,
 ): Promise<boolean> {
-  const account = await getAccountInfo(channelSlug);
-  if (!account) return true;
-  if (account.role !== "player" && account.role !== "manager") return true;
-  if (!account.teamId) return false;
-
-  const supabase = getSupabaseServerClient();
-  if (!supabase) return false;
-
-  const { data: match } = await supabase
-    .from("matches")
-    .select("team_a_name,team_b_name")
-    .eq("id", matchId)
-    .maybeSingle<{ team_a_name: string; team_b_name: string }>();
-
-  if (!match) return false;
-
-  const { data: ownTeam } = await supabase
-    .from("teams")
-    .select("name")
-    .eq("id", account.teamId)
-    .maybeSingle<{ name: string }>();
-
-  if (!ownTeam) return false;
-
-  if (
-    match.team_a_name === ownTeam.name ||
-    match.team_b_name === ownTeam.name
-  ) {
-    return false;
-  }
-
+  void channelSlug;
+  void matchId;
   return true;
 }
 
@@ -1866,11 +1837,6 @@ export default async function MatchDetailPage({
                 >
                   보기모드로 돌아가기
                 </Link>
-              ) : null}
-              {accountSession?.role === "player" && !canEditThisMatch ? (
-                <span className="text-xs text-amber-700">
-                  본인 팀 경기는 점수 입력이 제한됩니다. (팀장/팀원 공통)
-                </span>
               ) : null}
               {group ? (
                 <span className="text-xs text-gray-500">

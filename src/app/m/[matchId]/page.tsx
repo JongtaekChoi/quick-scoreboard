@@ -15,7 +15,6 @@ import MatchEditHelp from "./MatchEditHelp";
 import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
 import StarRatingInput from "@/components/StarRatingInput";
-import SubstitutionActions from "./SubstitutionActions";
 import PendingSubmitButton from "@/components/PendingSubmitButton";
 import TransientToast from "@/components/TransientToast";
 import LiveMinuteBadge from "./LiveMinuteBadge";
@@ -75,18 +74,6 @@ type MatchPeriodLineup = {
   team_side: "A" | "B";
   player_id: string | null;
   player_name: string | null;
-};
-
-type ReservedSubstitutionPlan = {
-  id: string;
-  team_side: "A" | "B";
-  match_period_id: string;
-  period_sequence: number;
-  player_out_id: string | null;
-  player_out_name: string | null;
-  player_in_id: string | null;
-  player_in_name: string | null;
-  planned_minute: number;
 };
 
 type MatchSubstitution = {
@@ -1468,16 +1455,6 @@ export default async function MatchDetailPage({
     .is("deleted_at", null)
     .returns<MatchPeriodLineup[]>();
 
-  const { data: reservedSubPlans } = await supabase
-    .from("match_period_substitution_plans")
-    .select(
-      "id,team_side,match_period_id,period_sequence,player_out_id,player_out_name,player_in_id,player_in_name,planned_minute",
-    )
-    .eq("match_id", matchId)
-    .is("deleted_at", null)
-    .is("applied_at", null)
-    .returns<ReservedSubstitutionPlan[]>();
-
   const sortedPeriodsForLineups = [...(matchPeriods ?? [])].sort(
     (a, b) => a.sequence - b.sequence,
   );
@@ -1652,14 +1629,8 @@ export default async function MatchDetailPage({
         channel.edit_session_version,
       )
     : async () => {};
-  const addSubstitutionAction = channel
-    ? addSubstitutionEvent.bind(null, matchId, channel.slug)
-    : async () => {};
   const undoSubstitutionAction = channel
     ? undoSubstitutionEvent.bind(null, matchId, channel.slug)
-    : async () => {};
-  const cancelReservedSubstitutionAction = channel
-    ? cancelReservedSubstitution.bind(null, matchId, channel.slug)
     : async () => {};
   const startPeriodAction = channel
     ? applyPeriodAction.bind(
@@ -1748,14 +1719,6 @@ export default async function MatchDetailPage({
       : "경기 종료"
     : null;
   const periodSequenceById = new Map((sortedPeriods ?? []).map((p) => [p.id, p.sequence] as const));
-  const reservablePeriods = sortedPeriods
-    .filter((p) => p.status === "pending")
-    .map((p) => ({
-      id: p.id,
-      sequence: p.sequence,
-      label: getPeriodDisplayLabel(p.sequence, p),
-    }));
-
   const periodStarters = sortedPeriods
     .filter((p) => p.status !== "pending")
     .map((p) => {
@@ -1913,14 +1876,8 @@ export default async function MatchDetailPage({
                   actionB={addGoalB}
                   teamAName={match.team_a_name}
                   teamBName={match.team_b_name}
-                  rosterA={(() => {
-                    const active = rosterA.filter((p) => activeKeysA.has(p.playerId || `name:${p.playerName}`));
-                    return active.length > 0 ? active : rosterA;
-                  })()}
-                  rosterB={(() => {
-                    const active = rosterB.filter((p) => activeKeysB.has(p.playerId || `name:${p.playerName}`));
-                    return active.length > 0 ? active : rosterB;
-                  })()}
+                  rosterA={rosterA}
+                  rosterB={rosterB}
                   defaultMinute={goalDefaultMinute}
                   periodState={match.period_state}
                   firstHalfStartedAt={match.first_half_started_at}
@@ -2038,171 +1995,6 @@ export default async function MatchDetailPage({
           </section>
         )}
 
-        {isEditMode ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-            <details>
-              <summary className="cursor-pointer list-none text-sm font-semibold text-gray-700 flex items-center justify-between">
-                <span>선수 운용</span>
-                <span className="text-xs text-gray-500">
-                  선발 A {startingCountA}명 · B {startingCountB}명 · 이벤트{" "}
-                  {(matchSubstitutions ?? []).length}건
-                </span>
-              </summary>
-
-              <div className="mt-3 space-y-3">
-                <div className="rounded border p-3">
-                    <SubstitutionActions
-                      action={addSubstitutionAction}
-                      teamAName={match.team_a_name}
-                      teamBName={match.team_b_name}
-                      activeA={rosterA.filter((p) =>
-                        activeKeysA.has(p.playerId || `name:${p.playerName}`),
-                      )}
-                      benchA={rosterA.filter(
-                        (p) =>
-                          !activeKeysA.has(
-                            p.playerId || `name:${p.playerName}`,
-                          ),
-                      )}
-                      activeB={rosterB.filter((p) =>
-                        activeKeysB.has(p.playerId || `name:${p.playerName}`),
-                      )}
-                      benchB={rosterB.filter(
-                        (p) =>
-                          !activeKeysB.has(
-                            p.playerId || `name:${p.playerName}`,
-                          ),
-                      )}
-                      disabled={match.period_state === "ended"}
-                      periodState={match.period_state}
-                      firstHalfStartedAt={match.first_half_started_at}
-                      secondHalfStartedAt={match.second_half_started_at}
-                      firstHalfEndedAt={match.first_half_ended_at}
-                      reservablePeriods={reservablePeriods}
-                    />
-                  </div>
-
-                <div className="text-xs text-gray-500">교체 이벤트는 상단 스코어보드에서 확인해 주세요.</div>
-
-                {reservablePeriods.length > 0 ? (
-                  <div className="rounded border p-2 space-y-1 text-xs">
-                    <div className="font-medium text-gray-700">시작 전 교체 예약</div>
-                    {(reservedSubPlans ?? []).length === 0 ? (
-                      <div className="text-gray-500">예약된 교체가 없습니다.</div>
-                    ) : (
-                      <ul className="space-y-1">
-                        {(reservedSubPlans ?? []).map((plan) => {
-                          const periodLabel =
-                            sortedPeriods.find(
-                              (p) => p.sequence === plan.period_sequence,
-                            )?.label ??
-                            sortedPeriods.find(
-                              (p) => p.sequence === plan.period_sequence,
-                            )?.period_code ??
-                            `${plan.period_sequence}P`;
-                          const outLabel =
-                            (plan.player_out_id
-                              ? playerLabelById.get(plan.player_out_id)
-                              : undefined) ??
-                            plan.player_out_name ??
-                            "선수";
-                          const inLabel =
-                            (plan.player_in_id
-                              ? playerLabelById.get(plan.player_in_id)
-                              : undefined) ??
-                            plan.player_in_name ??
-                            "선수";
-                          return (
-                            <li
-                              key={`reserved-sub-${plan.id}`}
-                              className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                            >
-                              <span>
-                                [{periodLabel}] {plan.team_side} · {plan.planned_minute}분 · OUT {outLabel} / IN {inLabel}
-                              </span>
-                              <form action={cancelReservedSubstitutionAction}>
-                                <input
-                                  type="hidden"
-                                  name="reservation_id"
-                                  value={plan.id}
-                                />
-                                <PendingSubmitButton className="rounded border px-2 py-0.5 text-xs">
-                                  예약 취소
-                                </PendingSubmitButton>
-                              </form>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </details>
-          </section>
-        ) : null}
-
-        {canRate ? (
-          <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-700">
-              무기명 평점 입력 (1.0~5.0, 0.5 단위)
-            </h2>
-            {ratingTargetRoster.length === 0 ? (
-              <p className="text-xs text-gray-500">
-                평점 대상 선수가 없습니다. (타팀 선수만 가능)
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {ratingTargetRoster.map((p) => {
-                  const agg = ratingMap.get(p.playerId);
-                  return (
-                    <li
-                      key={`rate-${p.playerId}`}
-                      className="rounded border p-2 flex items-center justify-between gap-2"
-                    >
-                      <div className="text-sm">
-                        #{p.jerseyNo} {p.playerName}
-                        {agg ? (
-                          <span className="ml-2 text-xs text-gray-500">
-                            평균 {agg.avg_rating} ({agg.rating_count})
-                          </span>
-                        ) : null}
-                      </div>
-                      <form
-                        action={submitRatingAction}
-                        className="flex items-center gap-2"
-                      >
-                        <input
-                          type="hidden"
-                          name="target_player_id"
-                          value={p.playerId}
-                        />
-                        <StarRatingInput
-                          name="rating"
-                          defaultValue={3}
-                          initialValue={myRatingMap.get(p.playerId) ?? 3}
-                          submitLabel="저장"
-                        />
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <p className="text-[11px] text-gray-500">
-              입력자 원문 정보는 저장하지 않으며, 동일 계정은 같은 선수에게
-              1회만 평점(재입력 시 갱신) 가능합니다.
-            </p>
-          </section>
-        ) : null}
-
-        {rosterA.length === 0 && rosterB.length === 0 ? (
-          <datalist id="name-suggestions">
-            {suggestedNames.map((name) => (
-              <option key={`name-${name}`} value={name} />
-            ))}
-          </datalist>
-        ) : null}
 
         {canEditGoalNow && channel ? (
           <GoalEditModal

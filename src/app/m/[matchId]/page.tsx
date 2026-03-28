@@ -441,20 +441,33 @@ async function applyPeriodAction(
 
   if (!match) return;
 
-  const { data: periods } = await supabase
+  const { data: periodsRaw } = await supabase
     .from("match_periods")
     .select("id,sequence,status")
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .order("sequence", { ascending: true })
     .returns<
-      { id: string; sequence: number; status: "pending" | "live" | "ended" }[]
+      { id: string; sequence: number; status: "pending" | "live" | "ended" | null }[]
     >();
 
-  if (!periods || periods.length === 0) {
+  if (!periodsRaw || periodsRaw.length === 0) {
     await setMatchFeedback("periods_not_ready");
     return;
   }
+
+  const nullStatusIds = periodsRaw.filter((p) => !p.status).map((p) => p.id);
+  if (nullStatusIds.length > 0) {
+    await supabase
+      .from("match_periods")
+      .update({ status: "pending" })
+      .in("id", nullStatusIds);
+  }
+
+  const periods = periodsRaw.map((p) => ({
+    ...p,
+    status: (p.status ?? "pending") as "pending" | "live" | "ended",
+  }));
 
   const livePeriod = periods.find((p) => p.status === "live") ?? null;
   const nextPending = periods.find((p) => p.status === "pending") ?? null;
@@ -1695,9 +1708,9 @@ export default async function MatchDetailPage({
     periodState: match.period_state,
     periods: matchPeriods ?? [],
   });
-  const sortedPeriods = [...(matchPeriods ?? [])].sort(
-    (a, b) => a.sequence - b.sequence,
-  );
+  const sortedPeriods = [...(matchPeriods ?? [])]
+    .map((p) => ({ ...p, status: (p.status ?? "pending") as "pending" | "live" | "ended" }))
+    .sort((a, b) => a.sequence - b.sequence);
   const livePeriod = sortedPeriods.find((p) => p.status === "live") ?? null;
   const nextPendingPeriod =
     sortedPeriods.find((p) => p.status === "pending") ?? null;
@@ -1910,6 +1923,9 @@ export default async function MatchDetailPage({
                       {startPeriodLabel ?? periodControlSummary.primaryActionLabel ?? "1P 시작"}
                     </PendingSubmitButton>
                   </form>
+                ) : null}
+                {!canStartPeriod && !canEndPeriod && match.status === "scheduled" ? (
+                  <span className="text-[11px] text-amber-700">시작 가능한 구간이 없습니다. 경기구간수를 저장해 주세요.</span>
                 ) : null}
                 {canEndPeriod ? (
                   <form action={endPeriodAction}>

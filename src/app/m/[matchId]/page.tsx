@@ -1316,13 +1316,39 @@ export default async function MatchDetailPage({
     );
   }
 
-  const { data: matchPeriods } = await supabase
+  const { data: matchPeriodsRaw } = await supabase
     .from("match_periods")
     .select("id,sequence,period_code,label,status")
     .eq("match_id", match.id)
     .is("deleted_at", null)
     .order("sequence", { ascending: true })
     .returns<MatchPeriodRow[]>();
+
+  let matchPeriods = matchPeriodsRaw ?? [];
+  const expectedPeriodCount = Math.max(1, match.period_count || 1);
+  const existingSeq = new Set(matchPeriods.map((p) => p.sequence));
+  const missingSeq = Array.from({ length: expectedPeriodCount }, (_, i) => i + 1).filter((seq) => !existingSeq.has(seq));
+
+  if (missingSeq.length > 0) {
+    await supabase.from("match_periods").insert(
+      missingSeq.map((seq) => ({
+        match_id: match.id,
+        sequence: seq,
+        period_code: seq <= 4 ? `Q${seq}` : `P${seq}`,
+        label: `${seq}P`,
+        status: "pending",
+      })),
+    );
+
+    const { data: hydratedPeriods } = await supabase
+      .from("match_periods")
+      .select("id,sequence,period_code,label,status")
+      .eq("match_id", match.id)
+      .is("deleted_at", null)
+      .order("sequence", { ascending: true })
+      .returns<MatchPeriodRow[]>();
+    matchPeriods = hydratedPeriods ?? matchPeriods;
+  }
 
   const { data: channel } = await supabase
     .from("channels")

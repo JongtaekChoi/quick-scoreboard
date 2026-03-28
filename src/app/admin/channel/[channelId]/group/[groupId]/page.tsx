@@ -279,7 +279,6 @@ async function saveGroupEntries(formData: FormData) {
   const teamId = String(formData.get('teamId') || '')
   const playerIds = formData.getAll('playerIds').map((v) => String(v)).filter(Boolean)
   const sourcePlayer = String(formData.get('sourcePlayer') || '')
-  const confirmCleanup = String(formData.get('confirm_cleanup') || '0') === '1'
 
   const manage = await canManageChannel(channelId)
   if (!manage.allowed) {
@@ -339,22 +338,6 @@ async function saveGroupEntries(formData: FormData) {
       return null
     })
     .filter((v): v is { matchId: string; side: 'A' | 'B' } => Boolean(v))
-
-  if (!confirmCleanup && affectedMatchSides.length > 0) {
-    const { data: existingLineups } = await supabase
-      .from('match_period_lineups')
-      .select('id,match_id,team_side')
-      .in('match_id', affectedMatchSides.map((x) => x.matchId))
-      .is('deleted_at', null)
-      .returns<{ id: string; match_id: string; team_side: 'A' | 'B' }[]>()
-
-    const sideKey = new Set(affectedMatchSides.map((x) => `${x.matchId}:${x.side}`))
-    const hasStarterChanges = (existingLineups ?? []).some((r) => sideKey.has(`${r.match_id}:${r.team_side}`))
-    if (hasStarterChanges) {
-      await setGroupFeedback('entry_affects_starters')
-      return
-    }
-  }
 
   await supabase
     .from('match_group_entries')
@@ -590,7 +573,6 @@ export default async function AdminGroupPage({
           {managerTeamId ? <p className="text-xs text-blue-700">팀장 모드: 자기 팀 엔트리만 관리할 수 있습니다.</p> : null}
           {err === 'forbidden' ? <p className="text-xs text-red-600">해당 작업 권한이 없습니다.</p> : null}
           {err === 'guest_source' ? <p className="text-xs text-red-600">용병 소속팀은 동일 팀으로 선택할 수 없습니다.</p> : null}
-          {err === 'entry_affects_starters' ? <p className="text-xs text-amber-700">이 팀은 이미 경기별 선발 제출 이력이 있어요. 엔트리 변경 시 해당 선발명단에서 제외 선수가 정리됩니다. 같은 팀에서 다시 제출하면 진행됩니다.</p> : null}
           {err === 'team_not_in_group' ? <p className="text-xs text-red-600">이 경기그룹에 참여하는 팀만 엔트리를 제출할 수 있습니다.</p> : null}
         </header>
 
@@ -715,7 +697,6 @@ export default async function AdminGroupPage({
                       <PendingSubmitButton
                         className="rounded border px-2 py-1.5 text-xs"
                         pendingText="제출중..."
-                        confirmMessage={warnTeam === t.id ? '이미 선발로 제출된 선수 중 엔트리에서 제외되는 선수가 있습니다. 해당 선수는 경기별 선발명단에서도 제거됩니다. 계속할까요?' : undefined}
                       >
                         제출
                       </PendingSubmitButton>

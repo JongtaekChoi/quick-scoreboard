@@ -69,6 +69,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
 
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]))
   const playerById = new Map((players ?? []).map((p) => [p.id, p]))
+  const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]))
   const teamShortById = new Map((teams ?? []).map((t) => [t.id, t.short_name ?? t.name]))
 
   const rows = (matches ?? [])
@@ -78,7 +79,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
       if (!isA && !isB) return null
       const side: 'A' | 'B' = isA ? 'A' : 'B'
       const teamName = isA ? m.team_a_name : m.team_b_name
-      const opponent = isA ? (m.team_b_id ? (teamShortById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name) : (m.team_a_id ? (teamShortById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name)
+      const opponentFull = isA ? (m.team_b_id ? (teamNameById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name) : (m.team_a_id ? (teamNameById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name)
+      const opponentShort = isA ? (m.team_b_id ? (teamShortById.get(m.team_b_id) ?? opponentFull) : opponentFull) : (m.team_a_id ? (teamShortById.get(m.team_a_id) ?? opponentFull) : opponentFull)
       const scored = isA ? m.score_a : m.score_b
       const conceded = isA ? m.score_b : m.score_a
       const group = m.match_group_id ? groupById.get(m.match_group_id) : null
@@ -99,7 +101,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
       return {
         id: m.id,
         teamName,
-        opponent,
+        opponentFull,
+        opponentShort,
         scored,
         conceded,
         seq: m.seq,
@@ -199,7 +202,10 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                       const result = row.scored > row.conceded ? '승' : row.scored < row.conceded ? '패' : '무'
                       return (
                         <tr key={`sum-${row.id}`} className="border-b border-gray-100 last:border-0">
-                          <td className="py-1 pr-2 max-w-[110px] truncate">{row.opponent}</td>
+                          <td className="py-1 pr-2 max-w-[110px]">
+                            <span className="hidden sm:inline truncate">{row.opponentFull}</span>
+                            <span className="sm:hidden truncate">{row.opponentShort || row.opponentFull}</span>
+                          </td>
                           <td className="py-1 pr-2">{result}</td>
                           <td className="py-1 pr-2">{row.scored}</td>
                           <td className="py-1 pr-2">{row.conceded}</td>
@@ -216,7 +222,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
             {rowsWithRank.map((row) => (
               <li key={row!.id} className="rounded-xl bg-white p-3 shadow-sm space-y-1.5">
                 <div className="text-xs text-gray-500">{row!.playDate} · {row!.seq}경기 {row!.groupTitle ? `· ${row!.groupTitle}` : ''}</div>
-                <div className="text-sm font-semibold text-gray-900">vs {row!.opponent} · {row!.scored}:{row!.conceded}</div>
+                <div className="text-sm font-semibold text-gray-900">vs <span className="hidden sm:inline">{row!.opponentFull}</span><span className="sm:hidden">{row!.opponentShort || row!.opponentFull}</span> · {row!.scored}:{row!.conceded}</div>
                 {row!.goals.length === 0 ? (
                   <div className="text-xs text-gray-500">득점 기록 없음</div>
                 ) : (

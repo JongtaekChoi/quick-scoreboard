@@ -42,6 +42,8 @@ type TeamRow = { id: string; name: string; short_name: string | null; color_hex:
 type TeamStat = {
   key: string;
   team: string;
+  fullTeam: string;
+  shortTeam: string;
   played: number;
   win: number;
   draw: number;
@@ -133,9 +135,13 @@ export default async function StatsPage({
     const key = teamId ?? `name:${fallbackName}`;
     const found = teamMap.get(key);
     if (found) return found;
+    const fullTeam = teamId ? (teamNameById.get(teamId) ?? fallbackName) : fallbackName;
+    const shortTeam = teamId ? (teamShortById.get(teamId) ?? fullTeam) : fallbackName;
     const init: TeamStat = {
       key,
-      team: teamId ? (teamShortById.get(teamId) ?? teamNameById.get(teamId) ?? fallbackName) : fallbackName,
+      team: shortTeam,
+      fullTeam,
+      shortTeam,
       played: 0,
       win: 0,
       draw: 0,
@@ -178,7 +184,7 @@ export default async function StatsPage({
 
   const teamStats = [...teamMap.values()]
     .map((t) => ({ ...t, gd: t.gf - t.ga }))
-    .sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team));
+    .sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.fullTeam.localeCompare(y.fullTeam));
 
   const playerById = new Map((players ?? []).map((p) => [p.id, p]));
 

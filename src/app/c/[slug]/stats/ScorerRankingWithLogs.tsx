@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import JerseyBadge from '@/components/JerseyBadge'
 
 type GoalLog = {
   matchId: string
@@ -42,7 +43,15 @@ export default function ScorerRankingWithLogs({ items }: { items: ScorerItem[] }
           <li key={`${s.key}-${i}`} className="flex justify-between py-2">
             <span>
               {s.rank}. {s.name}
-              <span className="text-xs text-gray-500"> {s.team !== '-' ? `(${s.team}${s.jersey ? ` #${s.jersey}` : ''})` : ''}</span>
+              <span className="text-xs text-gray-500">
+                {s.team !== '-' ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span>({s.team}</span>
+                    <JerseyBadge number={s.jersey} />
+                    <span>)</span>
+                  </span>
+                ) : ''}
+              </span>
             </span>
             {s.logs.length > 0 ? (
               <button type="button" className="rounded-md bg-gray-900 px-2 py-0.5 text-xs font-semibold text-white" onClick={() => setOpenKey(s.key)}>

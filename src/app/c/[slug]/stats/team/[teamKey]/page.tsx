@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo } from '@/lib/channelSession'
@@ -5,6 +6,7 @@ import UserGNB from '@/components/UserGNB'
 import ShareButton from '@/components/ShareButton'
 import AccountBadge from '@/components/AccountBadge'
 import LoginModal from '@/app/c/[slug]/LoginModal'
+import JerseyBadge from '@/components/JerseyBadge'
 
 type Channel = { id: string; name: string; slug: string }
 type Match = { id: string; match_group_id: string | null; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled'|'live'|'ended' }
@@ -12,6 +14,37 @@ type Goal = { match_id: string; team_side: 'A'|'B'; minute: number | null; creat
 type Player = { id: string; player_name: string; team_id: string; jersey_no: string | null }
 type Group = { id: string; play_date: string; title: string | null; seq: number }
 type TeamRow = { id: string; name: string; short_name: string | null }
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string; teamKey: string }> }): Promise<Metadata> {
+  const { slug, teamKey } = await params
+  const key = decodeURIComponent(teamKey)
+  const supabase = getSupabaseServerClient()
+
+  if (!supabase) {
+    return { title: '팀 상세 통계 | Quick Scoreboard' }
+  }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('name')
+    .eq('slug', slug)
+    .maybeSingle<{ name: string }>()
+
+  let teamName = key.startsWith('name:') ? key.replace(/^name:/, '') : key
+  if (!key.startsWith('name:')) {
+    const { data: team } = await supabase
+      .from('teams')
+      .select('name')
+      .eq('id', key)
+      .maybeSingle<{ name: string }>()
+    if (team?.name) teamName = team.name
+  }
+
+  const channelName = channel?.name ?? '리그'
+  return {
+    title: `${teamName} 팀 상세 통계 | ${channelName}`,
+  }
+}
 
 export default async function TeamDetailPage({ params }: { params: Promise<{ slug: string; teamKey: string }> }) {
   const { slug, teamKey } = await params
@@ -91,8 +124,10 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
           const assist = g.assist_player_id ? playerById.get(g.assist_player_id) : null
           return {
             minute: g.minute,
-            scorer: scorer ? `${scorer.jersey_no ? `#${scorer.jersey_no} ` : ''}${scorer.player_name}` : (g.scorer_name ?? '-'),
-            assist: assist ? `${assist.jersey_no ? `#${assist.jersey_no} ` : ''}${assist.player_name}` : g.assist_name,
+            scorerName: scorer?.player_name ?? (g.scorer_name ?? '-'),
+            scorerJersey: scorer?.jersey_no ?? null,
+            assistName: assist?.player_name ?? (g.assist_name ?? null),
+            assistJersey: assist?.jersey_no ?? null,
           }
         })
 
@@ -149,8 +184,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
   const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null }))
 
   const sideByMatchId = new Map(rowsWithRank.map((row) => [row.id, row.side as 'A' | 'B']))
-  const scorerMap = new Map<string, { label: string; goals: number }>()
-  const assistMap = new Map<string, { label: string; assists: number }>()
+  const scorerMap = new Map<string, { name: string; jersey: string | null; goals: number }>()
+  const assistMap = new Map<string, { name: string; jersey: string | null; assists: number }>()
 
   for (const g of goals ?? []) {
     const side = sideByMatchId.get(g.match_id)
@@ -159,22 +194,24 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
     if (g.scorer_player_id || g.scorer_name) {
       const key = g.scorer_player_id ? `p:${g.scorer_player_id}` : `n:${g.scorer_name}`
       const p = g.scorer_player_id ? playerById.get(g.scorer_player_id) : null
-      const label = p ? `${p.jersey_no ? `#${p.jersey_no} ` : ''}${p.player_name}` : (g.scorer_name ?? '-')
+      const name = p?.player_name ?? (g.scorer_name ?? '-')
+      const jersey = p?.jersey_no ?? null
       const prev = scorerMap.get(key)
-      scorerMap.set(key, { label, goals: (prev?.goals ?? 0) + 1 })
+      scorerMap.set(key, { name, jersey, goals: (prev?.goals ?? 0) + 1 })
     }
 
     if (g.assist_player_id || g.assist_name) {
       const key = g.assist_player_id ? `p:${g.assist_player_id}` : `n:${g.assist_name}`
       const p = g.assist_player_id ? playerById.get(g.assist_player_id) : null
-      const label = p ? `${p.jersey_no ? `#${p.jersey_no} ` : ''}${p.player_name}` : (g.assist_name ?? '-')
+      const name = p?.player_name ?? (g.assist_name ?? '-')
+      const jersey = p?.jersey_no ?? null
       const prev = assistMap.get(key)
-      assistMap.set(key, { label, assists: (prev?.assists ?? 0) + 1 })
+      assistMap.set(key, { name, jersey, assists: (prev?.assists ?? 0) + 1 })
     }
   }
 
-  const teamScorers = Array.from(scorerMap.values()).sort((a, b) => b.goals - a.goals || a.label.localeCompare(b.label)).slice(0, 20)
-  const teamAssisters = Array.from(assistMap.values()).sort((a, b) => b.assists - a.assists || a.label.localeCompare(b.label)).slice(0, 20)
+  const teamScorers = Array.from(scorerMap.values()).sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name)).slice(0, 20)
+  const teamAssisters = Array.from(assistMap.values()).sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name)).slice(0, 20)
 
   const titleTeam = rows[0]?.teamName ?? teamNameFallback ?? '팀'
 
@@ -259,7 +296,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                   <ul className="divide-y divide-gray-100 rounded-md bg-gray-50 px-2">
                     {row!.goals.map((g, idx) => (
                       <li key={`${row!.id}-${idx}`} className="py-1.5 text-xs text-gray-700">
-                        {g.minute != null ? `${g.minute}' ` : ''}득점: {g.scorer}{g.assist ? ` · 어시: ${g.assist}` : ''}
+                        {g.minute != null ? `${g.minute}' ` : ''}득점: <JerseyBadge number={g.scorerJersey} /> {g.scorerName}{g.assistName ? <> · 어시: <JerseyBadge number={g.assistJersey} /> {g.assistName}</> : ''}
                       </li>
                     ))}
                   </ul>
@@ -276,8 +313,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
               ) : (
                 <ol className="divide-y divide-gray-100 text-sm">
                   {teamScorers.map((item, i) => (
-                    <li key={`scorer-${item.label}`} className="flex items-center justify-between py-1.5">
-                      <span>{i + 1}. {item.label}</span>
+                    <li key={`scorer-${item.name}-${item.jersey ?? i}`} className="flex items-center justify-between py-1.5">
+                      <span className="inline-flex items-center gap-1">{i + 1}. <JerseyBadge number={item.jersey} /> {item.name}</span>
                       <span className="font-semibold">{item.goals}</span>
                     </li>
                   ))}
@@ -292,8 +329,8 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
               ) : (
                 <ol className="divide-y divide-gray-100 text-sm">
                   {teamAssisters.map((item, i) => (
-                    <li key={`assist-${item.label}`} className="flex items-center justify-between py-1.5">
-                      <span>{i + 1}. {item.label}</span>
+                    <li key={`assist-${item.name}-${item.jersey ?? i}`} className="flex items-center justify-between py-1.5">
+                      <span className="inline-flex items-center gap-1">{i + 1}. <JerseyBadge number={item.jersey} /> {item.name}</span>
                       <span className="font-semibold">{item.assists}</span>
                     </li>
                   ))}

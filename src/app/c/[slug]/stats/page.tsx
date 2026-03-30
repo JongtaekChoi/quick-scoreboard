@@ -303,11 +303,8 @@ export default async function StatsPage({
             <p className="text-sm text-gray-500">종료된 경기가 없습니다.</p>
           ) : (
             <TeamRankingWithDetailModal
+              slug={channel.slug}
               teamStats={teamStats}
-              matches={matches ?? []}
-              goals={goals ?? []}
-              players={players ?? []}
-              groups={groups ?? []}
               teamColorById={Object.fromEntries(teamColorById.entries())}
             />
           )}

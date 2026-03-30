@@ -37,31 +37,29 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
 
   const matchIds = (matches ?? []).map((m) => m.id)
   const groupIds = Array.from(new Set((matches ?? []).map((m) => m.match_group_id).filter((v): v is string => Boolean(v))))
+  const teamIds = Array.from(new Set((matches ?? []).flatMap((m) => [m.team_a_id, m.team_b_id]).filter((v): v is string => Boolean(v))))
 
-  const { data: groups } = groupIds.length
-    ? await supabase.from('match_groups').select('id,play_date,title,seq').in('id', groupIds).returns<Group[]>()
-    : { data: [] as Group[] }
-
-  const { data: goals } = matchIds.length
-    ? await supabase
-        .from('goal_events')
-        .select('match_id,team_side,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name')
-        .in('match_id', matchIds)
-        .is('deleted_at', null)
-        .returns<Goal[]>()
-    : { data: [] as Goal[] }
-
-  const { data: players } = await supabase
-    .from('team_players')
-    .select('id,player_name,team_id,jersey_no')
-    .eq('channel_id', channel.id)
-    .returns<Player[]>()
-
-  const { data: teams } = await supabase
-    .from('teams')
-    .select('id,name,short_name')
-    .in('id', Array.from(new Set((matches ?? []).flatMap((m) => [m.team_a_id, m.team_b_id]).filter((v): v is string => Boolean(v)))))
-    .returns<TeamRow[]>()
+  const [{ data: groups }, { data: goals }, { data: players }, { data: teams }] = await Promise.all([
+    groupIds.length
+      ? supabase.from('match_groups').select('id,play_date,title,seq').in('id', groupIds).returns<Group[]>()
+      : Promise.resolve({ data: [] as Group[] }),
+    matchIds.length
+      ? supabase
+          .from('goal_events')
+          .select('match_id,team_side,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name')
+          .in('match_id', matchIds)
+          .is('deleted_at', null)
+          .returns<Goal[]>()
+      : Promise.resolve({ data: [] as Goal[] }),
+    supabase
+      .from('team_players')
+      .select('id,player_name,team_id,jersey_no')
+      .eq('channel_id', channel.id)
+      .returns<Player[]>(),
+    teamIds.length
+      ? supabase.from('teams').select('id,name,short_name').in('id', teamIds).returns<TeamRow[]>()
+      : Promise.resolve({ data: [] as TeamRow[] }),
+  ])
 
   const isByName = key.startsWith('name:')
   const teamId = isByName ? null : key

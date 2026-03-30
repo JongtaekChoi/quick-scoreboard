@@ -3,6 +3,8 @@ import Link from 'next/link'
 type TeamStat = {
   key: string
   team: string
+  fullTeam: string
+  shortTeam: string
   played: number
   win: number
   draw: number
@@ -49,7 +51,8 @@ export default function TeamRankingWithDetailModal({
                     className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-black/10"
                     style={{ backgroundColor: t.key.startsWith('name:') ? '#D1D5DB' : (teamColorById[t.key] ?? '#D1D5DB') }}
                   />
-                  <span className="truncate">{t.team}</span>
+                  <span className="truncate hidden sm:inline">{t.fullTeam}</span>
+                  <span className="truncate sm:hidden">{t.shortTeam || t.fullTeam}</span>
                 </Link>
               </td>
               <td className="py-1 pr-2">{t.played}</td>

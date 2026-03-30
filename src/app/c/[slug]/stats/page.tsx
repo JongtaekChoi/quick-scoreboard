@@ -9,6 +9,7 @@ import ShareButton from "@/components/ShareButton";
 import AccountBadge from "@/components/AccountBadge";
 import LoginModal from "../LoginModal";
 import { resolveTeamColor } from "@/lib/teamColor";
+import TeamRankingWithDetailModal from "./TeamRankingWithDetailModal";
 
 type Channel = { id: string; name: string; slug: string };
 type Match = {
@@ -25,6 +26,7 @@ type Match = {
 };
 type Goal = {
   match_id: string;
+  team_side: "A" | "B";
   minute: number | null;
   created_at: string;
   scorer_player_id: string | null;
@@ -95,7 +97,7 @@ export default async function StatsPage({
   const { data: goals } = matchIds.length
     ? await supabase
         .from("goal_events")
-        .select("match_id,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
+        .select("match_id,team_side,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
         .in("match_id", matchIds)
         .is("deleted_at", null)
         .returns<Goal[]>()
@@ -300,48 +302,14 @@ export default async function StatsPage({
           {teamStats.length === 0 ? (
             <p className="text-sm text-gray-500">종료된 경기가 없습니다.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b border-gray-100 text-xs text-gray-500">
-                    <th className="py-1 pr-2">순위</th>
-                    <th className="py-1 pr-2">팀</th>
-                    <th className="py-1 pr-2">경기</th>
-                    <th className="py-1 pr-2">승</th>
-                    <th className="py-1 pr-2">무</th>
-                    <th className="py-1 pr-2">패</th>
-                    <th className="py-1 pr-2">득점</th>
-                    <th className="py-1 pr-2">실점</th>
-                    <th className="py-1 pr-2">득실</th>
-                    <th className="py-1 pr-2">승점</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamStats.map((t, i) => (
-                    <tr key={t.key} className="border-b border-gray-100 last:border-0">
-                      <td className="py-1 pr-2">{i + 1}</td>
-                      <td className="py-1 pr-2">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10"
-                            style={{ backgroundColor: t.key.startsWith('name:') ? resolveTeamColor({ teamName: t.team }) : (teamColorById.get(t.key) ?? '#D1D5DB') }}
-                          />
-                          <span>{t.team}</span>
-                        </span>
-                      </td>
-                      <td className="py-1 pr-2">{t.played}</td>
-                      <td className="py-1 pr-2">{t.win}</td>
-                      <td className="py-1 pr-2">{t.draw}</td>
-                      <td className="py-1 pr-2">{t.loss}</td>
-                      <td className="py-1 pr-2">{t.gf}</td>
-                      <td className="py-1 pr-2">{t.ga}</td>
-                      <td className="py-1 pr-2">{t.gd}</td>
-                      <td className="py-1 pr-2 font-semibold">{t.pts}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TeamRankingWithDetailModal
+              teamStats={teamStats}
+              matches={matches ?? []}
+              goals={goals ?? []}
+              players={players ?? []}
+              groups={groups ?? []}
+              teamColorById={Object.fromEntries(teamColorById.entries())}
+            />
           )}
         </section>
 

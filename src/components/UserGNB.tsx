@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 
 type TabKey = 'matches' | 'stats' | 'calendar' | 'account'
 
@@ -20,6 +21,7 @@ export default function UserGNB({
   subtitle?: ReactNode
   isLoggedIn?: boolean
 }) {
+  const router = useRouter()
   const normalizedSlug = slug?.trim() ?? ''
   const hasSlug = normalizedSlug.length > 0
   const tabs: { key: TabKey; label: string; href: string }[] = hasSlug
@@ -51,6 +53,8 @@ export default function UserGNB({
               href={tab.href}
               prefetch
               scroll={false}
+              onMouseEnter={() => router.prefetch(tab.href)}
+              onFocus={() => router.prefetch(tab.href)}
               className={`rounded-full px-2.5 py-1 text-xs ${current === tab.key ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
               {tab.label}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import JerseyBadge from '@/components/JerseyBadge'
 
 type Item = {
   name: string
@@ -36,7 +37,15 @@ export default function ExpandableRankingList({
           <li key={`${s.name}-${s.rank}-${i}`} className="flex justify-between py-2">
             <span>
               {s.rank}. {s.name}
-              <span className="text-xs text-gray-500"> {s.team !== '-' ? `(${s.team}${s.jersey ? ` #${s.jersey}` : ''})` : ''}</span>
+              <span className="text-xs text-gray-500">
+                {s.team !== '-' ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span>({s.team}</span>
+                    <JerseyBadge number={s.jersey} />
+                    <span>)</span>
+                  </span>
+                ) : ''}
+              </span>
             </span>
             <span className="font-medium">{s.value}{valueLabel ?? ''}</span>
           </li>

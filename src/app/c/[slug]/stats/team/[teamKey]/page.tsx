@@ -99,6 +99,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
       return {
         id: m.id,
         teamName,
+        side,
         opponentFull,
         opponentShort,
         scored,
@@ -146,6 +147,34 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
   }
 
   const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null }))
+
+  const sideByMatchId = new Map(rowsWithRank.map((row) => [row.id, row.side as 'A' | 'B']))
+  const scorerMap = new Map<string, { label: string; goals: number }>()
+  const assistMap = new Map<string, { label: string; assists: number }>()
+
+  for (const g of goals ?? []) {
+    const side = sideByMatchId.get(g.match_id)
+    if (!side || g.team_side !== side) continue
+
+    if (g.scorer_player_id || g.scorer_name) {
+      const key = g.scorer_player_id ? `p:${g.scorer_player_id}` : `n:${g.scorer_name}`
+      const p = g.scorer_player_id ? playerById.get(g.scorer_player_id) : null
+      const label = p ? `${p.jersey_no ? `#${p.jersey_no} ` : ''}${p.player_name}` : (g.scorer_name ?? '-')
+      const prev = scorerMap.get(key)
+      scorerMap.set(key, { label, goals: (prev?.goals ?? 0) + 1 })
+    }
+
+    if (g.assist_player_id || g.assist_name) {
+      const key = g.assist_player_id ? `p:${g.assist_player_id}` : `n:${g.assist_name}`
+      const p = g.assist_player_id ? playerById.get(g.assist_player_id) : null
+      const label = p ? `${p.jersey_no ? `#${p.jersey_no} ` : ''}${p.player_name}` : (g.assist_name ?? '-')
+      const prev = assistMap.get(key)
+      assistMap.set(key, { label, assists: (prev?.assists ?? 0) + 1 })
+    }
+  }
+
+  const teamScorers = Array.from(scorerMap.values()).sort((a, b) => b.goals - a.goals || a.label.localeCompare(b.label)).slice(0, 20)
+  const teamAssisters = Array.from(assistMap.values()).sort((a, b) => b.assists - a.assists || a.label.localeCompare(b.label)).slice(0, 20)
 
   const titleTeam = rows[0]?.teamName ?? teamNameFallback ?? '팀'
 
@@ -238,6 +267,40 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
               </li>
             ))}
           </ul>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <section className="rounded-2xl bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">팀 내 득점 순위</h3>
+              {teamScorers.length === 0 ? (
+                <p className="text-sm text-gray-500">득점 기록이 없습니다.</p>
+              ) : (
+                <ol className="divide-y divide-gray-100 text-sm">
+                  {teamScorers.map((item, i) => (
+                    <li key={`scorer-${item.label}`} className="flex items-center justify-between py-1.5">
+                      <span>{i + 1}. {item.label}</span>
+                      <span className="font-semibold">{item.goals}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section className="rounded-2xl bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">팀 내 어시스트 순위</h3>
+              {teamAssisters.length === 0 ? (
+                <p className="text-sm text-gray-500">어시스트 기록이 없습니다.</p>
+              ) : (
+                <ol className="divide-y divide-gray-100 text-sm">
+                  {teamAssisters.map((item, i) => (
+                    <li key={`assist-${item.label}`} className="flex items-center justify-between py-1.5">
+                      <span>{i + 1}. {item.label}</span>
+                      <span className="font-semibold">{item.assists}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          </div>
           </>
         )}
       </section>

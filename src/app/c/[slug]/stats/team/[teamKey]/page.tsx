@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSupabaseServerClient } from '@/lib/supabase'
 import { getAccountInfo } from '@/lib/channelSession'
@@ -13,6 +14,37 @@ type Goal = { match_id: string; team_side: 'A'|'B'; minute: number | null; creat
 type Player = { id: string; player_name: string; team_id: string; jersey_no: string | null }
 type Group = { id: string; play_date: string; title: string | null; seq: number }
 type TeamRow = { id: string; name: string; short_name: string | null }
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string; teamKey: string }> }): Promise<Metadata> {
+  const { slug, teamKey } = await params
+  const key = decodeURIComponent(teamKey)
+  const supabase = getSupabaseServerClient()
+
+  if (!supabase) {
+    return { title: '팀 상세 통계 | Quick Scoreboard' }
+  }
+
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('name')
+    .eq('slug', slug)
+    .maybeSingle<{ name: string }>()
+
+  let teamName = key.startsWith('name:') ? key.replace(/^name:/, '') : key
+  if (!key.startsWith('name:')) {
+    const { data: team } = await supabase
+      .from('teams')
+      .select('name')
+      .eq('id', key)
+      .maybeSingle<{ name: string }>()
+    if (team?.name) teamName = team.name
+  }
+
+  const channelName = channel?.name ?? '리그'
+  return {
+    title: `${teamName} 팀 상세 통계 | ${channelName}`,
+  }
+}
 
 export default async function TeamDetailPage({ params }: { params: Promise<{ slug: string; teamKey: string }> }) {
   const { slug, teamKey } = await params

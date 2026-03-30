@@ -188,6 +188,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                 <table className="min-w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-500">
+                      <th className="py-1 pr-2 text-left">날짜</th>
                       <th className="py-1 pr-2 text-left">상대팀</th>
                       <th className="py-1 pr-2 text-left">결과</th>
                       <th className="py-1 pr-2 text-left">득점</th>
@@ -200,6 +201,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                       const result = row.scored > row.conceded ? '승' : row.scored < row.conceded ? '패' : '무'
                       return (
                         <tr key={`sum-${row.id}`} className="border-b border-gray-100 last:border-0">
+                          <td className="py-1 pr-2 whitespace-nowrap">{row.playDate || '-'}</td>
                           <td className="py-1 pr-2 max-w-[110px]">
                             <span className="hidden sm:inline truncate">{row.opponentFull}</span>
                             <span className="sm:hidden truncate">{row.opponentShort || row.opponentFull}</span>

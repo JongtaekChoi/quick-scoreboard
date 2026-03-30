@@ -121,8 +121,11 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
 
   const standings = new Map<string, { pts: number; gd: number; gf: number }>()
   const rankAfterMatch = new Map<string, number>()
+  const rankDeltaAfterMatch = new Map<string, number | null>()
 
   const keyFor = (id: string | null, name: string) => id ?? `name:${name}`
+
+  let prevRank: number | null = null
 
   for (const m of timelineMatches) {
     const aKey = keyFor(m.team_a_id, m.team_a_name)
@@ -142,10 +145,15 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
 
     const targetKey = key
     const idx = ranked.indexOf(targetKey)
-    if (idx >= 0) rankAfterMatch.set(m.id, idx + 1)
+    if (idx >= 0) {
+      const currentRank = idx + 1
+      rankAfterMatch.set(m.id, currentRank)
+      rankDeltaAfterMatch.set(m.id, prevRank == null ? null : prevRank - currentRank)
+      prevRank = currentRank
+    }
   }
 
-  const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null }))
+  const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null, rankDelta: rankDeltaAfterMatch.get(row!.id) ?? null }))
 
   const titleTeam = rows[0]?.teamName ?? teamNameFallback ?? '팀'
 
@@ -193,7 +201,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                       <th className="py-1 pr-2 text-left">결과</th>
                       <th className="py-1 pr-2 text-left">득점</th>
                       <th className="py-1 pr-2 text-left">실점</th>
-                      <th className="py-1 pr-2 text-left">직후순위</th>
+                      <th className="py-1 pr-2 text-left">순위변동</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -209,7 +217,17 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                           <td className="py-1 pr-2">{result}</td>
                           <td className="py-1 pr-2">{row.scored}</td>
                           <td className="py-1 pr-2">{row.conceded}</td>
-                          <td className="py-1 pr-2">{row.postRank ?? '-'}</td>
+                          <td className="py-1 pr-2">
+                            {row.rankDelta == null ? (
+                              <span className="text-gray-400">-</span>
+                            ) : row.rankDelta > 0 ? (
+                              <span className="font-medium text-emerald-600">▲{row.rankDelta}</span>
+                            ) : row.rankDelta < 0 ? (
+                              <span className="font-medium text-rose-600">▼{Math.abs(row.rankDelta)}</span>
+                            ) : (
+                              <span className="text-gray-500">-</span>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}

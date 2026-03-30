@@ -37,7 +37,7 @@ type Goal = {
 };
 type RatingRow = { target_player_id: string; rating: number };
 type PlayerRow = { id: string; player_name: string; team_id: string; jersey_no: string | null };
-type TeamRow = { id: string; name: string; color_hex: string | null };
+type TeamRow = { id: string; name: string; short_name: string | null; color_hex: string | null };
 
 type TeamStat = {
   key: string;
@@ -119,12 +119,13 @@ export default async function StatsPage({
 
   const { data: teams } = await supabase
     .from("channel_teams_view")
-    .select("id,name,color_hex")
+    .select("id,name,short_name,color_hex")
     .eq("channel_id", channel.id)
     .returns<TeamRow[]>();
 
   const teamMap = new Map<string, TeamStat>();
   const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const teamShortById = new Map((teams ?? []).map((t) => [t.id, t.short_name ?? null]));
   const teamColorById = new Map(
     (teams ?? []).map((t) => [t.id, resolveTeamColor({ teamId: t.id, teamName: t.name, colorHex: t.color_hex })]),
   );
@@ -134,7 +135,7 @@ export default async function StatsPage({
     if (found) return found;
     const init: TeamStat = {
       key,
-      team: teamId ? (teamNameById.get(teamId) ?? fallbackName) : fallbackName,
+      team: teamId ? (teamShortById.get(teamId) ?? teamNameById.get(teamId) ?? fallbackName) : fallbackName,
       played: 0,
       win: 0,
       draw: 0,

@@ -8,7 +8,7 @@ import ImportTeamForm from './ImportTeamForm'
 import PendingSubmitButton from '@/components/PendingSubmitButton'
 
 type Channel = { id: string; name: string; slug: string; edit_session_version: number }
-type Team = { id: string; name: string; color_hex: string | null; last_used_at: string }
+type Team = { id: string; name: string; short_name: string | null; color_hex: string | null; last_used_at: string }
 type OtherChannelTeam = { channel_id: string; id: string; name: string }
 type OtherChannel = { id: string; name: string }
 
@@ -37,6 +37,7 @@ async function createTeam(formData: FormData) {
   'use server'
   const channelId = String(formData.get('channelId') || '')
   const name = String(formData.get('name') || '').trim()
+  const shortName = String(formData.get('short_name') || '').trim()
   const colorHexRaw = String(formData.get('color_hex') || '').trim()
   const colorHex = /^#([0-9a-fA-F]{6})$/.test(colorHexRaw) ? colorHexRaw : null
 
@@ -53,8 +54,8 @@ async function createTeam(formData: FormData) {
 
   const teamId = await ensureTeamInChannel(supabase, channelId, name)
 
-  if (teamId && colorHex) {
-    await supabase.from('teams').update({ color_hex: colorHex }).eq('id', teamId)
+  if (teamId) {
+    await supabase.from('teams').update({ color_hex: colorHex, short_name: shortName || null }).eq('id', teamId)
   }
 
   redirect(`/admin/channel/${channelId}/teams`)
@@ -65,6 +66,7 @@ async function renameTeam(formData: FormData) {
   const channelId = String(formData.get('channelId') || '')
   const teamId = String(formData.get('teamId') || '')
   const name = String(formData.get('name') || '').trim()
+  const shortName = String(formData.get('short_name') || '').trim()
   const colorHexRaw = String(formData.get('color_hex') || '').trim()
   const colorHex = /^#([0-9a-fA-F]{6})$/.test(colorHexRaw) ? colorHexRaw : null
 
@@ -79,7 +81,7 @@ async function renameTeam(formData: FormData) {
   const supabase = getSupabaseServerClient()
   if (!supabase) return
 
-  await supabase.from('teams').update({ name, color_hex: colorHex }).eq('id', teamId)
+  await supabase.from('teams').update({ name, short_name: shortName || null, color_hex: colorHex }).eq('id', teamId)
   await supabase
     .from('channel_teams')
     .update({ last_used_at: new Date().toISOString() })
@@ -153,7 +155,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
   const [{ data: teams }, { data: allChannels }, { data: allChannelTeams }] = await Promise.all([
     supabase
       .from('channel_teams_view')
-      .select('id,name,color_hex,last_used_at')
+      .select('id,name,short_name,color_hex,last_used_at')
       .eq('channel_id', channelId)
       .order('name', { ascending: true })
       .returns<Team[]>(),
@@ -199,6 +201,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
           <form action={createTeam} className="grid md:grid-cols-4 gap-2">
             <input type="hidden" name="channelId" value={channel.id} />
             <input className="rounded border px-2 py-1.5 text-sm" name="name" placeholder="팀명" required />
+            <input className="rounded border px-2 py-1.5 text-sm" name="short_name" placeholder="약칭(모바일용)" maxLength={12} />
             <input className="h-10 w-full rounded border px-2 py-1.5 text-sm" type="color" name="color_hex" defaultValue="#9CA3AF" aria-label="팀 컬러" />
             <PendingSubmitButton className="rounded border px-3 py-2 text-sm" pendingText="저장중...">팀 저장</PendingSubmitButton>
           </form>
@@ -222,6 +225,7 @@ export default async function AdminChannelTeamsPage({ params }: { params: Promis
                   <input type="hidden" name="teamId" value={t.id} />
                   <span className="inline-block h-3 w-3 rounded-sm border border-black/10" style={{ backgroundColor: t.color_hex ?? '#D1D5DB' }} />
                   <input className="rounded border px-2 py-1.5 text-sm" name="name" defaultValue={t.name} required />
+                  <input className="rounded border px-2 py-1.5 text-sm w-28" name="short_name" defaultValue={t.short_name ?? ''} placeholder="약칭" maxLength={12} />
                   <input className="h-9 w-12 rounded border px-1" type="color" name="color_hex" defaultValue={t.color_hex ?? '#9CA3AF'} aria-label={`${t.name} 팀 컬러`} />
                   <PendingSubmitButton className="rounded border px-2 py-1.5 text-xs" pendingText="저장중...">저장</PendingSubmitButton>
                 </form>

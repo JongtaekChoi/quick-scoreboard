@@ -11,6 +11,7 @@ type Match = { id: string; match_group_id: string | null; seq: number; team_a_id
 type Goal = { match_id: string; team_side: 'A'|'B'; minute: number | null; created_at: string; scorer_player_id: string | null; assist_player_id: string | null; scorer_name: string | null; assist_name: string | null }
 type Player = { id: string; player_name: string; team_id: string; jersey_no: string | null }
 type Group = { id: string; play_date: string; title: string | null; seq: number }
+type TeamRow = { id: string; name: string; short_name: string | null }
 
 export default async function TeamDetailPage({ params }: { params: Promise<{ slug: string; teamKey: string }> }) {
   const { slug, teamKey } = await params
@@ -56,12 +57,19 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
     .eq('channel_id', channel.id)
     .returns<Player[]>()
 
+  const { data: teams } = await supabase
+    .from('teams')
+    .select('id,name,short_name')
+    .in('id', Array.from(new Set((matches ?? []).flatMap((m) => [m.team_a_id, m.team_b_id]).filter((v): v is string => Boolean(v)))))
+    .returns<TeamRow[]>()
+
   const isByName = key.startsWith('name:')
   const teamId = isByName ? null : key
   const teamNameFallback = isByName ? key.replace(/^name:/, '') : null
 
   const groupById = new Map((groups ?? []).map((g) => [g.id, g]))
   const playerById = new Map((players ?? []).map((p) => [p.id, p]))
+  const teamShortById = new Map((teams ?? []).map((t) => [t.id, t.short_name ?? t.name]))
 
   const rows = (matches ?? [])
     .map((m) => {
@@ -70,7 +78,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
       if (!isA && !isB) return null
       const side: 'A' | 'B' = isA ? 'A' : 'B'
       const teamName = isA ? m.team_a_name : m.team_b_name
-      const opponent = isA ? m.team_b_name : m.team_a_name
+      const opponent = isA ? (m.team_b_id ? (teamShortById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name) : (m.team_a_id ? (teamShortById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name)
       const scored = isA ? m.score_a : m.score_b
       const conceded = isA ? m.score_b : m.score_a
       const group = m.match_group_id ? groupById.get(m.match_group_id) : null
@@ -103,6 +111,41 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
     .filter(Boolean)
     .sort((a, b) => b!.playDate.localeCompare(a!.playDate) || b!.seq - a!.seq)
 
+  const timelineMatches = (matches ?? [])
+    .map((m) => {
+      const group = m.match_group_id ? groupById.get(m.match_group_id) : null
+      return { ...m, playDate: group?.play_date ?? '' }
+    })
+    .sort((a, b) => a.playDate.localeCompare(b.playDate) || a.seq - b.seq)
+
+  const standings = new Map<string, { pts: number; gd: number; gf: number }>()
+  const rankAfterMatch = new Map<string, number>()
+
+  const keyFor = (id: string | null, name: string) => id ?? `name:${name}`
+
+  for (const m of timelineMatches) {
+    const aKey = keyFor(m.team_a_id, m.team_a_name)
+    const bKey = keyFor(m.team_b_id, m.team_b_name)
+    const aPrev = standings.get(aKey) ?? { pts: 0, gd: 0, gf: 0 }
+    const bPrev = standings.get(bKey) ?? { pts: 0, gd: 0, gf: 0 }
+
+    const aPts = m.score_a > m.score_b ? 3 : m.score_a === m.score_b ? 1 : 0
+    const bPts = m.score_b > m.score_a ? 3 : m.score_a === m.score_b ? 1 : 0
+
+    standings.set(aKey, { pts: aPrev.pts + aPts, gd: aPrev.gd + (m.score_a - m.score_b), gf: aPrev.gf + m.score_a })
+    standings.set(bKey, { pts: bPrev.pts + bPts, gd: bPrev.gd + (m.score_b - m.score_a), gf: bPrev.gf + m.score_b })
+
+    const ranked = Array.from(standings.entries())
+      .sort((x, y) => y[1].pts - x[1].pts || y[1].gd - x[1].gd || y[1].gf - x[1].gf || x[0].localeCompare(y[0]))
+      .map(([k]) => k)
+
+    const targetKey = key
+    const idx = ranked.indexOf(targetKey)
+    if (idx >= 0) rankAfterMatch.set(m.id, idx + 1)
+  }
+
+  const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null }))
+
   const titleTeam = rows[0]?.teamName ?? teamNameFallback ?? '팀'
 
   return (
@@ -134,11 +177,43 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
           </div>
         </section>
 
-        {rows.length === 0 ? (
+        {rowsWithRank.length === 0 ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm text-sm text-gray-500">기록이 없습니다.</section>
         ) : (
-          <ul className="space-y-2">
-            {rows.map((row) => (
+          <>
+            <section className="rounded-2xl bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">경기 요약표</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-gray-500">
+                      <th className="py-1 pr-2 text-left">상대팀</th>
+                      <th className="py-1 pr-2 text-left">결과</th>
+                      <th className="py-1 pr-2 text-left">득점</th>
+                      <th className="py-1 pr-2 text-left">실점</th>
+                      <th className="py-1 pr-2 text-left">직후순위</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rowsWithRank.map((row) => {
+                      const result = row.scored > row.conceded ? '승' : row.scored < row.conceded ? '패' : '무'
+                      return (
+                        <tr key={`sum-${row.id}`} className="border-b border-gray-100 last:border-0">
+                          <td className="py-1 pr-2 max-w-[110px] truncate">{row.opponent}</td>
+                          <td className="py-1 pr-2">{result}</td>
+                          <td className="py-1 pr-2">{row.scored}</td>
+                          <td className="py-1 pr-2">{row.conceded}</td>
+                          <td className="py-1 pr-2">{row.postRank ?? '-'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <ul className="space-y-2">
+            {rowsWithRank.map((row) => (
               <li key={row!.id} className="rounded-xl bg-white p-3 shadow-sm space-y-1.5">
                 <div className="text-xs text-gray-500">{row!.playDate} · {row!.seq}경기 {row!.groupTitle ? `· ${row!.groupTitle}` : ''}</div>
                 <div className="text-sm font-semibold text-gray-900">vs {row!.opponent} · {row!.scored}:{row!.conceded}</div>
@@ -156,6 +231,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
     </main>

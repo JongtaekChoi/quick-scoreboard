@@ -44,12 +44,12 @@ export default function TeamRankingWithDetailModal({
             <tr key={t.key} className="border-b border-gray-100 last:border-0">
               <td className="py-1 pr-2">{i + 1}</td>
               <td className="py-1 pr-2">
-                <Link href={`/c/${encodeURIComponent(slug)}/stats/team/${encodeURIComponent(t.key)}`} className="inline-flex items-center gap-1.5 hover:underline">
+                <Link href={`/c/${encodeURIComponent(slug)}/stats/team/${encodeURIComponent(t.key)}`} className="inline-flex max-w-[120px] items-center gap-1.5 hover:underline">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm border border-black/10"
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-black/10"
                     style={{ backgroundColor: t.key.startsWith('name:') ? '#D1D5DB' : (teamColorById[t.key] ?? '#D1D5DB') }}
                   />
-                  <span>{t.team}</span>
+                  <span className="truncate">{t.team}</span>
                 </Link>
               </td>
               <td className="py-1 pr-2">{t.played}</td>

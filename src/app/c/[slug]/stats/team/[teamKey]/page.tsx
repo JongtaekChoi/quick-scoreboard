@@ -41,8 +41,27 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   const channelName = channel?.name ?? '리그'
+  const title = `${teamName} 팀 상세 통계 | ${channelName}`
+  const description = `${channelName} ${teamName}의 경기 결과, 순위, 팀 내 득점/어시스트 통계`
+  const url = `/c/${encodeURIComponent(slug)}/stats/team/${encodeURIComponent(key)}`
+
   return {
-    title: `${teamName} 팀 상세 통계 | ${channelName}`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      locale: 'ko_KR',
+      siteName: '풋살리그운영',
+      url,
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
   }
 }
 

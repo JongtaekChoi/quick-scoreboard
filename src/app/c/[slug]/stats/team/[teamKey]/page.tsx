@@ -9,7 +9,7 @@ import LoginModal from '@/app/c/[slug]/LoginModal'
 import JerseyBadge from '@/components/JerseyBadge'
 
 type Channel = { id: string; name: string; slug: string }
-type Match = { id: string; match_group_id: string | null; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled'|'live'|'ended' }
+type Match = { id: string; match_group_id: string | null; seq: number; team_a_id: string | null; team_b_id: string | null; team_a_name: string; team_b_name: string; score_a: number; score_b: number; status: 'scheduled'|'live'|'ended'; scheduled_start_at: string | null }
 type Goal = { match_id: string; team_side: 'A'|'B'; minute: number | null; created_at: string; scorer_player_id: string | null; assist_player_id: string | null; scorer_name: string | null; assist_name: string | null }
 type Player = { id: string; player_name: string; team_id: string; jersey_no: string | null }
 type Group = { id: string; play_date: string; title: string | null; seq: number }
@@ -82,12 +82,14 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
 
   const { data: matches } = await supabase
     .from('matches')
-    .select('id,match_group_id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status')
+    .select('id,match_group_id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at')
     .eq('channel_id', channel.id)
-    .eq('status', 'ended')
-    .returns<Match[]>()
+    .returns<(Match & { scheduled_start_at: string | null })[]>()
 
-  const matchIds = (matches ?? []).map((m) => m.id)
+  const endedMatches = (matches ?? []).filter((m) => m.status === 'ended')
+  const upcomingMatches = (matches ?? []).filter((m) => m.status !== 'ended')
+
+  const matchIds = endedMatches.map((m) => m.id)
   const groupIds = Array.from(new Set((matches ?? []).map((m) => m.match_group_id).filter((v): v is string => Boolean(v))))
   const teamIds = Array.from(new Set((matches ?? []).flatMap((m) => [m.team_a_id, m.team_b_id]).filter((v): v is string => Boolean(v))))
 
@@ -122,7 +124,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
   const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]))
   const teamShortById = new Map((teams ?? []).map((t) => [t.id, t.short_name ?? t.name]))
 
-  const rows = (matches ?? [])
+  const rows = endedMatches
     .map((m) => {
       const isA = teamId ? m.team_a_id === teamId : m.team_a_name === teamNameFallback
       const isB = teamId ? m.team_b_id === teamId : m.team_b_name === teamNameFallback
@@ -167,7 +169,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
     .filter(Boolean)
     .sort((a, b) => b!.playDate.localeCompare(a!.playDate) || b!.seq - a!.seq)
 
-  const timelineMatches = (matches ?? [])
+  const timelineMatches = endedMatches
     .map((m) => {
       const group = m.match_group_id ? groupById.get(m.match_group_id) : null
       return { ...m, playDate: group?.play_date ?? '' }
@@ -201,6 +203,28 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
   }
 
   const rowsWithRank = rows.map((row) => ({ ...row!, postRank: rankAfterMatch.get(row!.id) ?? null }))
+
+  const upcomingRows = upcomingMatches
+    .map((m) => {
+      const isA = teamId ? m.team_a_id === teamId : m.team_a_name === teamNameFallback
+      const isB = teamId ? m.team_b_id === teamId : m.team_b_name === teamNameFallback
+      if (!isA && !isB) return null
+      const opponentFull = isA ? (m.team_b_id ? (teamNameById.get(m.team_b_id) ?? m.team_b_name) : m.team_b_name) : (m.team_a_id ? (teamNameById.get(m.team_a_id) ?? m.team_a_name) : m.team_a_name)
+      const opponentShort = isA ? (m.team_b_id ? (teamShortById.get(m.team_b_id) ?? opponentFull) : opponentFull) : (m.team_a_id ? (teamShortById.get(m.team_a_id) ?? opponentFull) : opponentFull)
+      const group = m.match_group_id ? groupById.get(m.match_group_id) : null
+      return {
+        id: m.id,
+        opponentFull,
+        opponentShort,
+        status: m.status,
+        seq: m.seq,
+        playDate: group?.play_date ?? '',
+        groupTitle: group?.title ?? null,
+        scheduledStartAt: m.scheduled_start_at,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a!.playDate.localeCompare(b!.playDate) || a!.seq - b!.seq))
 
   const sideByMatchId = new Map(rowsWithRank.map((row) => [row.id, row.side as 'A' | 'B']))
   const scorerMap = new Map<string, { name: string; jersey: string | null; goals: number }>()
@@ -263,8 +287,32 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
           </div>
         </section>
 
+        <section className="rounded-2xl bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">예정 경기</h3>
+          {upcomingRows.length === 0 ? (
+            <p className="text-sm text-gray-500">예정 경기가 없습니다.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 text-sm">
+              {upcomingRows.map((row) => (
+                <li key={`upcoming-${row!.id}`} className="py-2 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-500">{row!.playDate || '-'} · {row!.seq}경기 {row!.groupTitle ? `· ${row!.groupTitle}` : ''}</div>
+                    <div className="font-medium text-gray-900">vs <span className="hidden sm:inline">{row!.opponentFull}</span><span className="sm:hidden">{row!.opponentShort || row!.opponentFull}</span></div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className={`text-xs rounded-full px-2 py-0.5 ${row!.status === 'live' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {row!.status === 'live' ? '진행중' : '예정'}
+                    </div>
+                    {row!.scheduledStartAt ? <div className="mt-1 text-[11px] text-gray-500">{new Date(row!.scheduledStartAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</div> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {rowsWithRank.length === 0 ? (
-          <section className="rounded-2xl bg-white p-4 shadow-sm text-sm text-gray-500">기록이 없습니다.</section>
+          <section className="rounded-2xl bg-white p-4 shadow-sm text-sm text-gray-500">종료 경기 기록이 없습니다.</section>
         ) : (
           <>
             <section className="rounded-2xl bg-white p-4 shadow-sm">

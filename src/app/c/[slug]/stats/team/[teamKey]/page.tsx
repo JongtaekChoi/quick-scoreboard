@@ -288,27 +288,58 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
         </section>
 
         <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2">예정 경기</h3>
-          {upcomingRows.length === 0 ? (
-            <p className="text-sm text-gray-500">예정 경기가 없습니다.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
-              {upcomingRows.map((row) => (
-                <li key={`upcoming-${row!.id}`} className="py-2 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-500">{row!.playDate || '-'} · {row!.seq}경기 {row!.groupTitle ? `· ${row!.groupTitle}` : ''}</div>
-                    <div className="font-medium text-gray-900">vs <span className="hidden sm:inline">{row!.opponentFull}</span><span className="sm:hidden">{row!.opponentShort || row!.opponentFull}</span></div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className={`text-xs rounded-full px-2 py-0.5 ${row!.status === 'live' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {row!.status === 'live' ? '진행중' : '예정'}
-                    </div>
-                    {row!.scheduledStartAt ? <div className="mt-1 text-[11px] text-gray-500">{new Date(row!.scheduledStartAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</div> : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <details>
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-sm font-semibold text-gray-900">
+              <span>예정 경기</span>
+              <span className="text-xs font-normal text-gray-500">{upcomingRows.length}경기 · 접기/펼치기</span>
+            </summary>
+
+            <div className="mt-3">
+              {upcomingRows.length === 0 ? (
+                <p className="text-sm text-gray-500">예정 경기가 없습니다.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-500">
+                        <th className="py-1 pr-2 text-left">날짜</th>
+                        <th className="py-1 pr-2 text-left">상대팀</th>
+                        <th className="py-1 pr-2 text-left">상태</th>
+                        <th className="py-1 pr-2 text-left">시간</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {upcomingRows.map((row) => (
+                        <tr key={`upcoming-${row!.id}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                          <td className="py-1 pr-2 whitespace-nowrap">
+                            <Link className="block" href={`/m/${row!.id}`}>{row!.playDate || '-'}</Link>
+                          </td>
+                          <td className="py-1 pr-2 max-w-[110px]">
+                            <Link className="block" href={`/m/${row!.id}`}>
+                              <span className="hidden sm:inline truncate">{row!.opponentFull}</span>
+                              <span className="sm:hidden truncate">{row!.opponentShort || row!.opponentFull}</span>
+                            </Link>
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Link className="block" href={`/m/${row!.id}`}>
+                              <span className={`inline-block text-[11px] rounded-full px-2 py-0.5 ${row!.status === 'live' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {row!.status === 'live' ? '진행중' : '예정'}
+                              </span>
+                            </Link>
+                          </td>
+                          <td className="py-1 pr-2 whitespace-nowrap">
+                            <Link className="block" href={`/m/${row!.id}`}>
+                              {row!.scheduledStartAt ? new Date(row!.scheduledStartAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </details>
         </section>
 
         {rowsWithRank.length === 0 ? (
@@ -333,16 +364,13 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ slu
                     {rowsWithRank.map((row) => {
                       const result = row.scored > row.conceded ? '승' : row.scored < row.conceded ? '패' : '무'
                       return (
-                        <tr key={`sum-${row.id}`} className="border-b border-gray-100 last:border-0">
-                          <td className="py-1 pr-2 whitespace-nowrap">{row.playDate || '-'}</td>
-                          <td className="py-1 pr-2 max-w-[110px]">
-                            <span className="hidden sm:inline truncate">{row.opponentFull}</span>
-                            <span className="sm:hidden truncate">{row.opponentShort || row.opponentFull}</span>
-                          </td>
-                          <td className="py-1 pr-2">{result}</td>
-                          <td className="py-1 pr-2">{row.scored}</td>
-                          <td className="py-1 pr-2">{row.conceded}</td>
-                          <td className="py-1 pr-2">{row.postRank ?? '-'}</td>
+                        <tr key={`sum-${row.id}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                          <td className="py-1 pr-2 whitespace-nowrap"><Link className="block" href={`/m/${row.id}`}>{row.playDate || '-'}</Link></td>
+                          <td className="py-1 pr-2 max-w-[110px]"><Link className="block" href={`/m/${row.id}`}><span className="hidden sm:inline truncate">{row.opponentFull}</span><span className="sm:hidden truncate">{row.opponentShort || row.opponentFull}</span></Link></td>
+                          <td className="py-1 pr-2"><Link className="block" href={`/m/${row.id}`}>{result}</Link></td>
+                          <td className="py-1 pr-2"><Link className="block" href={`/m/${row.id}`}>{row.scored}</Link></td>
+                          <td className="py-1 pr-2"><Link className="block" href={`/m/${row.id}`}>{row.conceded}</Link></td>
+                          <td className="py-1 pr-2"><Link className="block" href={`/m/${row.id}`}>{row.postRank ?? '-'}</Link></td>
                         </tr>
                       )
                     })}

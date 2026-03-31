@@ -113,11 +113,11 @@ type MatchFeedbackRow = {
   author_login_id: string | null;
   author_role: string | null;
   content: string;
-  link_url: string | null;
   created_at: string;
 };
 
 const MATCH_FEEDBACK_COOKIE = "qsb_match_feedback";
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 async function setMatchFeedback(code: string) {
   const store = await cookies();
@@ -152,15 +152,8 @@ async function submitMatchFeedback(
   }
 
   const content = String(formData.get("content") ?? "").trim();
-  const linkRaw = String(formData.get("link_url") ?? "").trim();
 
   if (!content || content.length > 300) {
-    await setMatchFeedback("goal_invalid");
-    return;
-  }
-
-  const linkUrl = linkRaw ? linkRaw : null;
-  if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
     await setMatchFeedback("goal_invalid");
     return;
   }
@@ -179,7 +172,6 @@ async function submitMatchFeedback(
     author_login_id: actor.loginId,
     author_role: actor.role,
     content,
-    link_url: linkUrl,
   });
 
   revalidatePath(`/m/${matchId}`);
@@ -1536,7 +1528,7 @@ export default async function MatchDetailPage({
 
   const { data: feedbacks } = await supabase
     .from("match_feedbacks")
-    .select("id,author_login_id,author_role,content,link_url,created_at")
+    .select("id,author_login_id,author_role,content,created_at")
     .eq("match_id", matchId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -2109,8 +2101,7 @@ export default async function MatchDetailPage({
 
         <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">경기 피드백</h3>
-            <span className="text-[11px] text-gray-500">종료 후에도 작성 가능 · 영상 링크 첨부 가능</span>
+            <h3 className="text-sm font-semibold text-gray-900">댓글</h3>
           </div>
 
           {accountSession || isAdminSession ? (
@@ -2119,17 +2110,11 @@ export default async function MatchDetailPage({
                 name="content"
                 required
                 maxLength={300}
-                placeholder="경기 피드백을 남겨주세요 (최대 300자)"
+                placeholder="경기에 대한 코멘트나 링크를 남겨주세요 (최대 300자)"
                 className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm"
                 rows={3}
               />
-              <input
-                name="link_url"
-                type="url"
-                placeholder="영상/기록 링크 (선택, https://...)"
-                className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm"
-              />
-              <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="등록중...">피드백 등록</PendingSubmitButton>
+              <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="등록중...">댓글 등록</PendingSubmitButton>
             </form>
           ) : (
             <p className="text-xs text-gray-500">피드백 작성은 로그인 후 가능합니다.</p>
@@ -2142,12 +2127,17 @@ export default async function MatchDetailPage({
               {(feedbacks ?? []).map((fb) => (
                 <li key={fb.id} className="py-2">
                   <div className="text-xs text-gray-500">{fb.author_login_id ?? '익명'}{fb.author_role ? ` (${fb.author_role})` : ''} · {new Date(fb.created_at).toLocaleString('ko-KR')}</div>
-                  <div className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{fb.content}</div>
-                  {fb.link_url ? (
-                    <a href={fb.link_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-blue-600 underline break-all">
-                      {fb.link_url}
-                    </a>
-                  ) : null}
+                  <div className="mt-1 text-sm text-gray-900 whitespace-pre-wrap break-words">
+                    {fb.content.split(URL_REGEX).map((part, idx) =>
+                      /^https?:\/\//i.test(part) ? (
+                        <a key={`${fb.id}-link-${idx}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all">
+                          {part}
+                        </a>
+                      ) : (
+                        <span key={`${fb.id}-txt-${idx}`}>{part}</span>
+                      ),
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

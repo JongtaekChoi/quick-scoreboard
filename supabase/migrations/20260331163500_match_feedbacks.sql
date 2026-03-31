@@ -5,7 +5,6 @@ create table if not exists public.match_feedbacks (
   author_login_id text null,
   author_role text null,
   content text not null check (char_length(content) <= 300),
-  link_url text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz null

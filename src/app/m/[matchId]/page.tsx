@@ -2104,24 +2104,8 @@ export default async function MatchDetailPage({
             <h3 className="text-sm font-semibold text-gray-900">댓글</h3>
           </div>
 
-          {accountSession || isAdminSession ? (
-            <form action={submitFeedbackAction} className="space-y-2">
-              <textarea
-                name="content"
-                required
-                maxLength={300}
-                placeholder="경기에 대한 코멘트나 링크를 남겨주세요 (최대 300자)"
-                className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm"
-                rows={3}
-              />
-              <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="등록중...">댓글 등록</PendingSubmitButton>
-            </form>
-          ) : (
-            <p className="text-xs text-gray-500">피드백 작성은 로그인 후 가능합니다.</p>
-          )}
-
           {(feedbacks ?? []).length === 0 ? (
-            <p className="text-sm text-gray-500">아직 등록된 피드백이 없습니다.</p>
+            <p className="text-sm text-gray-500">아직 등록된 댓글이 없습니다.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {(feedbacks ?? []).map((fb) => (
@@ -2141,6 +2125,27 @@ export default async function MatchDetailPage({
                 </li>
               ))}
             </ul>
+          )}
+
+          {accountSession || isAdminSession ? (
+            <details>
+              <summary className="cursor-pointer list-none inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+                댓글 입력하기
+              </summary>
+              <form action={submitFeedbackAction} className="mt-2 space-y-2">
+                <textarea
+                  name="content"
+                  required
+                  maxLength={300}
+                  placeholder="경기에 대한 코멘트나 링크를 남겨주세요 (최대 300자)"
+                  className="w-full rounded border border-gray-200 px-2 py-1.5 text-base"
+                  rows={3}
+                />
+                <PendingSubmitButton className="rounded border px-2 py-1 text-xs" pendingText="등록중...">댓글 등록</PendingSubmitButton>
+              </form>
+            </details>
+          ) : (
+            <p className="text-xs text-gray-500">댓글 작성은 로그인 후 가능합니다.</p>
           )}
         </section>
 

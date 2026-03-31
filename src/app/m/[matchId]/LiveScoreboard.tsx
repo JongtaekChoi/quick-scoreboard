@@ -294,7 +294,7 @@ function LiveScoreboardInner({
     })();
 
   return (
-    <section className="sticky top-0 z-10 rounded-xl border border-gray-200 p-4 space-y-3 bg-white/95 backdrop-blur shadow-sm">
+    <section className="rounded-xl border border-gray-200 p-4 space-y-3 bg-white shadow-sm md:sticky md:top-2 md:z-10 md:bg-white/95 md:backdrop-blur">
       {readonly ? (
         <div className="flex items-center justify-between gap-2 text-sm">
           <label className="flex items-center gap-2">

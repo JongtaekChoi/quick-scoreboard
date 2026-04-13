@@ -38,6 +38,12 @@ export default function GoalAddActions({
   const action = open === 'A' ? actionA : actionB
   const assistRoster = useMemo(() => roster.filter((p) => p.value !== scorer), [roster, scorer])
 
+  const playerNameFromValue = (value: string) => {
+    if (!value) return null
+    const [, name] = value.split('|')
+    return (name || '').replace(/^#\d+\s*/, '').trim() || null
+  }
+
   function currentMinuteValue() {
     const now = Date.now()
     if (periodState === 'first_half' && firstHalfStartedAt) {
@@ -68,7 +74,25 @@ export default function GoalAddActions({
               <h3 className="text-sm font-semibold">득점 입력 · {teamName}</h3>
               <button type="button" className="text-xs underline" onClick={() => { setOpen(null); setScorer('') }}>닫기</button>
             </div>
-            <form action={action} className="space-y-2">
+            <form
+              action={action}
+              className="space-y-2"
+              onSubmit={(e) => {
+                const form = e.currentTarget
+                const fd = new FormData(form)
+                const assistVal = String(fd.get('assist') || '')
+                window.dispatchEvent(new CustomEvent('qsb:goal-optimistic', {
+                  detail: {
+                    teamSide: open,
+                    minute: Number(fd.get('minute') || minuteValue),
+                    scorerName: playerNameFromValue(scorer),
+                    assistName: playerNameFromValue(assistVal),
+                  },
+                }))
+                setOpen(null)
+                setScorer('')
+              }}
+            >
               <div>
                 <label className="block text-xs text-gray-600 mb-1">분</label>
                 <input name="minute" type="number" min={0} max={200} value={minuteValue} onChange={(e) => setMinuteValue(Math.max(0, Number(e.target.value) || 0))} className="w-full rounded border px-2 py-1.5 text-sm" />

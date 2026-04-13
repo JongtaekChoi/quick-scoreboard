@@ -326,7 +326,7 @@ async function addGoalDetailed(
   const { data: match } = await supabase
     .from("matches")
     .select(
-      "id,status,started_at,period_state,first_half_started_at,second_half_started_at",
+      "id,status,started_at,period_state,first_half_started_at,second_half_started_at,score_a,score_b",
     )
     .eq("id", matchId)
     .maybeSingle<{
@@ -336,6 +336,8 @@ async function addGoalDetailed(
       period_state: "pre" | "first_half" | "halftime" | "second_half" | "ended";
       first_half_started_at: string | null;
       second_half_started_at: string | null;
+      score_a: number;
+      score_b: number;
     }>();
 
   if (!match) return;
@@ -404,33 +406,14 @@ async function addGoalDetailed(
     return;
   }
 
-  const { data: countedGoals, error: countError } = await supabase
-    .from("goal_events")
-    .select("team_side")
-    .eq("match_id", matchId)
-    .is("deleted_at", null);
-
-  if (countError) {
-    console.error("[addGoal] recount failed", {
-      matchId,
-      error: countError.message,
-    });
-    await setMatchFeedback("goal_recount_failed");
-    return;
-  }
-
-  let scoreA = 0;
-  let scoreB = 0;
-  for (const g of countedGoals ?? []) {
-    if (g.team_side === "A") scoreA += 1;
-    else if (g.team_side === "B") scoreB += 1;
-  }
+  const nextScoreA = match.score_a + (teamSide === "A" ? 1 : 0);
+  const nextScoreB = match.score_b + (teamSide === "B" ? 1 : 0);
 
   const { error: updateError } = await supabase
     .from("matches")
     .update({
-      score_a: scoreA,
-      score_b: scoreB,
+      score_a: nextScoreA,
+      score_b: nextScoreB,
       status: match.status === "scheduled" ? "live" : match.status,
       started_at: match.status === "scheduled" ? now.toISOString() : undefined,
     })
@@ -453,7 +436,6 @@ async function addGoalDetailed(
   await logMatchChange(matchId, channelSlug, "goal_add", { teamSide, minute });
 
   revalidatePath(`/m/${matchId}`);
-  redirect(`/m/${matchId}?mode=edit`);
 }
 
 async function applyPeriodAction(

@@ -406,8 +406,32 @@ async function addGoalDetailed(
     return;
   }
 
-  const nextScoreA = match.score_a + (teamSide === "A" ? 1 : 0);
-  const nextScoreB = match.score_b + (teamSide === "B" ? 1 : 0);
+  const { data: countedGoals, error: countError } = await supabase
+    .from("goal_events")
+    .select("team_side")
+    .eq("match_id", matchId)
+    .is("deleted_at", null);
+
+  if (countError) {
+    await supabase
+      .from("goal_events")
+      .update({ deleted_at: now.toISOString() })
+      .eq("id", insertedGoal.id)
+      .eq("match_id", matchId);
+    console.error("[addGoal] recount failed", {
+      matchId,
+      error: countError.message,
+    });
+    await setMatchFeedback("goal_recount_failed");
+    return;
+  }
+
+  let nextScoreA = 0;
+  let nextScoreB = 0;
+  for (const goal of countedGoals ?? []) {
+    if (goal.team_side === "A") nextScoreA += 1;
+    else if (goal.team_side === "B") nextScoreB += 1;
+  }
 
   const { error: updateError } = await supabase
     .from("matches")

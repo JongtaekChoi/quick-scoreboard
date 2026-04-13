@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -62,6 +62,16 @@ type PeriodStarterSummary = {
 };
 
 type ScoreboardPayload = { match: MatchMini; goals: Goal[] };
+
+type OptimisticGoal = {
+  id: string;
+  team_side: "A" | "B";
+  period_sequence?: number | null;
+  minute: number | null;
+  scorer_name: string | null;
+  assist_name: string | null;
+  created_at: string;
+};
 
 const REFRESH_SEC = 10;
 
@@ -187,6 +197,7 @@ function LiveScoreboardInner({
   const [autoUpdate, setAutoUpdate] = useState(false);
   const [selectedStarterId, setSelectedStarterId] = useState<string | null>(null);
   const [selectingGoalId, setSelectingGoalId] = useState<string | null>(null);
+  const [optimisticGoals, setOptimisticGoals] = useState<OptimisticGoal[]>([]);
   const [, startTransition] = useTransition();
 
   const { data, refetch, isFetching } = useQuery({
@@ -208,8 +219,45 @@ function LiveScoreboardInner({
         : false,
   });
 
-  const match = data.match;
-  const goals = data.goals;
+  useEffect(() => {
+    const onOptimistic = (evt: Event) => {
+      const custom = evt as CustomEvent<{ teamSide?: "A" | "B"; minute?: number; scorerName?: string | null; assistName?: string | null }>;
+      const side = custom.detail?.teamSide;
+      if (side !== "A" && side !== "B") return;
+      const nowIso = new Date().toISOString();
+      setOptimisticGoals((prev) => [
+        {
+          id: `optimistic-${nowIso}-${Math.random().toString(36).slice(2, 7)}`,
+          team_side: side,
+          minute: Number.isFinite(custom.detail.minute) ? Number(custom.detail.minute) : null,
+          period_sequence: Number.isFinite(custom.detail.minute) && Number(custom.detail.minute) >= 15 ? 2 : 1,
+          scorer_name: custom.detail.scorerName ?? null,
+          assist_name: custom.detail.assistName ?? null,
+          created_at: nowIso,
+        },
+        ...prev,
+      ]);
+      window.setTimeout(() => {
+        void refetch();
+      }, 250);
+      window.setTimeout(() => {
+        setOptimisticGoals([]);
+        void refetch();
+      }, 1800);
+    };
+
+    window.addEventListener("qsb:goal-optimistic", onOptimistic as EventListener);
+    return () => window.removeEventListener("qsb:goal-optimistic", onOptimistic as EventListener);
+  }, [refetch]);
+
+  const optimisticCountA = optimisticGoals.filter((g) => g.team_side === "A").length;
+  const optimisticCountB = optimisticGoals.filter((g) => g.team_side === "B").length;
+  const goals = [...optimisticGoals, ...data.goals];
+  const match = {
+    ...data.match,
+    score_a: data.match.score_a + optimisticCountA,
+    score_b: data.match.score_b + optimisticCountB,
+  };
 
   const countA = goals.filter((g) => g.team_side === "A").length;
   const countB = goals.filter((g) => g.team_side === "B").length;

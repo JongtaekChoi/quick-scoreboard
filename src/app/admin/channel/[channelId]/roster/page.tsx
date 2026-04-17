@@ -75,7 +75,9 @@ async function transferPlayer(formData: FormData) {
     redirect('/admin/login')
   }
 
-  if (!channelId || !playerId || !newTeamId || !newJerseyNo) return
+  if (!channelId || !playerId || !newTeamId || !newJerseyNo) {
+    redirect(`/admin/channel/${channelId}/roster?fb=invalid`)
+  }
 
   const supabase = getSupabaseServerClient()
   if (!supabase) return
@@ -88,8 +90,12 @@ async function transferPlayer(formData: FormData) {
     .eq('channel_id', channelId)
     .maybeSingle()
 
-  if (!player || !player.is_active) return
-  if (player.team_id === newTeamId) return
+  if (!player || !player.is_active) {
+    redirect(`/admin/channel/${channelId}/roster?fb=player_not_active`)
+  }
+  if (player.team_id === newTeamId) {
+    redirect(`/admin/channel/${channelId}/roster?fb=same_team`)
+  }
 
   // 대상 팀에서 jersey_no 중복 체크
   const { data: existing } = await supabase
@@ -100,14 +106,20 @@ async function transferPlayer(formData: FormData) {
     .eq('jersey_no', newJerseyNo)
     .maybeSingle()
 
-  if (existing) return // 등번호 중복 시 무시
+  if (existing) {
+    redirect(`/admin/channel/${channelId}/roster?fb=jersey_conflict`)
+  }
 
-  await supabase
+  const { error: transferError } = await supabase
     .from('team_players')
     .update({ team_id: newTeamId, jersey_no: newJerseyNo })
     .eq('id', playerId)
 
-  redirect(`/admin/channel/${channelId}/roster`)
+  if (transferError) {
+    redirect(`/admin/channel/${channelId}/roster?fb=transfer_failed`)
+  }
+
+  redirect(`/admin/channel/${channelId}/roster?fb=transfer_ok`)
 }
 
 async function togglePlayerActive(formData: FormData) {
@@ -131,8 +143,16 @@ async function togglePlayerActive(formData: FormData) {
   redirect(`/admin/channel/${channelId}/roster`)
 }
 
-export default async function AdminRosterPage({ params }: { params: Promise<{ channelId: string }> }) {
+export default async function AdminRosterPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ channelId: string }>
+  searchParams?: Promise<{ fb?: string }>
+}) {
   const { channelId } = await params
+  const sp = (await searchParams) ?? {}
+  const feedback = sp.fb ?? null
   const supabase = getSupabaseServerClient()
   if (!supabase) return <main className="p-6">Supabase env가 필요합니다.</main>
 
@@ -166,6 +186,16 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
   const totalPlayers = (players ?? []).length
   const totalActivePlayers = (players ?? []).filter((p) => p.is_active).length
 
+  const feedbackMap: Record<string, { tone: 'ok' | 'warn'; text: string }> = {
+    transfer_ok: { tone: 'ok', text: '선수 이적이 완료되었습니다.' },
+    jersey_conflict: { tone: 'warn', text: '이적 대상 팀에 같은 등번호가 이미 있습니다.' },
+    same_team: { tone: 'warn', text: '같은 팀으로는 이적할 수 없습니다.' },
+    player_not_active: { tone: 'warn', text: '비활성 선수는 이적할 수 없습니다.' },
+    transfer_failed: { tone: 'warn', text: '이적 처리 중 오류가 발생했습니다. 다시 시도해 주세요.' },
+    invalid: { tone: 'warn', text: '이적 입력값이 올바르지 않습니다.' },
+  }
+  const feedbackItem = feedback ? feedbackMap[feedback] : null
+
   return (
     <main className="min-h-screen p-4 md:p-6 bg-white">
       <section className="max-w-5xl mx-auto space-y-5">
@@ -181,6 +211,12 @@ export default async function AdminRosterPage({ params }: { params: Promise<{ ch
           <p className="text-sm text-gray-600">{channel.name} · 팀별 등번호/이름 등록</p>
           <p className="text-xs text-gray-500">전체 팀인원: {totalActivePlayers}/{totalPlayers}명 (활성/전체)</p>
         </header>
+
+        {feedbackItem ? (
+          <div className={`rounded border px-3 py-2 text-sm ${feedbackItem.tone === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+            {feedbackItem.text}
+          </div>
+        ) : null}
 
         {(teams ?? []).length === 0 ? (
           <section className="rounded border p-4 text-sm text-gray-500">먼저 경기 입력을 통해 팀을 생성해 주세요.</section>

@@ -88,42 +88,40 @@ export default async function StatsPage({
   const matchIds = (matches ?? []).map((m) => m.id);
   const groupIds = Array.from(new Set((matches ?? []).map((m) => m.match_group_id).filter((v): v is string => Boolean(v))));
 
-  const { data: groups } = groupIds.length
-    ? await supabase
-        .from("match_groups")
-        .select("id,play_date,title,seq")
-        .in("id", groupIds)
-        .returns<{ id: string; play_date: string; title: string | null; seq: number }[]>()
-    : { data: [] as { id: string; play_date: string; title: string | null; seq: number }[] };
-
-  const { data: goals } = matchIds.length
-    ? await supabase
-        .from("goal_events")
-        .select("match_id,team_side,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
-        .in("match_id", matchIds)
-        .is("deleted_at", null)
-        .returns<Goal[]>()
-    : { data: [] as Goal[] };
-
-  const { data: ratings } = matchIds.length
-    ? await supabase
-        .from("player_ratings")
-        .select("target_player_id,rating")
-        .in("match_id", matchIds)
-        .returns<RatingRow[]>()
-    : { data: [] as RatingRow[] };
-
-  const { data: players } = await supabase
-    .from("team_players")
-    .select("id,player_name,team_id,jersey_no")
-    .eq("channel_id", channel.id)
-    .returns<PlayerRow[]>();
-
-  const { data: teams } = await supabase
-    .from("channel_teams_view")
-    .select("id,name,short_name,color_hex")
-    .eq("channel_id", channel.id)
-    .returns<TeamRow[]>();
+  const [{ data: groups }, { data: goals }, { data: ratings }, { data: players }, { data: teams }] = await Promise.all([
+    groupIds.length
+      ? supabase
+          .from("match_groups")
+          .select("id,play_date,title,seq")
+          .in("id", groupIds)
+          .returns<{ id: string; play_date: string; title: string | null; seq: number }[]>()
+      : Promise.resolve({ data: [] as { id: string; play_date: string; title: string | null; seq: number }[] }),
+    matchIds.length
+      ? supabase
+          .from("goal_events")
+          .select("match_id,team_side,minute,created_at,scorer_player_id,assist_player_id,scorer_name,assist_name,deleted_at")
+          .in("match_id", matchIds)
+          .is("deleted_at", null)
+          .returns<Goal[]>()
+      : Promise.resolve({ data: [] as Goal[] }),
+    matchIds.length
+      ? supabase
+          .from("player_ratings")
+          .select("target_player_id,rating")
+          .in("match_id", matchIds)
+          .returns<RatingRow[]>()
+      : Promise.resolve({ data: [] as RatingRow[] }),
+    supabase
+      .from("team_players")
+      .select("id,player_name,team_id,jersey_no")
+      .eq("channel_id", channel.id)
+      .returns<PlayerRow[]>(),
+    supabase
+      .from("channel_teams_view")
+      .select("id,name,short_name,color_hex")
+      .eq("channel_id", channel.id)
+      .returns<TeamRow[]>(),
+  ]);
 
   const teamMap = new Map<string, TeamStat>();
   const teamNameById = new Map((teams ?? []).map((t) => [t.id, t.name]));

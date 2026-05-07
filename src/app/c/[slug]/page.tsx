@@ -128,18 +128,15 @@ export default async function ChannelPage({
     .order("seq", { ascending: true })
     .returns<MatchGroup[]>();
 
-  const groupIds = (groups ?? []).map((g) => g.id);
-
-  const { data: matches } = groupIds.length
-    ? await supabase
-        .from("matches")
-        .select(
-          "id,match_group_id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at",
-        )
-        .in("match_group_id", groupIds)
-        .order("seq", { ascending: true })
-        .returns<Match[]>()
-    : { data: [] as Match[] };
+  const { data: matches } = await supabase
+    .from("matches")
+    .select(
+      "id,match_group_id,seq,team_a_id,team_b_id,team_a_name,team_b_name,score_a,score_b,status,scheduled_start_at",
+    )
+    .eq("channel_id", channel.id)
+    .order("match_group_id", { ascending: true })
+    .order("seq", { ascending: true })
+    .returns<Match[]>();
 
   const teamIds = Array.from(
     new Set(
